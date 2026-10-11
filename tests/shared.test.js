@@ -79,7 +79,9 @@ assert.strictEqual(s.validateEntry({ ...ok, note: '   ' }), 'reason required');
 assert.strictEqual(s.validateEntry({ ...ok, note: 'x'.repeat(201) }), 'reason too long');
 assert.strictEqual(s.validateEntry({ ...ok, amount: -5 }), 'bad amount');
 assert.strictEqual(s.validateEntry({ ...ok, amount: '5' }), 'bad amount');
-assert.strictEqual(s.validateEntry({ ...ok, type: 'Income', category: 'House' }), 'bad category');
+assert.strictEqual(s.validateEntry({ ...ok, type: 'Income', category: 'House' }), '', 'any well-formed name: the sheet adds it if it is new');
+['=X', 'a*b', 'Saved', 'constructor', '5 cows', ' Dairy', '', 'x'.repeat(31)].forEach(c => assert.strictEqual(s.validateEntry({ ...ok, category: c }), 'bad category', c));
+['Milk', 'दूध', "Ram's shop", 'Fuel-Diesel'].forEach(c => assert.ok(s.checkCatName(c), c));
 assert.strictEqual(s.validateEntry({ ...ok, type: 'Income', category: 'Others' }), '');
 assert.strictEqual(s.validateEntry({ ...ok, type: 'toString' }), 'bad type');
 assert.strictEqual(s.validateEntry({ ...ok, dateTime: 'yesterday' }), 'bad date');
@@ -121,6 +123,25 @@ v = s.applyOps(snap, [
 ]);
 assert.strictEqual(v.rows.length, 1);
 assert.deepStrictEqual([v.loans.length, v.repays.length], [0, 0], 'deleting a loan removes its repayments');
+
+// Categories: add, rename, merge, delete (into Others); entries move with them; Others never changes
+const D = (id, category, type) => ({ ...ok, id, type: type || 'Expense', category });
+const cat = (action, data) => ({ opId: 'c-' + action, kind: 'cat', action, data: { type: 'Expense', ...data } });
+const csnap = { rows: [D('row-00001', 'Dairy'), D('row-00002', 'Dairy', 'Income')] };
+v = s.applyOps(csnap, [cat('add', { name: 'Goats' }), { opId: 'g', kind: 'entry', action: 'add', id: 'row-00003', data: D('row-00003', 'Goats') }, cat('rename', { name: 'goats', to: 'Animals' })]);
+assert.deepStrictEqual([v.cats.Expense, v.rows.map(r => r.category)], [['House', 'Dairy', 'Crops', 'Animals', 'Others'], ['Dairy', 'Dairy', 'Animals']], 'added before Others; rename moves its entries');
+v = s.applyOps(csnap, [cat('add', { name: 'Goats' }), { opId: 'g', kind: 'entry', action: 'add', id: 'row-00003', data: D('row-00003', 'Goats') }, cat('rename', { name: 'Goats', to: 'dairy' }), cat('delete', { name: 'Dairy' })]);
+assert.deepStrictEqual([v.cats.Expense, v.rows.map(r => r.type + ' ' + r.category)], [['House', 'Crops', 'Others'], ['Expense Others', 'Income Dairy', 'Expense Others']], 'merge into Dairy, then delete moves both to Others; Income Dairy untouched');
+v = s.applyOps(csnap, [cat('rename', { name: 'Dairy', to: 'dairy' }), cat('rename', { name: 'Others', to: 'Misc' }), cat('delete', { name: 'Others' }), cat('rename', { name: 'Gone', to: 'X' }), cat('add', { name: 'house' })]);
+assert.deepStrictEqual([v.cats.Expense, v.rows[0].category], [['House', 'dairy', 'Crops', 'Others'], 'dairy'], 'a case-only rename keeps it; Others, unknown names and duplicates change nothing');
+assert.deepStrictEqual([s.CATEGORIES.Expense, csnap.rows[0].category], [['House', 'Dairy', 'Crops', 'Others'], 'Dairy'], 'defaults and snapshot not mutated');
+assert.strictEqual(s.applyCat({ Income: ['Others'], Expense: ['Others'] }, [], cat('delete', { name: 'Others' })), 'Others cannot be changed');
+assert.strictEqual(s.applyCat({ Income: ['Others'], Expense: ['Others'] }, [], cat('add', { name: '=1+1' })), 'bad category');
+// Totals follow the sheet's categories; an entry whose category was renamed elsewhere still counts (no NaN)
+const goats = { Income: ['Milk', 'Others'], Expense: ['Goats', 'Milk', 'Others'] };
+const gs = s.summarize([D('row-g0001', 'Goats'), D('row-g0002', 'Milk', 'Income'), D('row-g0003', 'Fuel')].map(r => ({ ...r, dateTime: iso(2026, 9, 2) })), 'month', new Date(2026, 9, 11), 0, goats);
+assert.deepStrictEqual([Object.keys(gs.net), gs.net, gs.spent], [['Milk', 'Goats', 'Others', 'Fuel'], { Milk: 10, Goats: -10, Others: 0, Fuel: -10 }, { Goats: 10, Milk: 0, Others: 0, Fuel: 10 }]);
+assert.deepStrictEqual(s.spendShare(gs).slices.map(x => [x.name, x.i]), [['Goats', 0], ['Fuel', 3]], 'i = place in the list, for the pie colour');
 
 // Most recent 20 for History
 const many = Array.from({ length: 25 }, (_, i) => ({ ...ok, id: 'many-' + String(i).padStart(4, '0'), dateTime: iso(2026, 9, 1 + i) }));
@@ -199,5 +220,22 @@ assert.strictEqual(f.owedNow, 15000);
 f = s.forecast([bl('loan-c', 100000, 3, 'month')], [], 2000, NOW);
 assert.deepStrictEqual([f.never, f.payoff, f.monthlyInterestNow, f.months.length], [true, null, 3000, 24], 'saving less than the interest: never paid off');
 assert.strictEqual(s.forecast([bl('loan-d', 1000000, 0)], [], 1000, NOW).never, true, 'more than 10 years counts as never in the graph');
+
+// ---- Investments: worth now and growth, compound (funds) or simple; money given adds its interest to each month's savings
+const ivs = extra => ({ id: 'inv-00001', dateTime: iso(2026, 9, 11), reason: 'Liquid fund', amount: 100000, interest: 12, per: 'year', dir: 'invested', ...extra });
+f = s.forecast([ivs()], [], 0, NOW);
+assert.deepStrictEqual([f.hasInvest, f.investedNow, f.growthNow, f.months[11].position, f.months[23].position], [true, 100000, 948.88, 12000, 25440], 'compound: 12% a year');
+f = s.forecast([ivs({ compound: false })], [], 0, NOW);
+assert.deepStrictEqual([f.growthNow, f.months[11].position, f.months[23].position], [1000, 12000, 24000], 'simple: the same 1,000 every month');
+const IV = s.summarizeLoans([ivs({ dateTime: iso(2025, 9, 11) })], [{ id: 'wd-000001', loanId: 'inv-00001', dateTime: iso(2026, 3, 11), amount: 50000 }], null, null, NOW).loans[0];
+assert.ok(Math.abs(IV.owed - (100000 * 1.12 - 50000 * Math.sqrt(1.12))) < 20, 'worth now: a year of growth, minus a withdrawal and the growth it missed (' + IV.owed + ')');
+assert.deepStrictEqual([IV.dir, IV.repaid, IV.principal, IV.done], ['invested', 50000, 50000, false]);
+f = s.forecast([{ id: 'giv-00001', dateTime: iso(2026, 0, 1), reason: 'To Raju', amount: 10000, interest: 2, per: 'month', dir: 'given' }], [], 0, NOW);
+assert.deepStrictEqual([f.interestIn, f.months[11].position, f.hasLoans], [200, 2400, false], 'money given: 2% a month on 10,000 comes in every month');
+// Interest already received is not averaged in (the forecast adds what is still to come instead)
+assert.strictEqual(s.savingRate([sav(2026, 8, 3000), { ...sav(2026, 8, 900), id: 'int-0001', category: 'interest' }], NOW, 3).perMonth, 1000);
+assert.strictEqual(s.validateLoan({ ...ivs(), compound: false }), '');
+assert.strictEqual(s.validateLoan({ ...ivs(), compound: 'no' }), 'bad interest');
+assert.strictEqual(s.validateLoan({ ...ivs(), dir: 'stocks' }), 'bad dir');
 
 console.log('all tests passed');

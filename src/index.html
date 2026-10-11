@@ -25,15 +25,16 @@
   --shadow:0 1px 2px rgba(11,11,12,.04),0 10px 28px -18px rgba(11,11,12,.28);
   --lavender:#E8DDFB;--mint:#D7F2DC;--butter:#F8E9B8;--sky:#D9EEF6;--blush:#F7D9D9;--peri:#DCDDF6;--on-pastel:#0B0B0C;
   --lavender-d:#B9A5F3;--mint-d:#8FD6A0;--butter-d:#EBC75E;--sky-d:#8DC8E2;--blush-d:#EE9F9F;--peri-d:#A6A9EC;
-  /* Pie slices: deeper than the pastels so neighbours stay apart, incl. colour-blind (checked with the dataviz validator) */
-  --pie-House:#2a78d6;--pie-Dairy:#e87ba4;--pie-Crops:#eda100;--pie-Others:#6250d6;--pie-Saved:#1baf7a;
+  /* Pie slices: deeper than the pastels so neighbours stay apart, incl. colour-blind (checked with the dataviz validator).
+     0-4: expense categories in list order (House, Dairy, Crops, then the family's own), then Others and Saved. */
+  --pie-0:#2a78d6;--pie-1:#e87ba4;--pie-2:#eda100;--pie-3:#008300;--pie-4:#e34948;--pie-Others:#6250d6;--pie-Saved:#1baf7a;
   --font:"Lexend",system-ui,-apple-system,"Segoe UI",sans-serif;
   color-scheme:light;
 }
 @media (prefers-color-scheme:dark){
   :root{--bg:#000000;--surface:#1C1C1E;--field:#2A2A2C;--ink:#FFFFFF;--ink-2:#D1D1D6;--muted:#8E8E93;--line:#2C2C2E;
     --primary:#FFFFFF;--on-primary:#0B0B0C;--seg-on:#3A3A3C;--good:#5FD38A;--bad:#FF8A80;--shadow:none;color-scheme:dark;
-    --pie-House:#3987e5;--pie-Dairy:#d55181;--pie-Crops:#c98500;--pie-Others:#9085e9;--pie-Saved:#199e70}
+    --pie-0:#3987e5;--pie-1:#d55181;--pie-2:#c98500;--pie-3:#008300;--pie-4:#e66767;--pie-Others:#9085e9;--pie-Saved:#199e70}
 }
 *{box-sizing:border-box;margin:0}
 /* Native-app feel: scrolling works everywhere, the scrollbars stay hidden */
@@ -58,6 +59,21 @@ button:active{transform:scale(.97)}
 .head{display:flex;align-items:center;gap:12px;padding:calc(env(safe-area-inset-top) + 12px) 18px 4px}
 .head h1{font-size:22px;font-weight:600;letter-spacing:-.01em;line-height:1.2}
 .head .sub{font-size:13px;color:var(--muted);display:flex;align-items:center;gap:5px}
+/* Sheet switcher: the picture and the name on Home open the list of sheets, spanning the header like the History filters */
+.head{position:relative}
+.head .hsheet{display:flex;align-items:center;gap:12px;position:static}
+.head h1 .dda{margin-left:4px;vertical-align:-3px}
+#headText{cursor:default}
+#avatar:not([hidden])+#headText{cursor:pointer}
+#ddSheets{grid-template-columns:1fr}
+.head #ddSheets{left:18px;right:18px;max-width:380px}
+.side-sheet,.nav .wide{display:none} /* the sidebar's sheet switcher and History: wide screens only */
+.srow{display:flex;align-items:center;gap:6px}
+.srow .opt{flex:1;min-width:0}
+.srow .what,.srow small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.srow small{font-size:11.5px;color:var(--muted);font-weight:400}
+.catcards{display:grid;gap:14px;align-items:start}
+.catcards .btn{min-height:46px}
 .av{width:48px;height:48px;border-radius:999px;display:grid;place-items:center;flex:none;background:var(--butter)}
 .rbtn{width:46px;height:46px;border-radius:999px;background:var(--surface);display:grid;place-items:center;box-shadow:var(--shadow);flex:none;position:relative;color:var(--ink)}
 .rbtn.sm{width:40px;height:40px}
@@ -91,6 +107,7 @@ section{display:flex;flex-direction:column;gap:14px}
 .pick .ptop{display:flex;width:100%;justify-content:space-between;align-items:center;margin-bottom:6px}
 .pick .plus{width:32px;height:32px;border-radius:999px;background:#0B0B0C;color:#fff;display:grid;place-items:center}
 .pick small{font-size:13px;color:rgba(11,11,12,.62)}
+.colA,.colB{display:contents} /* the two columns of Home and Loans on a wide screen; on a phone their parts just stack */
 .pick b{font-size:19px;font-weight:600;letter-spacing:-.01em;overflow:hidden;text-overflow:ellipsis}
 /* Category dropdown in the add/edit sheet: opens over the amount, closes on pick, outside tap or Esc */
 .dd{position:relative}
@@ -245,6 +262,59 @@ dialog::backdrop{background:rgba(8,10,12,.42)}
 .lcard .rp button{color:var(--muted);padding:6px}
 .ldone{opacity:.72}
 #toast{position:fixed;left:50%;width:max-content;bottom:calc(env(safe-area-inset-bottom) + 96px);transform:translateX(-50%);z-index:10;background:var(--primary);color:var(--on-primary);padding:12px 18px;border-radius:999px;font-weight:600;display:flex;gap:8px;align-items:center;max-width:calc(100% - 32px);box-shadow:0 12px 28px -12px rgba(0,0,0,.45)}
+
+/* Tablets and laptops: a desktop app. A full-height sidebar (sheet switcher, tabs), a sticky toolbar, content to the right edge. */
+@media (min-width:768px){
+  /* the sidebar's colour and edge are drawn on the frame, so they run the full height however far the page scrolls */
+  .app{max-width:none;margin:0;background:linear-gradient(90deg,var(--surface) 247px,var(--line) 247px 248px,transparent 248px);display:grid;grid-template-columns:248px minmax(0,1fr);grid-template-rows:auto 1fr;grid-template-areas:"nav head" "nav main"}
+  .navwrap{grid-area:nav;position:sticky;top:0;left:auto;right:auto;bottom:auto;height:100dvh;display:flex;flex-direction:column;gap:14px;
+    padding:calc(env(safe-area-inset-top) + 14px) 12px 16px;background:none}
+  .nav{flex-direction:column;gap:2px;padding:0;margin:0;max-width:none;background:none;box-shadow:none;border-radius:0}
+  .nav button,.nav button[aria-current="page"]{flex:none;flex-direction:row;gap:12px;padding:10px 12px;border-radius:12px;font-size:14.5px}
+  .nav button:not([aria-current]){color:var(--ink-2)}
+  .nav .wide{display:flex}
+  .side-sheet{display:block}
+  .side-btn{display:flex;align-items:center;gap:10px;width:100%;padding:8px;border-radius:16px;text-align:left}
+  .side-btn .av{width:42px;height:42px}
+  .side-btn small{display:flex;align-items:center;gap:4px;font-size:12px;color:var(--muted)}
+  .side-btn b{display:block;font-size:16px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .side-sheet #ddSheets{right:auto;width:320px}
+  .head{grid-area:head;position:sticky;top:0;z-index:4;background:var(--bg);padding:calc(env(safe-area-inset-top) + 14px) 32px 12px}
+  .head h1{font-size:24px}
+  #syncPill{display:none} /* the toolbar shows it */
+  main{grid-area:main;padding:16px 32px 40px}
+  .list{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));align-items:start}
+  #home .list{grid-template-columns:1fr}
+  .catcards{grid-template-columns:repeat(auto-fit,minmax(320px,1fr))}
+  #addLoan{width:auto;align-self:flex-start;padding:14px 28px}
+  dialog{margin:auto;border-radius:32px;max-height:90dvh}
+  .grab{display:none}
+  #toast{bottom:28px;left:calc(50% + 124px)}
+  @media (hover:hover){
+    button:active{transform:none}
+    .nav button:not([aria-current]):hover,.side-btn:hover,.opt:hover{background:var(--field)}
+    .lrow.tap:hover,.lcard:hover,.pick:hover,.btn.soft:hover{box-shadow:0 0 0 1px var(--line),0 10px 28px -16px rgba(11,11,12,.35)}
+  }
+}
+/* Wide enough for two columns (iPad landscape, laptops): Home and Loans side by side, Insights cards in pairs, History's search and filters in one row */
+@media (min-width:1000px){
+  #home{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:20px;align-items:start}
+  #loans{display:grid;grid-template-columns:minmax(300px,400px) minmax(0,1fr);gap:20px;align-items:start}
+  .colA,.colB{display:flex;flex-direction:column;gap:14px}
+  #loans .colA{position:sticky;top:90px}
+  #history{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr);align-items:center}
+  #history>*{grid-column:1/-1}
+  #history>.search{grid-column:1}
+  #history>.filters{grid-column:2}
+  #insights{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+  /* Cards pair up and stretch to equal height: the Others limit bar spans the top, the tall forecast sits beside Loans and the bar chart */
+  #insights>div>.card{height:100%}
+  #insights>*{order:1}
+  #insights>.seg,#insights>.period,#insights>.stats,#insLimit{order:0;grid-column:1/-1}
+  #insForecast{grid-row:span 2}
+  #insights>.sec,#entries{order:2;grid-column:1/-1}
+  #insights>:empty{display:none}
+}
 </style>
 </head>
 <body>
@@ -278,16 +348,20 @@ dialog::backdrop{background:rgba(8,10,12,.42)}
   <symbol id="i-hand-coins" viewBox="0 0 256 256"><path d="M232.76,137.88A28.39,28.39,0,0,0,208.13,133L172,141.26c0-.42,0-.84,0-1.26a32,32,0,0,0-32-32H89.94a35.76,35.76,0,0,0-25.45,10.54L43,140H20A20,20,0,0,0,0,160v40a20,20,0,0,0,20,20H120a11.89,11.89,0,0,0,2.91-.36l64-16a11.4,11.4,0,0,0,1.79-.6l38.82-16.54c.23-.09.45-.19.67-.3a28.61,28.61,0,0,0,4.57-48.32ZM36,196H24V164H36Zm181.68-31.39-37.51,16L118.52,196H60V157l21.46-21.46A11.93,11.93,0,0,1,89.94,132H140a8,8,0,0,1,0,16H112a12,12,0,0,0,0,24h32a12.19,12.19,0,0,0,2.69-.3l67-15.41.47-.12a4.61,4.61,0,0,1,5.82,4.44A4.58,4.58,0,0,1,217.68,164.61ZM164,100a40.36,40.36,0,0,0,5.18-.34,40,40,0,1,0,29.67-59.32A40,40,0,1,0,164,100Zm40-36a16,16,0,1,1-16,16A16,16,0,0,1,204,64ZM164,44a16,16,0,0,1,12.94,6.58A39.9,39.9,0,0,0,164.2,76H164a16,16,0,0,1,0-32Z"/></symbol>
   <symbol id="i-pencil-simple" viewBox="0 0 256 256"><path d="M230.14,70.54,185.46,25.85a20,20,0,0,0-28.29,0L33.86,149.17A19.85,19.85,0,0,0,28,163.31V208a20,20,0,0,0,20,20H92.69a19.86,19.86,0,0,0,14.14-5.86L230.14,98.82a20,20,0,0,0,0-28.28ZM91,204H52V165l84-84,39,39ZM192,103,153,64l18.34-18.34,39,39Z"/></symbol>
   <symbol id="i-plus" viewBox="0 0 256 256"><path d="M228,128a12,12,0,0,1-12,12H140v76a12,12,0,0,1-24,0V140H40a12,12,0,0,1,0-24h76V40a12,12,0,0,1,24,0v76h76A12,12,0,0,1,228,128Z"/></symbol>
+  <symbol id="i-trend-up" viewBox="0 0 256 256"><path d="M244,56v64a12,12,0,0,1-24,0V85l-75.51,75.52a12,12,0,0,1-17,0L96,129,32.49,192.49a12,12,0,0,1-17-17l72-72a12,12,0,0,1,17,0L136,135l67-67H168a12,12,0,0,1,0-24h64A12,12,0,0,1,244,56Z"/></symbol>
   <symbol id="i-trash" viewBox="0 0 256 256"><path d="M216,48H180V36A28,28,0,0,0,152,8H104A28,28,0,0,0,76,36V48H40a12,12,0,0,0,0,24h4V208a20,20,0,0,0,20,20H192a20,20,0,0,0,20-20V72h4a12,12,0,0,0,0-24ZM100,36a4,4,0,0,1,4-4h48a4,4,0,0,1,4,4V48H100Zm88,168H68V72H188ZM116,104v64a12,12,0,0,1-24,0V104a12,12,0,0,1,24,0Zm48,0v64a12,12,0,0,1-24,0V104a12,12,0,0,1,24,0Z"/></symbol>
 </svg>
 
 <div class="app">
   <header class="head">
     <button class="rbtn" type="button" id="backHome" aria-label="Back to Home" hidden><svg class="i"><use href="#i-caret-left"/></svg></button>
-    <span class="av" id="avatar"><img class="e" src="assets/3d/farmer.png" width="36" height="36" alt=""></span>
-    <div class="grow">
-      <div class="sub" id="headSub"></div>
-      <h1 id="headTitle">Family Money</h1>
+    <div class="dd grow hsheet">
+      <button type="button" class="av" id="avatar" aria-expanded="false" aria-controls="ddSheets" aria-label="Sheets on this device"><img class="e" src="assets/3d/farmer.png" width="36" height="36" alt=""></button>
+      <div class="grow" id="headText">
+        <div class="sub" id="headSub"></div>
+        <h1 id="headTitle">Family Money</h1>
+      </div>
+      <div class="ddlist" id="ddSheets" hidden></div>
     </div>
     <button class="rbtn" id="syncBtn" type="button" aria-label="Sync now"><svg class="i"><use href="#i-arrows-clockwise"/></svg><span class="dot" hidden></span></button>
   </header>
@@ -305,6 +379,7 @@ dialog::backdrop{background:rgba(8,10,12,.42)}
     </section>
 
     <section id="home">
+      <div class="colA">
       <div class="pcard hero" style="background:var(--lavender)">
         <div class="grow">
           <img class="e" src="assets/3d/bag.png" width="44" height="44" alt="">
@@ -318,8 +393,16 @@ dialog::backdrop{background:rgba(8,10,12,.42)}
         <button type="button" class="pick" data-new="Expense" style="background:var(--blush)"><span class="ptop"><img class="e" src="assets/3d/wings.png" width="30" height="30" alt=""><span class="plus"><svg class="i sm"><use href="#i-plus"/></svg></span></span><small>Expenses</small><b class="num" id="heroOut">₹0</b></button>
       </div>
       <div id="homeLimit"></div>
+      </div>
+      <div class="colB">
       <div class="sec"><h2>Latest</h2><span class="secr"><span class="pill" id="syncPill"></span><button class="rbtn sm" type="button" id="openHistory" aria-label="History: all entries"><svg class="i sm"><use href="#i-clock-counter-clockwise"/></svg></button></span></div>
       <div class="list" id="recent"></div>
+      </div>
+    </section>
+
+    <section id="cats" hidden>
+      <div class="catcards" id="catsList"></div>
+      <p class="foot">Deleting a category moves its entries to Others. Others is always kept, with its monthly limit. Changes reach the Google Sheet with the next sync, and its summary follows.</p>
     </section>
 
     <section id="history" hidden>
@@ -335,7 +418,9 @@ dialog::backdrop{background:rgba(8,10,12,.42)}
     </section>
 
     <section id="loans" hidden>
-      <!-- Shared by the Loans tab (money borrowed) and the Given tab (money given to others); app.js fills in the words. -->
+      <!-- Shared by the Loans tab (money borrowed) and the Given tab (money lent to others, or invested); app.js fills in the words. -->
+      <div class="colA">
+      <div class="seg" id="givenSeg" role="group" aria-label="Show"><button type="button" data-tab="given">Lent</button><button type="button" data-tab="invested">Invested</button></div>
       <div class="pcard" id="loanSummary">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
           <div><div class="muted t-sm" id="loanLeftLabel">Still owed</div><div class="big num" id="loanOwed">₹0</div></div>
@@ -344,13 +429,16 @@ dialog::backdrop{background:rgba(8,10,12,.42)}
         <div class="inlist">
           <div class="row"><svg class="i" style="color:#0B0B0C"><use id="loanTotalIcon" href="#i-arrow-down-left"/></svg><div class="grow"><b class="t-sm" id="loanTotalLabel">Borrowed</b><div class="t-xs muted" id="loanTotalSub">All loans</div></div><b class="num" id="loanBorrowed">₹0</b></div>
           <div class="row"><svg class="i" style="color:#0B0B0C"><use id="loanBackIcon" href="#i-arrow-up-right"/></svg><div class="grow"><b class="t-sm" id="loanBackLabel">Repaid</b><div class="t-xs muted" id="loanBackSub">Paid back so far</div></div><b class="num" id="loanRepaid">₹0</b></div>
-          <div class="row" id="loanIntRow" hidden><svg class="i" style="color:#0B0B0C"><use href="#i-clock"/></svg><div class="grow"><b class="t-sm">Interest</b><div class="t-xs muted" id="loanIntSub">Each month, on what is still owed</div></div><b class="num" id="loanInt">₹0</b></div>
+          <div class="row" id="loanIntRow" hidden><svg class="i" style="color:#0B0B0C"><use href="#i-clock"/></svg><div class="grow"><b class="t-sm" id="loanIntLabel">Interest</b><div class="t-xs muted" id="loanIntSub">Each month, on what is still owed</div></div><b class="num" id="loanInt">₹0</b></div>
         </div>
       </div>
       <button type="button" class="btn" id="addLoan"><svg class="i sm"><use href="#i-plus"/></svg><span id="addLoanText">Add a loan</span></button>
+      </div>
+      <div class="colB">
       <div class="sec"><h2 id="loanListTitle">Loans</h2><span class="see" id="loanCount"></span></div>
       <div class="list" id="loanList"></div>
       <p class="foot" id="loanFoot"></p>
+      </div>
     </section>
 
     <section id="insights" hidden>
@@ -386,8 +474,16 @@ dialog::backdrop{background:rgba(8,10,12,.42)}
   </main>
 
   <nav class="navwrap" aria-label="Main">
+    <div class="dd side-sheet">
+      <button type="button" class="side-btn" id="sideSheet" aria-expanded="false" aria-controls="ddSheets" aria-label="Sheets on this device">
+        <span class="av" id="sideAv"><img class="e" src="assets/3d/farmer.png" width="30" height="30" alt=""></span>
+        <span class="grow"><small>Namaste <img class="e" src="assets/3d/wave.png" width="14" height="14" alt=""></small><b id="sideName">Family Money</b></span>
+        <svg class="i sm dda"><use href="#i-caret-right"/></svg>
+      </button>
+    </div>
     <div class="nav">
       <button type="button" data-tab="home" aria-current="page"><svg class="i"><use href="#i-house-fill"/></svg>Home</button>
+      <button type="button" data-tab="history" class="wide"><svg class="i"><use href="#i-clock-counter-clockwise"/></svg>History</button>
       <button type="button" data-tab="loans"><svg class="i"><use href="#i-hand-arrow-down"/></svg>Loans</button>
       <button type="button" data-tab="given"><svg class="i"><use href="#i-hand-arrow-up"/></svg>Given</button>
       <button type="button" data-tab="insights"><svg class="i"><use href="#i-chart-bar"/></svg>Insights</button>
@@ -412,9 +508,11 @@ dialog::backdrop{background:rgba(8,10,12,.42)}
     <label id="noteBox"><span class="lbl" id="noteLabel">Reason</span><input class="field" id="note" maxlength="200" autocomplete="off" placeholder="What was it for?"></label>
     <div class="chips" id="noteChips"></div>
     <div id="loanOpts" hidden>
-      <span class="lbl">Priority (high shows first)</span>
-      <div class="seg prio" role="group" aria-label="Priority"><button type="button" data-prio="high">High</button><button type="button" data-prio="medium">Medium</button><button type="button" data-prio="low">Low</button></div>
-      <span class="lbl" style="margin-top:12px">Interest (optional)</span>
+      <div id="prioBox"><span class="lbl">Priority (high shows first)</span>
+      <div class="seg prio" role="group" aria-label="Priority"><button type="button" data-prio="high">High</button><button type="button" data-prio="medium">Medium</button><button type="button" data-prio="low">Low</button></div></div>
+      <div id="compBox" hidden><span class="lbl">Growth</span>
+      <div class="seg" role="group" aria-label="Growth"><button type="button" data-comp="compound">Compound (funds)</button><button type="button" data-comp="simple">Simple</button></div></div>
+      <span class="lbl" id="rateLabel" style="margin-top:12px">Interest (optional)</span>
       <div class="rate">
         <label class="field ratein"><input id="rate" inputmode="decimal" autocomplete="off" maxlength="6" placeholder="0" aria-label="Interest percent"><b>%</b></label>
         <div class="seg" role="group" aria-label="Interest is charged"><button type="button" data-per="month">per month</button><button type="button" data-per="year">per year</button></div>

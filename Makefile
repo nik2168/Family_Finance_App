@@ -1,10 +1,11 @@
 # Family Money. Run `make` to list the commands.
 PORT       ?= 8000
 PLAYWRIGHT := 1.48.2
+CLASP      := $(TOOLS)/clasp/node_modules/.bin/clasp
 TOOLS      := .tools
 E2E_ENV    := NODE_PATH=$(TOOLS)/node_modules PLAYWRIGHT_BROWSERS_PATH=$(TOOLS)/browsers
 
-.PHONY: help test check e2e demo run apps-script clean
+.PHONY: help test check e2e demo run apps-script push clean
 
 help: ## Show this list
 	@grep -E '^[a-z0-9-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "}; {printf "  make %-12s %s\n", $$1, $$2}'
@@ -50,6 +51,27 @@ apps-script: ## Put Code.gs + shared.gs in build/apps-script, ready to paste int
 	cp src/shared.js build/apps-script/shared.gs
 	@echo "Paste both files from build/apps-script/ into Extensions > Apps Script,"
 	@echo "then Deploy > Manage deployments > edit > New version."
+
+# Each sheet in .env: <NAME>_SCRIPT_ID, <NAME>_DEPLOYEMENT_ID, <NAME>_WEB_APP_URL and its key. The key is never printed.
+# clasp pull brings the live appsscript.json, so the web app's access settings ship unchanged (without them phones are cut off).
+push: test $(CLASP) ## Push Code.gs + shared.gs to both Google Sheets and update their web apps (same URLs). Once: npx @google/clasp login
+	@test -f .env || { echo "No .env"; exit 1; }; set -a; . ./.env; set +a; \
+	for s in SHEET:FAMILY_KEY PERSONAL_SHEET:PERSONAL_KEY; do \
+		name=$${s%%:*}; id=$$(printenv $${name}_SCRIPT_ID); dep=$$(printenv $${name}_DEPLOYEMENT_ID); \
+		url=$$(printenv $${name}_WEB_APP_URL); key=$$(printenv $${s##*:}); dir=build/clasp/$$name; \
+		if [ -z "$$id" ] || [ -z "$$dep" ] || [ -z "$$url" ] || [ -z "$$key" ]; then \
+			echo "$$name: .env needs $${name}_SCRIPT_ID (Apps Script > Project Settings > IDs), $${name}_DEPLOYEMENT_ID, $${name}_WEB_APP_URL and $${s##*:}"; exit 1; fi; \
+		rm -rf $$dir && mkdir -p $$dir && printf '{"scriptId":"%s"}\n' "$$id" > $$dir/.clasp.json; \
+		(cd $$dir && $(CURDIR)/$(CLASP) pull >/dev/null) || exit 1; \
+		grep -q '"ANYONE_ANONYMOUS"' $$dir/appsscript.json || { echo "$$name: its appsscript.json has no public web app settings, not pushing"; exit 1; }; \
+		rm -f $$dir/*.js $$dir/*.gs && cp apps-script/Code.gs $$dir/Code.js && cp src/shared.js $$dir/shared.js; \
+		(cd $$dir && $(CURDIR)/$(CLASP) push --force && $(CURDIR)/$(CLASP) deploy -i "$$dep" -d "make push") || exit 1; \
+		printf '{"key":"%s","ops":[]}' "$$key" | curl -sfL -H 'Content-Type: text/plain;charset=utf-8' --data-binary @- "$$url" | grep -q '"rows"' \
+			&& echo "$$name: pushed, deployed and synced" || { echo "$$name: deployed, but its test sync failed"; exit 1; }; \
+	done
+
+$(CLASP):
+	npm install --prefix $(TOOLS)/clasp --no-save --no-package-lock @google/clasp@3.4.1  # own folder: a --no-save install prunes the other
 
 clean: ## Remove build output and the installed test tools
 	rm -rf build $(TOOLS)

@@ -4,6 +4,7 @@ const eq = (a, b, msg) => assert.strictEqual(JSON.stringify(a), JSON.stringify(b
 const { createBackend } = require('./fake-sheet.js');
 
 const B = createBackend(), { ctx, props, tab, month } = B;
+props.CATS = JSON.stringify(ctx.CATEGORIES); // the family sheet: Job, Dairy, Crops / House, Dairy, Crops (a new sheet starts with only Others, below)
 ctx.setup();
 const KEY = props.KEY;
 const post = body => ctx.doPost({ postData: { contents: JSON.stringify({ key: KEY, ...body }) } });
@@ -16,13 +17,15 @@ const cells = rows => rows.map(r => r.slice(1, 5)); // Category, Income, Expense
 // ---- setup(): only the common tab exists until there is an entry; year tabs are made when needed
 eq(B.ss.getSheets().map(t => t.name), ['Loans & Settings']);
 eq(tab('Loans & Settings').rows[0], ['Others monthly limit', 3000]);
-// Four tables, left to right: MONEY BORROWED A:I, PAID BACK K:O, MONEY GIVEN Q:Y, GOT BACK AA:AE
-eq([0, 10, 16, 26].map(c => tab('Loans & Settings').rows[2][c]), ['MONEY BORROWED', 'PAID BACK', 'MONEY GIVEN', 'GOT BACK']);
+// Six tables, left to right: MONEY BORROWED A:I, PAID BACK K:O, MONEY GIVEN Q:Y, GOT BACK AA:AE, INVESTED AG:AO, WITHDRAWN AQ:AU
+eq([0, 10, 16, 26, 32, 42].map(c => tab('Loans & Settings').rows[2][c]), ['MONEY BORROWED', 'PAID BACK', 'MONEY GIVEN', 'GOT BACK', 'INVESTED', 'WITHDRAWN']);
 eq(tab('Loans & Settings').rows[3].slice(0, 9), ['Date', 'From whom / why', 'Amount', 'Interest %', 'Per', 'Priority', 'Paid back', 'Still owed', 'Id']);
 eq(tab('Loans & Settings').rows[3].slice(10, 15), ['Date', 'Loan', 'Amount', 'LoanId', 'Id']);
 eq(tab('Loans & Settings').rows[3].slice(16, 25), ['Date', 'To whom / why', 'Amount', 'Interest %', 'Per', 'Priority', 'Got back', 'Still to get', 'Id']);
 eq(tab('Loans & Settings').rows[3].slice(26, 31), ['Date', 'Given to', 'Amount', 'LoanId', 'Id']);
-eq(tab('Loans & Settings').hiddenCols, [9, 14, 15, 25, 30, 31], 'Id columns hidden');
+eq(tab('Loans & Settings').rows[3].slice(32, 41), ['Date', 'Fund / scheme', 'Amount', 'Return %', 'Per', 'Interest', 'Withdrawn', 'Still invested', 'Id']);
+eq(tab('Loans & Settings').rows[3].slice(42, 47), ['Date', 'Fund', 'Amount', 'LoanId', 'Id']);
+eq(tab('Loans & Settings').hiddenCols, [9, 14, 15, 25, 30, 31, 41, 46, 47], 'Id columns hidden');
 eq(ctx.doPost({ postData: { contents: JSON.stringify({ key: 'nope', ops: [] }) } }), { error: 'wrong key' });
 eq(ctx.doPost({ postData: { contents: '{oops' } }), { error: 'bad request' });
 
@@ -35,13 +38,19 @@ eq(B.ss.getSheets().map(t => t.name), ['2026', 'Loans & Settings'], 'the 2026 ta
 // ---- The year tab: title, summary (live formulas), 12 month tables side by side
 const y = tab('2026');
 assert.strictEqual(y.rows[0][0], '2026 · Family Money');
-eq(y.rows[2], ['Month', 'Job', 'Dairy', 'Crops', 'Others', 'Income', 'House', 'Dairy', 'Crops', 'Others', 'Expenses', 'Saved']);
+eq(y.rows[2], ['Month', 'Job', 'Dairy', 'Crops', 'Others', '', 'Income', 'House', 'Dairy', 'Crops', 'Others', 'Expenses', '', 'Saved'], 'F and M stay blank: they are month Id columns');
 eq(y.rows[3].slice(0, 2), ['January', '=SUMIF(B21:B,"Job",C21:C)']);
-eq(y.rows[12].slice(6, 12), ['=SUMIF(BM21:BM,"House",BO21:BO)', '=SUMIF(BM21:BM,"Dairy",BO21:BO)', '=SUMIF(BM21:BM,"Crops",BO21:BO)', '=SUMIF(BM21:BM,"Others",BO21:BO)', '=SUM(G13:J13)', '=F13-K13'], 'October = month 10, columns BL:BQ');
+eq(y.rows[12].slice(7, 14), ['=SUMIF(BM21:BM,"House",BO21:BO)', '=SUMIF(BM21:BM,"Dairy",BO21:BO)', '=SUMIF(BM21:BM,"Crops",BO21:BO)', '=SUMIF(BM21:BM,"Others",BO21:BO)', '=SUM(H13:K13)', '', '=G13-L13'], 'October = month 10, columns BL:BQ');
 eq(y.rows[15].slice(0, 3), ['Total', '=SUM(B4:B15)', '=SUM(C4:C15)']);
 eq(y.rows[18][7 * OCT], 'OCTOBER');
 eq(y.rows[19].slice(7 * OCT, 7 * OCT + 6), ['Date', 'Category', 'Income', 'Expense', 'Reason', 'Id']);
 eq(y.hiddenCols.slice(0, 2), [6, 13], 'the Id column of each month is hidden');
+[1, 2, 3, 15].forEach(r => y.rows[r].forEach((v, c) => assert.ok(v === '' || !y.hiddenCols.includes(c + 1), `summary cell ${ctx.colName(c + 1)}${r + 1} sits in a hidden Id column`)));
+// A summary written by an older layout (Income under the hidden F) is rewritten on the next sync
+props.SUMMARY = '1';
+y.rows[2][5] = 'Income';
+post({ ops: [] });
+eq([y.rows[2][5], y.rows[2][6], props.SUMMARY], ['', 'Income', ctx.SUMMARY], 'old summary rewritten once');
 eq(cells(month(2026, OCT)), [['Dairy', '', 450, 'Cattle feed']]);
 assert.ok(month(2026, OCT)[0][0] instanceof Date);
 
@@ -154,5 +163,62 @@ eq(cells(O.month(2025, 11)), [['House', '', 300, '']]);
 eq([r.loans.map(l => [l.id, l.interest, l.priority]), r.repays.map(p => p.amount), r.othersLimit], [[['loan-old1', 0, 'medium']], [200], 4000]);
 r = go();
 eq([r.rows.length, r.loans.length, r.repays.length], [2, 1, 1], 'running again moves nothing twice');
+
+// ---- Investments: their own table (AG:AO) with Compound / Simple in the sixth column, withdrawals in AQ:AU
+const inv = { id: 'inv-00001', dateTime: '2026-01-01T05:00:00.000Z', reason: 'HDFC Liquid Fund', amount: 50000, interest: 7, per: 'year', dir: 'invested' };
+r = post({ ops: [op('i1', 'loan', 'add', 'inv-00001', inv), op('i2', 'loan', 'add', 'inv-00002', { ...inv, id: 'inv-00002', reason: 'Post office FD', compound: false }),
+  op('i3', 'repay', 'add', 'wd-000001', rep('wd-000001', 5000, 'inv-00001')), op('i4', 'loan', 'add', 'inv-00003', { ...inv, id: 'inv-00003', compound: 'yes' })] });
+eq([r.done, r.rejected], [['i1', 'i2', 'i3'], [{ opId: 'i4', error: 'bad interest' }]]);
+eq(r.loans.filter(l => l.dir === 'invested').map(l => [l.reason, l.compound]), [['HDFC Liquid Fund', true], ['Post office FD', false]]);
+eq(L.rows[4].slice(33, 41), ['HDFC Liquid Fund', 50000, 7, 'year', 'Compound', '=SUMIF($AT$5:$AT,AO5,$AS$5:$AS)', '=AI5-AM5', 'inv-00001']);
+eq(L.rows[5].slice(37, 38), ['Simple']);
+eq(L.rows[4].slice(43, 46), ['HDFC Liquid Fund', 5000, 'inv-00001'], 'the withdrawal sits in WITHDRAWN');
+L.rows[5][37] = 'compound'; // changed by hand in the sheet
+assert.strictEqual(post({ ops: [] }).loans.find(l => l.id === 'inv-00002').compound, true);
+// A sheet laid out before investments existed gets the INVESTED / WITHDRAWN tables on its next sync, and keeps its own
+const X = createBackend();
+X.props.KEY = 'k';
+const xs = X.ss.insertSheet('Loans & Settings');
+xs.rows = [['Others monthly limit', 2000], [], ['MONEY BORROWED', , , , , , , , , , 'PAID BACK', , , , , , 'MONEY GIVEN', , , , , , , , , , 'GOT BACK']];
+X.ctx.doPost({ postData: { contents: JSON.stringify({ key: 'k', ops: [] }) } });
+eq([xs.rows[2][32], xs.rows[2][42], xs.rows[3][0], xs.rows[0][1]], ['INVESTED', 'WITHDRAWN', undefined, 2000], 'only the missing tables are laid out');
+
+// ---- Categories: kept in the CATS property; renames move the rows; every year tab's summary follows the list
+const C = createBackend();
+C.props.KEY = 'k';
+C.props.CATS = JSON.stringify(C.ctx.CATEGORIES);
+const cpost = ops => C.ctx.doPost({ postData: { contents: JSON.stringify({ key: 'k', ops }) } });
+const cat = (opId, action, data) => ({ opId, kind: 'cat', action, data: { type: 'Expense', ...data } });
+r = cpost([op('c0', 'entry', 'add', 'cat-00001', entry('cat-00001')), op('c00', 'entry', 'add', 'cat-00002', entry('cat-00002', { dateTime: '2025-03-01T05:00:00.000Z' }))]);
+eq(r.cats, { Income: ['Job', 'Dairy', 'Crops', 'Others'], Expense: ['House', 'Dairy', 'Crops', 'Others'] }, 'the starting list');
+r = cpost([cat('c1', 'add', { name: 'Goats' }), cat('c2', 'rename', { name: 'Dairy', to: 'Animals' })]);
+eq([r.done, r.cats.Expense], [['c1', 'c2'], ['House', 'Animals', 'Crops', 'Goats', 'Others']]);
+eq(cells(C.month(2026, OCT)), [['Animals', '', 450, 'Cattle feed']], 'the row is renamed in the sheet');
+eq(cells(C.month(2025, 2)), [['Animals', '', 450, 'Cattle feed']], 'in every year');
+const cy = C.tab('2026');
+eq(cy.rows[2].slice(0, 15), ['Month', 'Job', 'Dairy', 'Crops', 'Others', '', 'Income', 'House', 'Animals', 'Crops', 'Goats', 'Others', '', 'Expenses', 'Saved']);
+eq(cy.rows[3].slice(7, 15), ['=SUMIF(B21:B,"House",D21:D)', '=SUMIF(B21:B,"Animals",D21:D)', '=SUMIF(B21:B,"Crops",D21:D)', '=SUMIF(B21:B,"Goats",D21:D)', '=SUMIF(B21:B,"Others",D21:D)', '', '=SUM(H4:L4)', '=G4-N4']);
+eq([cy.rows[1][7], cy.rows[15][0]], ['EXPENSES', 'Total']);
+eq(C.tab('2025').rows[2][10], 'Goats', 'older year tabs follow too');
+r = cpost([cat('c3', 'delete', { name: 'Animals' }), cat('c4', 'delete', { name: 'Goats' }), cat('c5', 'rename', { name: 'Others', to: 'Misc' }), cat('c6', 'add', { name: '=HYPERLINK("x")' }), cat('c7', 'add', { type: 'toString', name: 'X' })]);
+eq([r.done, r.rejected.map(x => x.error)], [['c3', 'c4'], ['Others cannot be changed', 'bad category', 'bad type']]);
+eq(cells(C.month(2026, OCT)), [['Others', '', 450, 'Cattle feed']], 'deleting moves the rows into Others');
+eq([cy.rows[2].slice(0, 12), cy.rows[2].slice(12, 15)], [['Month', 'Job', 'Dairy', 'Crops', 'Others', '', 'Income', 'House', 'Crops', 'Others', 'Expenses', 'Saved'], ['', '', '']], 'old columns blanked');
+// A phone that missed the delete still sends "Goats" (in any case): the category comes back, the entry is never lost
+r = cpost([op('c8', 'entry', 'add', 'cat-00003', entry('cat-00003', { category: 'goats' })), op('c9', 'entry', 'add', 'cat-00004', entry('cat-00004', { category: 'Crops ' }))]);
+eq([r.rejected, r.cats.Expense], [[{ opId: 'c9', error: 'bad category' }], ['House', 'Crops', 'goats', 'Others']]);
+eq(cpost([]).cats.Expense, ['House', 'Crops', 'goats', 'Others'], 'kept between syncs');
+C.typeRow(2026, OCT, [new Date(T), 'GOATS', '', 50, 'Typed']);
+assert.ok(cpost([]).rows.some(x => x.note === 'Typed' && x.category === 'goats'), 'hand-typed rows match the new list');
+
+// ---- A new, empty sheet starts with only Others (saved at setup); a sheet with entries but no saved list keeps the starting categories
+const N = createBackend();
+N.ctx.setup();
+eq(JSON.parse(N.props.CATS), { Income: ['Others'], Expense: ['Others'] });
+const E = createBackend();
+E.props.KEY = 'k';
+E.ss.insertSheet('2025'); // made before categories could change
+eq(E.ctx.doPost({ postData: { contents: JSON.stringify({ key: 'k', ops: [] }) } }).cats, { Income: ['Job', 'Dairy', 'Crops', 'Others'], Expense: ['House', 'Dairy', 'Crops', 'Others'] });
+assert.strictEqual(E.props.CATS, undefined, 'nothing saved for it');
 
 console.log('Code.gs harness passed');

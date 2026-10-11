@@ -15,6 +15,7 @@ const SCRIPT = 'https://script.google.com/macros/s/DEMO/exec', KEY = 'demo-key';
 const SHOTS = process.env.SHOTS;
 const money = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0, maximumFractionDigits: 2 });
 const backend = createBackend();
+backend.props.CATS = JSON.stringify(backend.ctx.CATEGORIES); // a family sheet with the starting categories
 backend.ctx.setup();
 backend.props.KEY = KEY;
 const post = ops => backend.doPost(JSON.stringify({ key: KEY, ops }));
@@ -138,7 +139,8 @@ function sheetChecks(label) {
       });
       const sm = s.summarize(rows, 'month', new Date(+y, m, 1), 0), inc = c => round2((sm.net[c] || 0) + (sm.spent[c] || 0));
       const want = [inc('Job'), inc('Dairy'), inc('Crops'), inc('Others'), sm.income, sm.spent.House, sm.spent.Dairy, sm.spent.Crops, sm.spent.Others, sm.expense, sm.savings];
-      const got = want.map((_, k) => value(tab, 4 + m, 2 + k));
+      const cols = tab.rows[2].map((v, c) => v ? c + 1 : 0).filter(Boolean).slice(1); // after Month; blanks under hidden Id columns skipped
+      const got = want.map((_, k) => value(tab, 4 + m, cols[k]));
       if (!eqv(got, want)) badSummary.push(`${y}-${m + 1}: sheet ${JSON.stringify(got)} app ${JSON.stringify(want)}`);
     }
   });

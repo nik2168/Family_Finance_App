@@ -10,7 +10,8 @@ const shot = (page, name, full) => SHOTS ? page.screenshot({ path: path.join(SHO
 const SCRIPT = 'https://script.google.com/macros/s/TEST123/exec';
 
 (async () => {
-  const backend = require('./fake-sheet.js').createBackend();
+  const { createBackend } = require('./fake-sheet.js'), backend = createBackend();
+  backend.props.CATS = JSON.stringify(backend.ctx.CATEGORIES); // the family sheet; a new one (backend2) starts with only Others
   backend.ctx.setup();
   backend.props.KEY = 'k1';
   const sheet = () => JSON.parse(JSON.stringify(backend.ctx.loadAll(backend.ss), (k, v) => k === "ss" ? undefined : v)); // what the sheet holds, read like Code.gs
@@ -31,12 +32,14 @@ const SCRIPT = 'https://script.google.com/macros/s/TEST123/exec';
     const errors = [];
     page.on('pageerror', e => errors.push(e.message));
     page.on('console', m => { if (m.type() === 'error' && !/ERR_INTERNET_DISCONNECTED/.test(m.text())) errors.push(m.text()); });
-    page.on('dialog', d => d.accept()); // "Delete this …?" confirmations
+    let answer = '';
+    page.on('dialog', d => d.accept(answer)); // "Delete this …?" confirmations; prompts get `answer`
     const goOffline = async () => { online = false; await ctx.setOffline(true); };
     const synced = () => page.waitForFunction(() => document.querySelector('#syncPill').textContent.includes('Synced'));
     const goOnline = async () => { online = true; await ctx.setOffline(false); await synced(); };
     // History has no tab of its own: it opens from the clock button next to "Latest" on Home.
     const tab = async name => {
+      if (name === 'invested') { await page.click('.nav [data-tab="given"]'); return page.click('#givenSeg [data-tab="invested"]'); } // inside the Given tab
       if (name !== 'history') return page.click(`.nav [data-tab="${name}"]`);
       await page.click('.nav [data-tab="home"]');
       await page.click('#openHistory');
@@ -313,7 +316,7 @@ const SCRIPT = 'https://script.google.com/macros/s/TEST123/exec';
     assert.strictEqual(await page.evaluate(() => localStorage.getItem('fm.pending')), null);
 
     // ---- Navigation: Home, Loans, Given, Insights; History opens from Home and goes back to it
-    assert.deepStrictEqual(await page.$$eval('.nav button', b => b.map(x => x.textContent.trim())), ['Home', 'Loans', 'Given', 'Insights']);
+    assert.deepStrictEqual(await page.$$eval('.nav button', b => b.filter(x => x.offsetParent).map(x => x.textContent.trim())), ['Home', 'Loans', 'Given', 'Insights']);
     await tab('history');
     assert.strictEqual(await page.textContent('#headTitle'), 'History');
     assert.strictEqual(await page.getAttribute('.nav [data-tab="home"]', 'aria-current'), 'page', 'Home stays lit while in History');
@@ -357,6 +360,32 @@ const SCRIPT = 'https://script.google.com/macros/s/TEST123/exec';
     assert.match(await page.textContent('#insLoans'), /Others owe us.*₹6,000/);
     await shot(page, '14-insights-loans');
 
+    // ---- Investments: a liquid fund at an expected 7% a year, compounding; the forecast counts its growth and the interest on money given
+    await tab('invested');
+    assert.strictEqual(await page.textContent('#headTitle'), 'Investments');
+    assert.deepStrictEqual([await page.getAttribute('.nav [data-tab="given"]', 'aria-current'), await page.getAttribute('#givenSeg [data-tab="invested"]', 'aria-pressed')], ['page', 'true'], 'Invested lives in the Given tab');
+    await page.click('#addLoan');
+    assert.strictEqual(await page.textContent('#sheetTitle'), 'New investment');
+    assert.ok(await page.isHidden('#prioBox') && await page.isVisible('#compBox'), 'growth type instead of priority');
+    assert.deepStrictEqual([await page.getAttribute('[data-comp="compound"]', 'aria-pressed'), await page.getAttribute('[data-per="year"]', 'aria-pressed')], ['true', 'true']);
+    await keypad('50000');
+    await page.fill('#note', 'HDFC Liquid Fund');
+    await page.click('#rateChips [data-rate="7"]');
+    await page.click('#saveBtn');
+    await closed();
+    await synced();
+    assert.match(await page.textContent('#loanList'), /HDFC Liquid Fund.*₹50,000 now.*7% a year expected, compound, about ₹283 a month now/);
+    const fund = sheet().loans.find(l => l.dir === 'invested');
+    assert.deepStrictEqual([fund.reason, fund.amount, fund.interest, fund.per, fund.compound], ['HDFC Liquid Fund', 50000, 7, 'year', true]);
+    await shot(page, '14b-invested');
+    await tab('insights');
+    assert.match(await page.textContent('#insForecast'), /₹120 a month interest from money given, \+ about ₹283 a month growth on investments/);
+    assert.match(await page.textContent('#insLoans'), /Loans & investments.*Investments, worth about.*₹50,000/);
+    await page.click('.nav [data-tab="given"]');
+    assert.strictEqual(await page.textContent('#headTitle'), 'Investments', 'Given reopens on the side last used');
+    await page.click('.nav [data-tab="loans"]');
+    assert.ok(await page.isHidden('#givenSeg'), 'no Lent / Invested switch on Loans');
+
     // ---- Apps Script takes 500 changes per request: 600 waiting all sync without a tap
     await goOffline();
     await page.evaluate(() => {
@@ -369,6 +398,95 @@ const SCRIPT = 'https://script.google.com/macros/s/TEST123/exec';
     });
     await goOnline();
     assert.strictEqual(sheet().rows.filter(e => /^Bulk /.test(e.note)).length, 600);
+
+    // ---- Categories: add one, use it, rename it (the sheet's rows follow), delete it (entries go to Others); Others stays
+    await tab('home');
+    await page.click('#headTitle'); // the sheet's name opens the same list as its picture
+    await page.click('#editCats');
+    assert.strictEqual(await page.textContent('#headTitle'), 'Categories');
+    assert.strictEqual(await page.locator('[data-cren="Others"], [data-cdel="Others"]').count(), 0, 'Others is always kept');
+    answer = 'Goats';
+    await page.click('[data-cadd="Expense"]');
+    await synced();
+    await tab('home');
+    await add('Expense', 'Goats', '700', 'Goat feed');
+    await synced();
+    await page.click('#avatar');
+    await page.click('#editCats');
+    answer = 'Animals';
+    await page.click('[data-cren="Goats"]');
+    await synced();
+    assert.match(await page.textContent('#catsList'), /Animals1 entry/);
+    assert.strictEqual(sheet().rows.find(e => e.note === 'Goat feed').category, 'Animals');
+    assert.ok(backend.tab(String(new Date().getFullYear())).rows[2].includes('Animals'), 'the year summary has an Animals column');
+    await shot(page, '15-categories');
+    await page.click('[data-cdel="Animals"]');
+    await synced();
+    assert.strictEqual(sheet().rows.find(e => e.note === 'Goat feed').category, 'Others');
+    assert.deepStrictEqual(sheet().cats.Expense, ['House', 'Dairy', 'Crops', 'Others']);
+    await page.click('#backHome');
+
+    // ---- A second Google Sheet: its link adds "Sheet 2" with its own picture and entries; the header switches between them
+    const backend2 = createBackend(), SCRIPT2 = 'https://script.google.com/macros/s/TEST456/exec';
+    backend2.ctx.setup();
+    backend2.props.KEY = 'k2';
+    await ctx.route(SCRIPT2, route => route.fulfill({ json: backend2.doPost(route.request().postData()), headers: { 'access-control-allow-origin': '*' } }));
+    await page.goto(`http://localhost:8765/#setup=${SCRIPT2}|k2`);
+    await page.reload(); // a hash-only change doesn't restart the app
+    await synced();
+    assert.match(await page.textContent('#headTitle'), /^Sheet 2/);
+    assert.strictEqual(await page.getAttribute('#avatar img', 'src'), 'assets/3d/house.png', 'a picture the first sheet does not use');
+    assert.match(await page.textContent('#recent'), /No entries yet/);
+    assert.strictEqual(await page.evaluate(() => JSON.parse(localStorage.getItem('fm.cfg')).url), SCRIPT, 'the first sheet keeps its link');
+    await page.click('[data-new="Income"]');
+    assert.deepStrictEqual(await page.$$eval('#catList .opt', b => b.map(x => x.textContent)), ['Others'], 'a new sheet starts with only Others');
+    await page.click('#cancel');
+    await add('Income', 'Others', '900', 'Shop sale');
+    await synced();
+    assert.ok(backend2.ctx.loadAll(backend2.ss).rows.some(e => e.note === 'Shop sale') && !sheet().rows.some(e => e.note === 'Shop sale'), 'went to the second sheet only');
+    await page.click('#avatar');
+    answer = 'Shop';
+    await page.click('[data-sren]:not([data-sren="fm."])');
+    assert.match(await page.textContent('#headTitle'), /^Shop/);
+    assert.match(await page.textContent('#ddSheets'), /Family Money.*Shop/);
+    await shot(page, '16-sheets');
+    await page.click('[data-sheet="fm."]');
+    await synced();
+    assert.match(await page.textContent('#headTitle'), /^Family Money/);
+    assert.match(await page.textContent('#recent'), /Goat feed/);
+    await page.click('#avatar');
+    await page.click('[data-sdel]:not([data-sdel="fm."])');
+    assert.strictEqual(await page.locator('#ddSheets [data-sheet]').count(), 1);
+    assert.strictEqual(await page.evaluate(() => Object.keys(localStorage).filter(k => /^fm\.\w{8}\./.test(k)).length), 0, 'its copy on the phone is gone');
+    assert.strictEqual(await page.locator('[data-sdel]').count(), 0, 'the last sheet cannot be removed');
+
+    // ---- Laptop: a full-height sidebar on the left edge (sheet switcher, tabs incl. History), toolbar titles, Home in two columns
+    const wide = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+    await wide.route(SCRIPT, route => route.fulfill({ json: backend.doPost(route.request().postData()), headers: { 'access-control-allow-origin': '*' } }));
+    const desk = await wide.newPage();
+    desk.on('pageerror', e => errors.push(e.message));
+    await desk.goto(`http://localhost:8765/#setup=${SCRIPT}|k1`);
+    await desk.waitForSelector('#headSub:has-text("Synced")'); // the toolbar shows the sync state on a wide screen
+    const box = s => desk.locator(s).boundingBox();
+    const [side, main, colA, colB] = await Promise.all(['.navwrap', 'main', '#home .colA', '#home .colB'].map(box));
+    assert.ok(side.x === 0 && side.y === 0 && side.height === 800 && side.x + side.width <= main.x, 'sidebar: left edge, full height');
+    assert.ok(colA.x + colA.width <= colB.x && Math.abs(colA.y - colB.y) < 2, 'Home side by side');
+    assert.strictEqual(await desk.textContent('#sideName'), 'Family Money');
+    assert.ok(await desk.isHidden('#avatar'), 'the sheet switcher lives in the sidebar');
+    assert.strictEqual(await desk.textContent('#headTitle'), 'Home');
+    await desk.click('#sideSheet');
+    assert.ok(await desk.isVisible('.side-sheet #ddSheets [data-sheet="fm."]'), 'the sheets list opens under the sidebar switcher');
+    await desk.keyboard.press('Escape');
+    await desk.click('.nav [data-tab="history"]');
+    assert.strictEqual(await desk.getAttribute('.nav [data-tab="history"]', 'aria-current'), 'page');
+    assert.ok(await desk.isHidden('#backHome'), 'History is a tab here, no back button');
+    if (SHOTS) await desk.screenshot({ path: path.join(SHOTS, '17-desktop.png') });
+    // iPad portrait: still the sidebar, pages in one column
+    await desk.setViewportSize({ width: 820, height: 1180 });
+    await desk.click('.nav [data-tab="home"]');
+    const [hero, latest] = await Promise.all(['#home .hero', '#recent'].map(box));
+    assert.ok(await desk.isVisible('#sideSheet') && latest.y > hero.y + hero.height && latest.x === hero.x, 'tablet: sidebar, Home in one column');
+    await wide.close();
 
     assert.deepStrictEqual(errors, []);
     console.log('E2E passed');

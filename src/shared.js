@@ -1,16 +1,32 @@
 // Shared by the phone app and Apps Script (pasted there as shared.gs). Pure functions only.
+// Each sheet keeps its own category list (Apps Script property CATS); Others is always last and never changes.
+// CATEGORIES: what sheets made before categories could change were using. A new, empty sheet starts with only Others.
 var CATEGORIES = {
   Income: ['Job', 'Dairy', 'Crops', 'Others'],
   Expense: ['House', 'Dairy', 'Crops', 'Others']
 };
-var NET_ORDER = ['Job', 'Dairy', 'Crops', 'House', 'Others'];
+var NEW_CATEGORIES = { Income: ['Others'], Expense: ['Others'] };
 var MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 var DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 var PRIORITY = { high: 0, medium: 1, low: 2 }; // loans: high shows first
+// Money we borrowed, gave to others (on interest), or invested (funds, deposits). Their "repayments": paid back, got back, withdrawn.
+var DIRS = ['borrowed', 'given', 'invested'];
+function loanDir(l) { return l && DIRS.indexOf(l.dir) > 0 ? l.dir : 'borrowed'; } // missing = borrowed (older records)
 
 function checkId(id) { return typeof id === 'string' && /^[\w-]{8,64}$/.test(id); }
 function checkAmount(a) { return typeof a === 'number' && isFinite(a) && a > 0 && a <= 1e9; }
 function checkDate(s) { return typeof s === 'string' && !isNaN(Date.parse(s)); }
+// A category name starts with a letter and has none of the characters sheet formulas and SUMIF treat specially.
+// 'Saved' is the pie's own slice; names like 'constructor' would clash with object keys.
+function checkCatName(s) {
+  return typeof s === 'string' && s === s.trim() && /^\p{L}[^"*?~<>=\x00-\x1f]{0,29}$/u.test(s) && s.toLowerCase() !== 'saved' && !(s in {});
+}
+// "dairy " typed by hand still counts as "Dairy".
+function matchName(names, v) {
+  var s = String(v == null ? '' : v).trim().toLowerCase();
+  for (var i = 0; i < names.length; i++) if (names[i].toLowerCase() === s) return names[i];
+  return '';
+}
 function checkReason(s) {
   var t = typeof s === 'string' ? s.trim() : '';
   return !t ? 'reason required' : t.length > 200 ? 'reason too long' : '';
@@ -21,7 +37,7 @@ function validateEntry(e) {
   if (!e || typeof e !== 'object') return 'bad entry';
   if (!checkId(e.id)) return 'bad id';
   if (!CATEGORIES.hasOwnProperty(e.type)) return 'bad type';
-  if (CATEGORIES[e.type].indexOf(e.category) < 0) return 'bad category';
+  if (!checkCatName(e.category)) return 'bad category'; // any name: a phone may not have heard of a rename yet
   if (!checkAmount(e.amount)) return 'bad amount';
   if (!checkDate(e.dateTime)) return 'bad date';
   return checkReason(e.note);
@@ -37,8 +53,8 @@ function validateLoan(l) {
   if (l.interest != null && !(typeof l.interest === 'number' && l.interest >= 0 && l.interest <= 100)) return 'bad interest';
   if (l.interest > 0 && l.per !== 'month' && l.per !== 'year') return 'bad interest';
   if (l.priority != null && !PRIORITY.hasOwnProperty(l.priority)) return 'bad priority';
-  // Money we borrowed, or money we gave to others (missing = borrowed). A repayment of a given loan is money received back.
-  if (l.dir != null && l.dir !== 'borrowed' && l.dir !== 'given') return 'bad dir';
+  if (l.dir != null && DIRS.indexOf(l.dir) < 0) return 'bad dir';
+  if (l.compound != null && typeof l.compound !== 'boolean') return 'bad interest'; // investments: compound (missing) or simple
   return checkReason(l.reason);
 }
 
@@ -92,8 +108,16 @@ function bucketIndex(view, d, start) {
 
 function round2(n) { return Math.round(n * 100) / 100; }
 
-// rows: [{id, dateTime, type, category, amount, note}], duplicates by id are counted once.
-function summarize(rows, view, date, othersLimit) {
+// Profit by source: income categories, then expense-only ones, then Others. A name in both lists is income minus expenses.
+function netOrder(cats) {
+  var out = cats.Income.filter(function (c) { return c !== 'Others'; });
+  cats.Expense.forEach(function (c) { if (c !== 'Others' && out.indexOf(c) < 0) out.push(c); });
+  return out.concat('Others');
+}
+
+// rows: [{id, dateTime, type, category, amount, note}], duplicates by id are counted once. cats: the sheet's categories.
+function summarize(rows, view, date, othersLimit, cats) {
+  cats = cats || CATEGORIES;
   var r = periodRange(view, date), labels = buckets(view, r.start);
   var out = {
     start: r.start, end: r.end, label: periodLabel(view, date), labels: labels,
@@ -102,8 +126,8 @@ function summarize(rows, view, date, othersLimit) {
     expenseSeries: labels.map(function () { return 0; }),
     entries: [], others: 0, othersLimit: othersLimit || 0
   };
-  NET_ORDER.forEach(function (c) { out.net[c] = 0; });
-  CATEGORIES.Expense.forEach(function (c) { out.spent[c] = 0; });
+  netOrder(cats).forEach(function (c) { out.net[c] = 0; });
+  cats.Expense.forEach(function (c) { out.spent[c] = 0; });
   var seen = {};
   rows.forEach(function (e) {
     if (seen[e.id]) return;
@@ -112,9 +136,9 @@ function summarize(rows, view, date, othersLimit) {
     if (!(d >= r.start && d < r.end)) return;
     var i = bucketIndex(view, d, r.start);
     if (e.type === 'Income') {
-      out.income += e.amount; out.net[e.category] += e.amount; out.incomeSeries[i] += e.amount;
-    } else {
-      out.expense += e.amount; out.net[e.category] -= e.amount; out.spent[e.category] += e.amount; out.expenseSeries[i] += e.amount;
+      out.income += e.amount; out.net[e.category] = (out.net[e.category] || 0) + e.amount; out.incomeSeries[i] += e.amount;
+    } else { // || 0: a queued entry can still carry a name renamed on another phone
+      out.expense += e.amount; out.net[e.category] = (out.net[e.category] || 0) - e.amount; out.spent[e.category] = (out.spent[e.category] || 0) + e.amount; out.expenseSeries[i] += e.amount;
     }
     out.entries.push(e);
   });
@@ -122,26 +146,27 @@ function summarize(rows, view, date, othersLimit) {
   out.income = round2(out.income);
   out.expense = round2(out.expense);
   out.savings = round2(out.income - out.expense);
-  NET_ORDER.forEach(function (c) { out.net[c] = round2(out.net[c]); });
-  CATEGORIES.Expense.forEach(function (c) { out.spent[c] = round2(out.spent[c]); });
+  Object.keys(out.net).forEach(function (c) { out.net[c] = round2(out.net[c]); });
+  Object.keys(out.spent).forEach(function (c) { out.spent[c] = round2(out.spent[c]); });
   out.incomeSeries = out.incomeSeries.map(round2);
   out.expenseSeries = out.expenseSeries.map(round2);
-  out.others = out.spent.Others;
+  out.others = out.spent.Others || 0;
   out.overLimit = out.othersLimit > 0 && out.others > out.othersLimit;
   return out;
 }
 
 // Where the period's income went: each expense category and what was saved, as % of income.
-// When more was spent than earned, the % are of expenses and overBy says by how much.
+// When more was spent than earned, the % are of expenses and overBy says by how much. i: the category's place in the list (its colour).
 function spendShare(s) {
   var base = Math.max(s.income, s.expense), slices = [];
-  CATEGORIES.Expense.forEach(function (c) { if (s.spent[c] > 0) slices.push({ name: c, amount: s.spent[c] }); });
+  Object.keys(s.spent).forEach(function (c, i) { if (s.spent[c] > 0) slices.push({ name: c, amount: s.spent[c], i: i }); });
   if (s.savings > 0) slices.push({ name: 'Saved', amount: s.savings });
   slices.forEach(function (x) { x.pct = Math.round(x.amount / base * 1000) / 10; });
   return { base: base, slices: slices, overBy: round2(Math.max(0, s.expense - s.income)) };
 }
 
-// ---- Offline operation queue. op = {opId, kind: 'entry'|'loan'|'repay', action: 'add'|'update'|'delete', id, data}
+// ---- Offline operation queue. op = {opId, kind: 'entry'|'loan'|'repay', action: 'add'|'update'|'delete', id, data},
+// or a category change {opId, kind: 'cat', action: 'add'|'rename'|'delete', data: {type, name, to}} (see applyCat).
 // The phone shows server data with its queued ops applied; Apps Script applies the same ops in the same order.
 var LISTS = { entry: 'rows', loan: 'loans', repay: 'repays' };
 
@@ -151,8 +176,11 @@ function indexById(list, id) {
 }
 
 function applyOps(snap, ops) {
-  var out = { rows: (snap.rows || []).slice(), loans: (snap.loans || []).slice(), repays: (snap.repays || []).slice() };
+  var c = snap.cats || CATEGORIES;
+  var out = { rows: (snap.rows || []).slice(), loans: (snap.loans || []).slice(), repays: (snap.repays || []).slice(),
+    cats: { Income: c.Income.slice(), Expense: c.Expense.slice() } };
   ops.forEach(function (op) {
+    if (op.kind === 'cat') { applyCat(out.cats, out.rows, op); return; }
     var key = LISTS[op.kind];
     if (!key) return;
     var list = out[key], i = indexById(list, op.id);
@@ -164,6 +192,34 @@ function applyOps(snap, ops) {
     }
   });
   return out;
+}
+
+// Changes cats ({Income: [...], Expense: [...]}) in place. Renaming onto an existing name merges the two; deleting is renaming into Others.
+// Entries of a renamed category are replaced in rows by moved copies, and onMove(copy) is called for each. Returns '' or the reason.
+function applyCat(cats, rows, op, onMove) {
+  var d = op.data || {}, list = CATEGORIES.hasOwnProperty(d.type) ? cats[d.type] : null;
+  if (!list) return 'bad type';
+  if (op.action === 'add') {
+    if (!checkCatName(d.name)) return 'bad category';
+    if (!matchName(list, d.name)) list.splice(list.length - 1, 0, d.name); // before Others
+    return '';
+  }
+  var to = op.action === 'delete' ? 'Others' : op.action === 'rename' ? d.to : '';
+  if (!checkCatName(to)) return op.action === 'rename' ? 'bad category' : 'bad op';
+  var name = matchName(list, d.name);
+  if (name === 'Others') return 'Others cannot be changed';
+  if (!name) return ''; // already renamed or deleted on another phone
+  var hit = matchName(list, to);
+  if (hit && hit !== name) list.splice(list.indexOf(name), 1); else list[list.indexOf(name)] = hit = to; // merge, or rename (also "dairy" -> "Dairy")
+  rows.forEach(function (r, i) {
+    if (r.type !== d.type || r.category !== name) return;
+    var moved = {};
+    for (var k in r) moved[k] = r[k];
+    moved.category = hit;
+    rows[i] = moved;
+    if (onMove) onMove(moved);
+  });
+  return '';
 }
 
 function byNewest(a, b) { return Date.parse(b.dateTime) - Date.parse(a.dateTime); }
@@ -187,8 +243,20 @@ function filterEntries(rows, f) {
   });
 }
 
-// Totals for borrowed money: overall, per loan, and within [start, end) when given.
-function summarizeLoans(loans, repays, start, end) {
+// What one rupee invested grows to after `months` at the expected return (a yearly rate is the fund's XIRR):
+// compounding (liquid and mutual funds, cumulative deposits) or simple interest (the same amount every month).
+var MONTH_MS = 365.25 / 12 * 864e5;
+function growth(l, months) {
+  var r = l.interest > 0 ? l.interest / 100 : 0;
+  if (l.compound === false) return 1 + r / (l.per === 'year' ? 12 : 1) * months;
+  return Math.pow(1 + r, l.per === 'year' ? months / 12 : months);
+}
+
+// Totals for one kind of loan: overall, per loan, and within [start, end) when given.
+// Borrowed and given: owed = still to pay or to get, monthly = simple interest on it.
+// Invested: owed = worth now (an estimate: what went in and came out, each grown to today), monthly = this month's growth.
+function summarizeLoans(loans, repays, start, end, now) {
+  now = now || new Date();
   function inPeriod(s) { var d = new Date(s); return !!start && d >= start && d < end; }
   var out = { loans: [], borrowed: 0, repaid: 0, owed: 0, periodBorrowed: 0, periodRepaid: 0, monthlyInterest: 0 }, byLoan = {};
   loans.forEach(function (l) { byLoan[l.id] = []; });
@@ -198,15 +266,20 @@ function summarizeLoans(loans, repays, start, end) {
     if (inPeriod(r.dateTime)) out.periodRepaid += r.amount;
   });
   loans.forEach(function (l) {
-    var paid = round2(byLoan[l.id].reduce(function (sum, r) { return sum + r.amount; }, 0));
-    var owed = round2(Math.max(0, l.amount - paid));
+    var paid = round2(byLoan[l.id].reduce(function (sum, r) { return sum + r.amount; }, 0)), dir = loanDir(l);
+    var principal = round2(Math.max(0, l.amount - paid)), owed = principal;
     var rate = l.interest > 0 ? l.interest : 0, per = l.per === 'year' ? 'year' : 'month';
     // Simple interest on what is still owed, as a monthly amount (a yearly rate is spread over 12 months).
     var monthly = round2(owed * rate / 100 / (per === 'year' ? 12 : 1));
+    if (dir === 'invested') {
+      var at = function (s) { return growth(l, Math.max(0, (now - Date.parse(s)) / MONTH_MS)); };
+      // whole rupees: it is an estimate
+      owed = Math.round(Math.max(0, l.amount * at(l.dateTime) - byLoan[l.id].reduce(function (sum, r) { return sum + r.amount * at(r.dateTime); }, 0)));
+      monthly = Math.round((l.compound === false ? principal : owed) * (growth(l, 1) - 1));
+    }
     out.loans.push({ id: l.id, reason: l.reason, dateTime: l.dateTime, amount: l.amount, interest: rate, per: per, monthly: monthly,
-      priority: PRIORITY.hasOwnProperty(l.priority) ? l.priority : 'medium',
-      dir: l.dir === 'given' ? 'given' : 'borrowed',
-      repaid: paid, owed: owed, done: owed === 0, repays: byLoan[l.id].sort(byNewest) });
+      priority: PRIORITY.hasOwnProperty(l.priority) ? l.priority : 'medium', dir: dir, compound: l.compound !== false, principal: principal,
+      repaid: paid, owed: owed, done: dir === 'invested' ? owed < 1 : owed === 0, repays: byLoan[l.id].sort(byNewest) });
     out.borrowed += l.amount; out.repaid += paid; out.owed += owed; out.monthlyInterest += monthly;
     if (inPeriod(l.dateTime)) out.periodBorrowed += l.amount;
   });
@@ -219,8 +292,10 @@ function summarizeLoans(loans, repays, start, end) {
 // ---- Forecast from the current saving rate
 
 // Average monthly Saved over the last n complete months (this month is still running, so it is left out). Can be negative.
+// Income in the Interest category is left out: the forecast adds the interest still to come on money given instead.
 function savingRate(rows, now, n) {
   var total = 0, from = null, to = null;
+  rows = rows.filter(function (e) { return !(e.type === 'Income' && matchName(['Interest'], e.category)); });
   for (var i = n; i >= 1; i--) {
     var d = new Date(now.getFullYear(), now.getMonth() - i, 1);
     total += summarize(rows, 'month', d, 0).savings;
@@ -232,11 +307,16 @@ function savingRate(rows, now, n) {
 
 // Month by month from today: open borrowed loans grow by simple monthly interest, and each month's savings pay them
 // High > Medium > Low priority, then the dearest interest first, then the oldest. What is left over is saved.
-// months[k] is the position k+1 months from now: saved minus still owed.
+// Money given adds its interest to each month's savings; investments grow (compound or simple) on top.
+// months[k] is the position k+1 months from now: saved (incl. investment growth) minus still owed.
 var FORECAST_MAX = 120;
 function forecast(loans, repays, perMonth, now) {
-  var open = summarizeLoans(loans.filter(function (l) { return l.dir !== 'given'; }), repays).loans
-    .filter(function (l) { return !l.done; })
+  function openOf(dir) { return summarizeLoans(loans.filter(function (l) { return loanDir(l) === dir; }), repays, null, null, now).loans.filter(function (l) { return !l.done; }); }
+  var interestIn = round2(openOf('given').reduce(function (s, l) { return s + l.monthly; }, 0));
+  // base: what simple interest is paid on (what is still invested); null = compounding on the whole value
+  var inv = openOf('invested').map(function (l) { return { value: l.owed, base: l.compound ? null : l.principal, step: growth(l, 1) - 1 }; });
+  var invNow = inv.reduce(function (s, x) { return s + x.value; }, 0);
+  var open = openOf('borrowed')
     .map(function (l) {
       return { reason: l.reason, interest: l.interest, per: l.per, priority: l.priority, dateTime: l.dateTime, left: l.owed, paidAt: 0,
         rate: l.interest > 0 ? l.interest / (l.per === 'year' ? 1200 : 100) : 0 };
@@ -244,10 +324,13 @@ function forecast(loans, repays, perMonth, now) {
     .sort(function (a, b) { return (PRIORITY[a.priority] - PRIORITY[b.priority]) || (b.rate - a.rate) || (Date.parse(a.dateTime) - Date.parse(b.dateTime)); });
   var owedNow = open.reduce(function (s, l) { return s + l.left; }, 0);
   var out = { months: [], payoff: null, totalInterest: 0, hasLoans: open.length > 0, owedNow: round2(owedNow),
-    monthlyInterestNow: round2(open.reduce(function (s, l) { return s + l.left * l.rate; }, 0)), never: false };
+    monthlyInterestNow: round2(open.reduce(function (s, l) { return s + l.left * l.rate; }, 0)), never: false,
+    interestIn: interestIn, hasInvest: inv.length > 0, investedNow: round2(invNow),
+    growthNow: round2(inv.reduce(function (s, x) { return s + (x.base == null ? x.value : x.base) * x.step; }, 0)) };
   var saved = 0, end = open.length ? FORECAST_MAX : 24;
   for (var m = 1; m <= end; m++) {
-    var cash = perMonth;
+    var cash = perMonth + interestIn;
+    inv.forEach(function (x) { x.value += (x.base == null ? x.value : x.base) * x.step; });
     open.forEach(function (l) { if (l.left > 0) { var i = l.left * l.rate; l.left += i; out.totalInterest += i; } });
     open.forEach(function (l) {
       if (l.left > 0 && cash > 0) {
@@ -258,7 +341,8 @@ function forecast(loans, repays, perMonth, now) {
     });
     saved += cash;
     var owed = open.reduce(function (s, l) { return s + l.left; }, 0), date = new Date(now.getFullYear(), now.getMonth() + m, 1);
-    out.months.push({ date: date, owed: round2(owed), saved: round2(saved), position: round2(saved - owed) });
+    var grown = inv.reduce(function (s, x) { return s + x.value; }, 0) - invNow;
+    out.months.push({ date: date, owed: round2(owed), saved: round2(saved + grown), position: round2(saved + grown - owed), invested: round2(invNow + grown) });
     if (open.length && !out.payoff && owed === 0) { out.payoff = { months: m, date: date }; end = Math.max(24, m + 12); }
   }
   out.never = open.length > 0 && !out.payoff;
@@ -271,7 +355,7 @@ function forecast(loans, repays, perMonth, now) {
 }
 
 if (typeof module !== 'undefined') {
-  module.exports = { CATEGORIES: CATEGORIES, NET_ORDER: NET_ORDER, validateEntry: validateEntry, validateLoan: validateLoan,
+  module.exports = { CATEGORIES: CATEGORIES, DIRS: DIRS, growth: growth, checkCatName: checkCatName, matchName: matchName, applyCat: applyCat, validateEntry: validateEntry, validateLoan: validateLoan,
     validateRepay: validateRepay, periodRange: periodRange, shiftPeriod: shiftPeriod, periodLabel: periodLabel, buckets: buckets,
     summarize: summarize, spendShare: spendShare, applyOps: applyOps, recentEntries: recentEntries, filterEntries: filterEntries, summarizeLoans: summarizeLoans,
     savingRate: savingRate, forecast: forecast };

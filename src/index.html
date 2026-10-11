@@ -1,0 +1,439 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Family Money</title>
+<meta name="theme-color" content="#F5F5F7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Money">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="assets/icons/icon-192.png">
+<style>
+/* Lexend (OFL), bundled so the app looks the same offline. latin-ext carries the ₹ sign. */
+@font-face{font-family:"Lexend";src:url(assets/fonts/lexend-latin.woff2) format("woff2");font-weight:300 700;font-display:swap;
+  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+@font-face{font-family:"Lexend";src:url(assets/fonts/lexend-latin-ext.woff2) format("woff2");font-weight:300 700;font-display:swap;
+  unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C4,U+2113,U+2C60-2C7F,U+A720-A7FF}
+
+/* Pastel theme (from ref_ui.html). Pastels are identical in both themes; text on them is always --on-pastel. */
+:root{
+  --bg:#F5F5F7;--surface:#FFFFFF;--field:#F1F1F3;--ink:#0B0B0C;--ink-2:#3A3A3C;--muted:#8A8A8E;--line:#ECECEF;
+  --primary:#0B0B0C;--on-primary:#FFFFFF;--seg-on:#FFFFFF;--good:#15803D;--bad:#B42318;
+  --shadow:0 1px 2px rgba(11,11,12,.04),0 10px 28px -18px rgba(11,11,12,.28);
+  --lavender:#E8DDFB;--mint:#D7F2DC;--butter:#F8E9B8;--sky:#D9EEF6;--blush:#F7D9D9;--peri:#DCDDF6;--on-pastel:#0B0B0C;
+  --lavender-d:#B9A5F3;--mint-d:#8FD6A0;--butter-d:#EBC75E;--sky-d:#8DC8E2;--blush-d:#EE9F9F;--peri-d:#A6A9EC;
+  /* Pie slices: deeper than the pastels so neighbours stay apart, incl. colour-blind (checked with the dataviz validator) */
+  --pie-House:#2a78d6;--pie-Dairy:#e87ba4;--pie-Crops:#eda100;--pie-Others:#6250d6;--pie-Saved:#1baf7a;
+  --font:"Lexend",system-ui,-apple-system,"Segoe UI",sans-serif;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){
+  :root{--bg:#000000;--surface:#1C1C1E;--field:#2A2A2C;--ink:#FFFFFF;--ink-2:#D1D1D6;--muted:#8E8E93;--line:#2C2C2E;
+    --primary:#FFFFFF;--on-primary:#0B0B0C;--seg-on:#3A3A3C;--good:#5FD38A;--bad:#FF8A80;--shadow:none;color-scheme:dark;
+    --pie-House:#3987e5;--pie-Dairy:#d55181;--pie-Crops:#c98500;--pie-Others:#9085e9;--pie-Saved:#199e70}
+}
+*{box-sizing:border-box;margin:0}
+/* Native-app feel: scrolling works everywhere, the scrollbars stay hidden */
+*{scrollbar-width:none}
+*::-webkit-scrollbar{display:none}
+html,body{background:var(--bg)}
+body{font-family:var(--font);color:var(--ink);font-size:15px;line-height:1.45;-webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent}
+button,input{font:inherit;color:inherit}
+button{cursor:pointer;border:0;background:none;padding:0}
+button:active{transform:scale(.97)}
+[hidden]{display:none !important}
+:focus-visible{outline:3px solid var(--lavender-d);outline-offset:2px}
+.i{width:22px;height:22px;fill:currentColor;flex:none}
+.i.sm{width:18px;height:18px}
+.e{display:inline-block;object-fit:contain;flex:none;vertical-align:middle}
+.grow{flex:1;min-width:0}
+.num{font-variant-numeric:tabular-nums;white-space:nowrap}
+.muted{color:var(--muted)}
+.pos{color:var(--good)}
+
+.app{max-width:560px;margin:0 auto;min-height:100dvh}
+.head{display:flex;align-items:center;gap:12px;padding:calc(env(safe-area-inset-top) + 12px) 18px 4px}
+.head h1{font-size:22px;font-weight:600;letter-spacing:-.01em;line-height:1.2}
+.head .sub{font-size:13px;color:var(--muted);display:flex;align-items:center;gap:5px}
+.av{width:48px;height:48px;border-radius:999px;display:grid;place-items:center;flex:none;background:var(--butter)}
+.rbtn{width:46px;height:46px;border-radius:999px;background:var(--surface);display:grid;place-items:center;box-shadow:var(--shadow);flex:none;position:relative;color:var(--ink)}
+.rbtn.sm{width:40px;height:40px}
+.rbtn:disabled{opacity:.35;cursor:default}
+.rbtn .dot{position:absolute;top:10px;right:11px;width:9px;height:9px;border-radius:99px;background:var(--butter-d);box-shadow:0 0 0 2px var(--surface)}
+.rbtn .dot.bad{background:var(--blush-d)}
+@media (prefers-reduced-motion:no-preference){.rbtn.spin .i{animation:spin .9s linear infinite}}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+main{padding:10px 18px calc(env(safe-area-inset-bottom) + 112px);display:flex;flex-direction:column;gap:14px}
+section{display:flex;flex-direction:column;gap:14px}
+.pcard{border-radius:28px;padding:18px;color:var(--on-pastel);position:relative;overflow:hidden}
+.pcard .muted,.inlist .muted{color:rgba(11,11,12,.62)}
+.card{background:var(--surface);border-radius:28px;padding:16px 18px;box-shadow:var(--shadow)}
+.card h2,.sec h2{font-size:17px;font-weight:600;display:flex;justify-content:space-between;align-items:center;gap:8px}
+.card h2{margin-bottom:6px}
+.sec{display:flex;justify-content:space-between;align-items:center;padding:4px 4px 0;gap:8px}
+.see{font-size:13px;color:var(--muted)}
+.secr{display:flex;align-items:center;gap:8px;min-width:0}
+.big{font-size:40px;font-weight:600;letter-spacing:-.03em;line-height:1.05}
+.inlist{background:rgba(255,255,255,.62);border-radius:20px;padding:2px 14px;margin-top:12px}
+.hero{padding:16px 18px;display:flex;align-items:center;gap:12px}
+.hero .big{font-size:32px}
+.hero #heroLabel{margin-top:6px}
+.pie.hpie{width:112px;margin:0;flex:none}
+.pie.hpie svg{width:112px;height:112px;pointer-events:none}
+.pie.hpie .mid b{font-size:19px}
+.pie.hpie .mid span{font-size:11px;color:rgba(11,11,12,.62)}
+.picks{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.pick{display:flex;flex-direction:column;gap:1px;text-align:left;border-radius:22px;padding:12px 12px 14px 14px;color:var(--on-pastel);box-shadow:var(--shadow);min-width:0}
+.pick .ptop{display:flex;width:100%;justify-content:space-between;align-items:center;margin-bottom:6px}
+.pick .plus{width:32px;height:32px;border-radius:999px;background:#0B0B0C;color:#fff;display:grid;place-items:center}
+.pick small{font-size:13px;color:rgba(11,11,12,.62)}
+.pick b{font-size:19px;font-weight:600;letter-spacing:-.01em;overflow:hidden;text-overflow:ellipsis}
+/* Category dropdown in the add/edit sheet: opens over the amount, closes on pick, outside tap or Esc */
+.dd{position:relative}
+.ddbtn{display:flex;align-items:center;gap:10px;text-align:left;padding:8px 14px 8px 8px;font-weight:500}
+.ddbtn .ph{color:var(--muted);padding-left:6px}
+.dda{margin-left:auto;transform:rotate(90deg);opacity:.55}
+[aria-expanded="true"] .dda{transform:rotate(-90deg)}
+.ddlist{position:absolute;z-index:3;top:calc(100% + 6px);left:0;right:0;background:var(--surface);border-radius:20px;padding:6px;display:grid;grid-template-columns:1fr 1fr;gap:2px;box-shadow:0 0 0 1px var(--line),0 18px 36px -14px rgba(0,0,0,.4)}
+.ddlist h4{grid-column:1/-1;font-size:12px;font-weight:500;color:var(--muted);padding:6px 10px 2px}
+.opt{display:flex;align-items:center;gap:10px;padding:7px;border-radius:14px;font-weight:500;text-align:left}
+.opt[aria-pressed="true"]{background:var(--field)}
+.opt[aria-pressed="true"]::after{content:"";margin-left:auto;width:8px;height:8px;border-radius:9px;background:var(--ink)}
+.disc.xs{width:36px;height:36px}
+.ddlist.c4{grid-template-columns:repeat(4,1fr)}
+.ddlist .full{grid-column:1/-1}
+.opt.txt{justify-content:center;padding:10px 6px}
+.opt.txt[aria-pressed="true"]{background:var(--primary);color:var(--on-primary)}
+.opt.txt[aria-pressed="true"]::after{display:none}
+/* History: search and filter pills; the open list spans the whole filter row */
+.search{display:flex;align-items:center;gap:10px;background:var(--surface);border-radius:999px;padding:4px 6px 4px 16px;box-shadow:var(--shadow);color:var(--muted)}
+.search:focus-within{box-shadow:inset 0 0 0 2px var(--ink)}
+.search input{flex:1;min-width:0;border:0;background:none;outline:none;font-size:16px;padding:10px 0;color:var(--ink);-webkit-appearance:none;appearance:none}
+.search input::-webkit-search-cancel-button{display:none}
+.rbtn.xs{width:32px;height:32px;box-shadow:none;background:var(--field)}
+.filters{position:relative;display:grid;grid-template-columns:.9fr .9fr 1.2fr;gap:8px}
+.filters .dd{position:static;min-width:0}
+.fbtn{display:flex;align-items:center;gap:4px;width:100%;background:var(--surface);box-shadow:var(--shadow);border-radius:999px;padding:10px 10px 10px 13px;font-size:14px;font-weight:500;min-width:0}
+.fbtn span{display:flex;align-items:center;gap:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fbtn.on{background:var(--primary);color:var(--on-primary)}
+.hsum{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:0 4px;font-size:13px;color:var(--muted);min-height:20px}
+.row{display:flex;gap:12px;align-items:center;padding:11px 0}
+.row+.row{border-top:1px solid var(--line)}
+.inlist .row+.row{border-top-color:rgba(11,11,12,.08)}
+.row b{font-weight:600}
+.t-sm{font-size:13.5px}.t-xs{font-size:11.5px}
+.pill{display:inline-flex;align-items:center;gap:5px;padding:4px 11px;border-radius:999px;font-size:12.5px;font-weight:500;white-space:nowrap;background:var(--field);color:var(--ink)}
+.pill.white{background:#fff;color:#0B0B0C}
+.pill.ok{background:var(--mint);color:var(--on-pastel)}
+.pill.bad{background:var(--blush);color:var(--on-pastel)}
+.bar{display:block;height:10px;border-radius:999px;background:var(--field);overflow:hidden}
+.pcard .bar{background:rgba(255,255,255,.65)}
+.bar>i{display:block;height:100%;border-radius:inherit}
+
+.disc{width:48px;height:48px;border-radius:999px;display:grid;place-items:center;flex:none}
+.disc.s{width:42px;height:42px}
+.disc.l{width:60px;height:60px}
+.list{display:flex;flex-direction:column;gap:8px}
+.lrow{background:var(--surface);border-radius:22px;padding:9px 14px 9px 9px;display:flex;gap:10px;align-items:center;box-shadow:var(--shadow);font-size:14px}
+.lrow .what{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lrow small{display:flex;align-items:center;gap:4px;color:var(--muted);font-size:11.5px}
+.lrow .amt{font-weight:600}
+
+.seg{display:flex;background:var(--field);border-radius:999px;padding:4px;gap:2px}
+.seg button{flex:1;padding:9px 8px;font-size:14px;font-weight:500;border-radius:999px;color:var(--muted)}
+.seg button[aria-pressed="true"]{background:var(--seg-on);color:var(--ink);box-shadow:var(--shadow)}
+.rate{display:grid;grid-template-columns:104px 1fr;gap:8px;align-items:center}
+.ratein{display:flex;align-items:center;gap:4px;padding:11px 14px}
+.ratein:focus-within{box-shadow:inset 0 0 0 2px var(--ink)}
+.ratein input{border:0;background:none;outline:none;width:100%;min-width:0;font-size:16px;font-weight:600;color:var(--ink)}
+.rate .seg button{font-size:13.5px;white-space:nowrap}
+.prio-tag{display:flex;align-items:center;gap:5px;font-size:11.5px;font-weight:600;color:var(--ink-2);text-transform:uppercase;letter-spacing:.04em}
+.prio-tag i{width:8px;height:8px;border-radius:9px}
+.period{display:flex;align-items:center;justify-content:space-between;font-size:16px;font-weight:600}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.stat{border-radius:22px;padding:12px 11px 10px;color:var(--on-pastel);min-width:0}
+.stat span{font-size:12px;color:rgba(11,11,12,.65)}
+.stat b{display:block;font-size:17px;font-weight:600;letter-spacing:-.01em;overflow-wrap:anywhere}
+.pie{display:grid;place-items:center;position:relative;width:168px;margin:6px auto 4px}
+.pie svg{width:168px;height:168px;display:block}
+.pie circle{fill:none;cursor:pointer}
+.pie .mid{position:absolute;inset:0;display:grid;place-content:center;text-align:center;pointer-events:none}
+.pie .mid b{font-size:22px;font-weight:600;letter-spacing:-.02em}
+.pie .mid span{font-size:12px;color:var(--muted)}
+.slice{display:grid;grid-template-columns:auto auto 1fr auto;gap:8px;align-items:center;width:100%;padding:8px 6px;border-radius:14px;font-size:14px;text-align:left}
+.slice[aria-pressed="true"]{background:var(--field)}
+/* Money forecast */
+.fc-head{font-size:19px;font-weight:600;letter-spacing:-.01em;line-height:1.3}
+.fc-head b{font-weight:700}
+.seg.sm button{padding:6px 6px;font-size:12.5px}
+.fc-chart{position:relative;margin:10px 0 2px;cursor:crosshair;touch-action:pan-y}
+.fc-chart svg{display:block;width:100%;height:auto;overflow:visible}
+.fc-chart text{font:500 10.5px var(--font);fill:var(--muted)}
+.fc-chart .lbl{font-weight:600;fill:var(--ink)}
+.fc-chart .halo{paint-order:stroke;stroke:var(--surface);stroke-width:4px;stroke-linejoin:round}
+.fc-chips{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:10px}
+.fc-chips div{background:var(--field);border-radius:14px;padding:8px 10px;min-width:0}
+.fc-chips span{display:block;font-size:11.5px;color:var(--muted)}
+.fc-chips b{font-size:14.5px;font-weight:600;overflow-wrap:anywhere}
+.slice .sw{width:10px;height:10px;border-radius:3px}
+.slice .pc{color:var(--muted);font-weight:400;display:inline-block;min-width:3.4em;text-align:right}
+.legend{display:flex;gap:14px;font-size:12px;color:var(--muted);margin-bottom:10px}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+.chart{display:flex;gap:6px;height:150px;align-items:flex-end;border-bottom:1px solid var(--line);padding-top:58px}
+.col{flex:1;min-width:0;height:100%;display:flex;align-items:flex-end;justify-content:center;gap:2px;position:relative;border-radius:10px 10px 0 0}
+.col i{width:min(13px,40%);border-radius:5px 5px 0 0}
+.col[aria-pressed="true"]{background:var(--field)}
+.ticks{display:flex;gap:6px;margin-top:6px}
+.ticks span{flex:1;min-width:0;text-align:center;font-size:11px;color:var(--muted);overflow:hidden;white-space:nowrap}
+.ttip{position:absolute;left:2px;white-space:nowrap;font-size:11.5px;line-height:1.35;padding:6px 9px;border-radius:10px;background:var(--primary);color:var(--on-primary);z-index:2;text-align:left;font-weight:500;pointer-events:none}
+.ttip.r{left:auto;right:2px}
+
+.field{background:var(--field);border:0;border-radius:18px;padding:14px 16px;width:100%;color:var(--ink);font-size:15px;outline:none}
+.field:focus{box-shadow:inset 0 0 0 2px var(--ink)}
+.lbl{font-size:13px;font-weight:500;color:var(--muted);margin:0 0 6px 6px;display:block}
+.btn{display:flex;align-items:center;justify-content:center;gap:8px;border-radius:999px;padding:14px 22px;font-weight:600;font-size:16px;min-height:54px;background:var(--primary);color:var(--on-primary);width:100%}
+.btn.ink{background:#0B0B0C;color:#fff}
+.btn.soft{background:var(--surface);color:var(--ink);box-shadow:var(--shadow);font-size:15px;min-height:50px}
+.err{color:var(--bad);font-size:13.5px;min-height:1em}
+
+.navwrap{position:fixed;left:0;right:0;bottom:0;z-index:5;padding:10px 12px calc(env(safe-area-inset-bottom) + 12px);background:linear-gradient(to bottom,transparent,var(--bg) 40%)}
+.nav{max-width:460px;margin:0 auto;display:flex;background:var(--surface);border-radius:999px;padding:5px;box-shadow:0 0 0 1px var(--line),0 12px 28px -16px rgba(0,0,0,.35)}
+.nav button{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:1px;padding:8px 0 7px;border-radius:999px;font-size:10.5px;font-weight:500;color:var(--muted)}
+.nav button[aria-current="page"]{background:var(--primary);color:var(--on-primary);flex:1.35}
+
+/* Add-entry sheet */
+dialog{border:0;padding:0;width:100%;max-width:560px;margin:auto auto 0;border-radius:36px 36px 0 0;background:var(--surface);color:var(--ink);max-height:96dvh;overflow:auto}
+dialog::backdrop{background:rgba(8,10,12,.42)}
+@media (prefers-reduced-motion:no-preference){dialog[open]{animation:up .28s cubic-bezier(.2,.8,.2,1)}}
+@keyframes up{from{transform:translateY(40px);opacity:.4}}
+.sheet{padding:10px 20px calc(env(safe-area-inset-bottom) + 18px);display:flex;flex-direction:column;gap:10px}
+.grab{width:42px;height:5px;border-radius:9px;background:var(--line);margin:0 auto 4px}
+.sh{display:flex;align-items:center;gap:12px}
+.sh h3{font-size:22px;font-weight:600;line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.amount{background:var(--field);border-radius:22px;padding:10px 16px;font-size:40px;font-weight:600;letter-spacing:-.03em;text-align:center;line-height:1.2}
+.amount .ph{color:var(--muted)}
+.caret{display:inline-block;width:2px;height:.85em;background:currentColor;margin-left:3px;vertical-align:-.06em}
+@media (prefers-reduced-motion:no-preference){.caret{animation:blink 1s steps(1) infinite}}
+@keyframes blink{50%{opacity:0}}
+.chips{display:flex;gap:8px;overflow-x:auto;padding:1px}
+.chip{flex:none;padding:8px 14px;border-radius:999px;background:var(--field);font-size:13.5px;font-weight:500;display:inline-flex;gap:6px;align-items:center}
+.chip[aria-pressed="true"]{background:var(--primary);color:var(--on-primary)}
+.when{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--ink-2)}
+.link{margin-left:auto;font-weight:600;color:var(--ink);text-decoration:underline;text-underline-offset:3px;padding:6px 0}
+.keys{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.key{height:50px;border-radius:18px;background:var(--field);font-size:22px;font-weight:500;display:grid;place-items:center;color:var(--ink)}
+
+.lrow.tap{width:100%;text-align:left;color:var(--ink)}
+.lrow .edit{color:var(--muted)}
+.foot{font-size:12.5px;color:var(--muted);text-align:center;padding:4px 12px}
+.btn.soft{background:var(--surface);color:var(--ink);box-shadow:var(--shadow)}
+.btn.danger{background:var(--blush);color:#7A1A12;min-height:48px;font-size:15px}
+.chip img{width:20px;height:20px}
+.chip.dark{background:var(--primary);color:var(--on-primary)}
+.lcard{background:var(--surface);border-radius:24px;padding:12px 14px 12px 10px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:10px}
+.lcard .lhead{display:flex;gap:10px;align-items:center;text-align:left;color:var(--ink);width:100%}
+.lcard .lhead small{display:flex;align-items:center;gap:4px;color:var(--muted);font-size:11.5px}
+.lcard .lfoot{display:flex;align-items:center;gap:10px;justify-content:space-between;padding-left:4px;font-size:12.5px;color:var(--muted)}
+.lcard .bar{margin-left:4px;height:8px}
+.lcard details{padding-left:4px;font-size:13px}
+.lcard summary{cursor:pointer;color:var(--ink-2);font-weight:500;padding:2px 0}
+.lcard .rp{display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--line)}
+.lcard .rp button{color:var(--muted);padding:6px}
+.ldone{opacity:.72}
+#toast{position:fixed;left:50%;width:max-content;bottom:calc(env(safe-area-inset-bottom) + 96px);transform:translateX(-50%);z-index:10;background:var(--primary);color:var(--on-primary);padding:12px 18px;border-radius:999px;font-weight:600;display:flex;gap:8px;align-items:center;max-width:calc(100% - 32px);box-shadow:0 12px 28px -12px rgba(0,0,0,.45)}
+</style>
+</head>
+<body>
+<!-- Icons: Phosphor (MIT), bold + fill weights, copied from @phosphor-icons/core 2.1.1. 3D images: Microsoft Fluent Emoji (MIT). -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-arrow-down-left" viewBox="0 0 256 256"><path d="M200.49,72.48,93,180h75a12,12,0,0,1,0,24H64a12,12,0,0,1-12-12V88a12,12,0,0,1,24,0v75L183.51,55.51a12,12,0,0,1,17,17Z"/></symbol>
+  <symbol id="i-arrow-up-right" viewBox="0 0 256 256"><path d="M204,64V168a12,12,0,0,1-24,0V93L72.49,200.49a12,12,0,0,1-17-17L163,76H88a12,12,0,0,1,0-24H192A12,12,0,0,1,204,64Z"/></symbol>
+  <symbol id="i-arrows-clockwise" viewBox="0 0 256 256"><path d="M228,48V96a12,12,0,0,1-12,12H168a12,12,0,0,1,0-24h19l-7.8-7.8a75.55,75.55,0,0,0-53.32-22.26h-.43A75.49,75.49,0,0,0,72.39,75.57,12,12,0,1,1,55.61,58.41a99.38,99.38,0,0,1,69.87-28.47H126A99.42,99.42,0,0,1,196.2,59.23L204,67V48a12,12,0,0,1,24,0ZM183.61,180.43a75.49,75.49,0,0,1-53.09,21.63h-.43A75.55,75.55,0,0,1,76.77,179.8L69,172H88a12,12,0,0,0,0-24H40a12,12,0,0,0-12,12v48a12,12,0,0,0,24,0V189l7.8,7.8A99.42,99.42,0,0,0,130,226.06h.56a99.38,99.38,0,0,0,69.87-28.47,12,12,0,0,0-16.78-17.16Z"/></symbol>
+  <symbol id="i-backspace" viewBox="0 0 256 256"><path d="M216,36H68.53a20.09,20.09,0,0,0-17.15,9.71L5.71,121.83a12,12,0,0,0,0,12.34l45.67,76.12A20.09,20.09,0,0,0,68.53,220H216a20,20,0,0,0,20-20V56A20,20,0,0,0,216,36Zm-4,160H70.8L30,128,70.8,60H212ZM103.51,143.51,119,128l-15.52-15.51a12,12,0,0,1,17-17L136,111l15.51-15.52a12,12,0,0,1,17,17L153,128l15.52,15.51a12,12,0,0,1-17,17L136,145l-15.51,15.52a12,12,0,0,1-17-17Z"/></symbol>
+  <symbol id="i-caret-left" viewBox="0 0 256 256"><path d="M168.49,199.51a12,12,0,0,1-17,17l-80-80a12,12,0,0,1,0-17l80-80a12,12,0,0,1,17,17L97,128Z"/></symbol>
+  <symbol id="i-caret-right" viewBox="0 0 256 256"><path d="M184.49,136.49l-80,80a12,12,0,0,1-17-17L159,128,87.51,56.49a12,12,0,1,1,17-17l80,80A12,12,0,0,1,184.49,136.49Z"/></symbol>
+  <symbol id="i-chart-bar-fill" viewBox="0 0 256 256"><path d="M232,208a8,8,0,0,1-8,8H32a8,8,0,0,1,0-16h8V136a8,8,0,0,1,8-8H72a8,8,0,0,1,8,8v64H96V88a8,8,0,0,1,8-8h32a8,8,0,0,1,8,8V200h16V40a8,8,0,0,1,8-8h40a8,8,0,0,1,8,8V200h8A8,8,0,0,1,232,208Z"/></symbol>
+  <symbol id="i-chart-bar" viewBox="0 0 256 256"><path d="M224,196h-4V40a12,12,0,0,0-12-12H152a12,12,0,0,0-12,12V76H96A12,12,0,0,0,84,88v36H48a12,12,0,0,0-12,12v60H32a12,12,0,0,0,0,24H224a12,12,0,0,0,0-24ZM164,52h32V196H164Zm-56,48h32v96H108ZM60,148H84v48H60Z"/></symbol>
+  <symbol id="i-check" viewBox="0 0 256 256"><path d="M232.49,80.49l-128,128a12,12,0,0,1-17,0l-56-56a12,12,0,1,1,17-17L96,183,215.51,63.51a12,12,0,0,1,17,17Z"/></symbol>
+  <symbol id="i-clock-countdown" viewBox="0 0 256 256"><path d="M236,137A108.13,108.13,0,1,1,119,20,12,12,0,0,1,121,44,84.12,84.12,0,1,0,212,135,12,12,0,1,1,236,137ZM116,76v52a12,12,0,0,0,12,12h52a12,12,0,0,0,0-24H140V76a12,12,0,0,0-24,0Zm92,20a16,16,0,1,0-16-16A16,16,0,0,0,208,96ZM176,64a16,16,0,1,0-16-16A16,16,0,0,0,176,64Z"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 256 256"><path d="M128,20A108,108,0,1,0,236,128,108.12,108.12,0,0,0,128,20Zm0,192a84,84,0,1,1,84-84A84.09,84.09,0,0,1,128,212Zm68-84a12,12,0,0,1-12,12H128a12,12,0,0,1-12-12V72a12,12,0,0,1,24,0v44h44A12,12,0,0,1,196,128Z"/></symbol>
+  <symbol id="i-cloud-check" viewBox="0 0 256 256"><path d="M160,36A92.09,92.09,0,0,0,79,84.36,68,68,0,1,0,72,220h88a92,92,0,0,0,0-184Zm0,160H72a44,44,0,0,1-1.82-88A91.86,91.86,0,0,0,68,128a12,12,0,0,0,24,0,68,68,0,1,1,68,68Zm40.49-92.49a12,12,0,0,1,0,17l-48,48a12,12,0,0,1-17,0l-24-24a12,12,0,1,1,17-17L144,143l39.51-39.52A12,12,0,0,1,200.49,103.51Z"/></symbol>
+  <symbol id="i-cloud-slash" viewBox="0 0 256 256"><path d="M56.88,31.93A12,12,0,1,0,39.12,48.07L71.79,84A68,68,0,0,0,72,220h88a91.26,91.26,0,0,0,30.66-5.24l8.46,9.31a12,12,0,0,0,17.76-16.14ZM160,196H72a44,44,0,0,1-1.8-87.95A91.91,91.91,0,0,0,68,128a12,12,0,0,0,24,0,68.22,68.22,0,0,1,2.66-18.84l77.88,85.67A68.67,68.67,0,0,1,160,196Zm92-68a91.32,91.32,0,0,1-17.53,54,12,12,0,1,1-19.41-14.11,68,68,0,0,0-89.57-98.53,12,12,0,0,1-12.2-20.66A92,92,0,0,1,252,128Z"/></symbol>
+  <symbol id="i-house-fill" viewBox="0 0 256 256"><path d="M224,120v96a8,8,0,0,1-8,8H160a8,8,0,0,1-8-8V164a4,4,0,0,0-4-4H108a4,4,0,0,0-4,4v52a8,8,0,0,1-8,8H40a8,8,0,0,1-8-8V120a16,16,0,0,1,4.69-11.31l80-80a16,16,0,0,1,22.62,0l80,80A16,16,0,0,1,224,120Z"/></symbol>
+  <symbol id="i-house" viewBox="0 0 256 256"><path d="M222.14,105.85l-80-80a20,20,0,0,0-28.28,0l-80,80A19.86,19.86,0,0,0,28,120v96a12,12,0,0,0,12,12h64a12,12,0,0,0,12-12V164h24v52a12,12,0,0,0,12,12h64a12,12,0,0,0,12-12V120A19.86,19.86,0,0,0,222.14,105.85ZM204,204H164V152a12,12,0,0,0-12-12H104a12,12,0,0,0-12,12v52H52V121.65l76-76,76,76Z"/></symbol>
+  <symbol id="i-link" viewBox="0 0 256 256"><path d="M117.18,188.74a12,12,0,0,1,0,17l-5.12,5.12A58.26,58.26,0,0,1,70.6,228h0A58.62,58.62,0,0,1,29.14,127.92L63.89,93.17a58.64,58.64,0,0,1,98.56,28.11,12,12,0,1,1-23.37,5.44,34.65,34.65,0,0,0-58.22-16.58L46.11,144.89A34.62,34.62,0,0,0,70.57,204h0a34.41,34.41,0,0,0,24.49-10.14l5.11-5.12A12,12,0,0,1,117.18,188.74ZM226.83,45.17a58.65,58.65,0,0,0-82.93,0l-5.11,5.11a12,12,0,0,0,17,17l5.12-5.12a34.63,34.63,0,1,1,49,49L175.1,145.86A34.39,34.39,0,0,1,150.61,156h0a34.63,34.63,0,0,1-33.69-26.72,12,12,0,0,0-23.38,5.44A58.64,58.64,0,0,0,150.56,180h.05a58.28,58.28,0,0,0,41.47-17.17l34.75-34.75a58.62,58.62,0,0,0,0-82.91Z"/></symbol>
+  <symbol id="i-note-pencil" viewBox="0 0 256 256"><path d="M232.49,55.51l-32-32a12,12,0,0,0-17,0l-96,96A12,12,0,0,0,84,128v32a12,12,0,0,0,12,12h32a12,12,0,0,0,8.49-3.51l96-96A12,12,0,0,0,232.49,55.51ZM192,49l15,15L196,75,181,60Zm-69,99H108V133l56-56,15,15Zm105-7.43V208a20,20,0,0,1-20,20H48a20,20,0,0,1-20-20V48A20,20,0,0,1,48,28h67.43a12,12,0,0,1,0,24H52V204H204V140.57a12,12,0,0,1,24,0Z"/></symbol>
+  <symbol id="i-magnifying-glass" viewBox="0 0 256 256"><path d="M232.49,215.51,185,168a92.12,92.12,0,1,0-17,17l47.53,47.54a12,12,0,0,0,17-17ZM44,112a68,68,0,1,1,68,68A68.07,68.07,0,0,1,44,112Z"/></symbol>
+  <symbol id="i-x" viewBox="0 0 256 256"><path d="M208.49,191.51a12,12,0,0,1-17,17L128,145,64.49,208.49a12,12,0,0,1-17-17L111,128,47.51,64.49a12,12,0,0,1,17-17L128,111l63.51-63.52a12,12,0,0,1,17,17L145,128Z"/></symbol>
+  <symbol id="i-clock-counter-clockwise-fill" viewBox="0 0 256 256"><path d="M224,128A96,96,0,0,1,62.11,197.82a8,8,0,1,1,11-11.64A80,80,0,1,0,71.43,71.43C67.9,75,64.58,78.51,61.35,82L77.66,98.34A8,8,0,0,1,72,112H32a8,8,0,0,1-8-8V64a8,8,0,0,1,13.66-5.66L50,70.7c3.22-3.49,6.54-7,10.06-10.55A96,96,0,0,1,224,128ZM128,72a8,8,0,0,0-8,8v48a8,8,0,0,0,3.88,6.86l40,24a8,8,0,1,0,8.24-13.72L136,123.47V80A8,8,0,0,0,128,72Z"/></symbol>
+  <symbol id="i-clock-counter-clockwise" viewBox="0 0 256 256"><path d="M140,80v41.21l34.17,20.5a12,12,0,1,1-12.34,20.58l-40-24A12,12,0,0,1,116,128V80a12,12,0,0,1,24,0ZM128,28A99.38,99.38,0,0,0,57.24,57.34c-4.69,4.74-9,9.37-13.24,14V64a12,12,0,0,0-24,0v40a12,12,0,0,0,12,12H72a12,12,0,0,0,0-24H57.77C63,86,68.37,80.22,74.26,74.26a76,76,0,1,1,1.58,109,12,12,0,0,0-16.48,17.46A100,100,0,1,0,128,28Z"/></symbol>
+  <symbol id="i-hand-arrow-down" viewBox="0 0 256 256"><path d="M232.76,137.88A28.39,28.39,0,0,0,208.13,133L172,141.26c0-.42,0-.84,0-1.26a32,32,0,0,0-32-32H89.94a35.76,35.76,0,0,0-25.45,10.54L43,140H20A20,20,0,0,0,0,160v40a20,20,0,0,0,20,20H120a11.89,11.89,0,0,0,2.91-.36l64-16a11.4,11.4,0,0,0,1.79-.6l38.82-16.54c.23-.09.45-.19.67-.3a28.61,28.61,0,0,0,4.57-48.32ZM24,164H36v32H24Zm193.68.61-37.51,16L118.52,196H60V157l21.46-21.46A11.93,11.93,0,0,1,89.94,132H140a8,8,0,0,1,0,16H112a12,12,0,0,0,0,24h32a12.19,12.19,0,0,0,2.69-.3l67-15.41.47-.12a4.61,4.61,0,0,1,5.82,4.44A4.58,4.58,0,0,1,217.68,164.61ZM151.51,80.49a12,12,0,0,1,17-17L180,75V24a12,12,0,0,1,24,0V75l11.51-11.52a12,12,0,0,1,17,17l-32,32a12,12,0,0,1-17,0Z"/></symbol>
+  <symbol id="i-hand-arrow-down-fill" viewBox="0 0 256 256"><path d="M230.33,141.06a24.4,24.4,0,0,0-21.24-4.23l-41.84,9.62A28,28,0,0,0,140,112H89.94a31.82,31.82,0,0,0-22.63,9.37L44.69,144H16A16,16,0,0,0,0,160v40a16,16,0,0,0,16,16H120a7.93,7.93,0,0,0,1.94-.24l64-16a6.94,6.94,0,0,0,1.19-.4L226,182.82l.44-.2a24.6,24.6,0,0,0,3.93-41.56Zm-10.9,27.15-38,16.18L119,200H56V155.31l22.63-22.62A15.86,15.86,0,0,1,89.94,128H140a12,12,0,0,1,0,24H112a8,8,0,0,0,0,16h32a8.32,8.32,0,0,0,1.79-.2l67-15.41.31-.08a8.6,8.6,0,0,1,6.3,15.9ZM154.34,77.66a8,8,0,0,1,11.32-11.32L184,84.69V24a8,8,0,0,1,16,0V84.69l18.34-18.35a8,8,0,0,1,11.32,11.32l-32,32a8,8,0,0,1-11.32,0Z"/></symbol>
+  <symbol id="i-hand-arrow-up" viewBox="0 0 256 256"><path d="M232.76,137.88A28.39,28.39,0,0,0,208.13,133L172,141.26c0-.42,0-.84,0-1.26a32,32,0,0,0-32-32H89.94a35.74,35.74,0,0,0-25.45,10.54L43,140H20A20,20,0,0,0,0,160v40a20,20,0,0,0,20,20H120a11.89,11.89,0,0,0,2.91-.36l64-16a11.4,11.4,0,0,0,1.79-.6l38.82-16.54c.23-.09.45-.19.67-.3a28.61,28.61,0,0,0,4.57-48.32ZM24,164H36v32H24Zm193.68.61-37.51,16L118.52,196H60V157l21.46-21.46A11.93,11.93,0,0,1,89.94,132H140a8,8,0,0,1,0,16H112a12,12,0,0,0,0,24h32a12.19,12.19,0,0,0,2.69-.3l67-15.41.47-.12a4.6,4.6,0,0,1,5.81,4.44A4.58,4.58,0,0,1,217.68,164.61ZM151.51,64.48a12,12,0,0,1,0-17l32-32a12,12,0,0,1,17,0l32,32a12,12,0,1,1-17,17L204,53v51a12,12,0,0,1-24,0V53L168.49,64.48A12,12,0,0,1,151.51,64.48Z"/></symbol>
+  <symbol id="i-hand-arrow-up-fill" viewBox="0 0 256 256"><path d="M230.33,141.06a24.43,24.43,0,0,0-21.24-4.23l-41.84,9.62A28,28,0,0,0,140,112H89.94a31.82,31.82,0,0,0-22.63,9.37L44.69,144H16A16,16,0,0,0,0,160v40a16,16,0,0,0,16,16H120a7.93,7.93,0,0,0,1.94-.24l64-16a7.35,7.35,0,0,0,1.2-.4L226,182.82l.44-.2a24.6,24.6,0,0,0,3.93-41.56Zm-10.9,27.15-38,16.18L119,200H56V155.31l22.63-22.62A15.86,15.86,0,0,1,89.94,128H140a12,12,0,0,1,0,24H112a8,8,0,0,0,0,16h32a8.32,8.32,0,0,0,1.79-.2l67-15.41.31-.08a8.6,8.6,0,0,1,6.3,15.9ZM154.34,61.66a8,8,0,0,1,0-11.32l32-32a8,8,0,0,1,11.32,0l32,32a8,8,0,0,1-11.32,11.32L200,43.31V104a8,8,0,0,1-16,0V43.31L165.66,61.66A8,8,0,0,1,154.34,61.66Z"/></symbol>
+  <symbol id="i-hand-coins-fill" viewBox="0 0 256 256"><path d="M128.09,57.38a36,36,0,0,1,55.17-27.82,4,4,0,0,1-.56,7A52.06,52.06,0,0,0,152,84c0,1.17,0,2.34.12,3.49a4,4,0,0,1-6,3.76A36,36,0,0,1,128.09,57.38ZM240,160.61a24.47,24.47,0,0,1-13.6,22l-.44.2-38.83,16.54a6.94,6.94,0,0,1-1.19.4l-64,16A7.93,7.93,0,0,1,120,216H16A16,16,0,0,1,0,200V160a16,16,0,0,1,16-16H44.69l22.62-22.63A31.82,31.82,0,0,1,89.94,112H140a28,28,0,0,1,27.25,34.45l41.84-9.62A24.61,24.61,0,0,1,240,160.61Zm-16,0a8.61,8.61,0,0,0-10.87-8.3l-.31.08-67,15.41a8.32,8.32,0,0,1-1.79.2H112a8,8,0,0,1,0-16h28a12,12,0,0,0,0-24H89.94a15.86,15.86,0,0,0-11.31,4.69L56,155.31V200h63l62.43-15.61,38-16.18A8.56,8.56,0,0,0,224,160.61ZM168,84a36,36,0,1,0,36-36A36,36,0,0,0,168,84Z"/></symbol>
+  <symbol id="i-hand-coins" viewBox="0 0 256 256"><path d="M232.76,137.88A28.39,28.39,0,0,0,208.13,133L172,141.26c0-.42,0-.84,0-1.26a32,32,0,0,0-32-32H89.94a35.76,35.76,0,0,0-25.45,10.54L43,140H20A20,20,0,0,0,0,160v40a20,20,0,0,0,20,20H120a11.89,11.89,0,0,0,2.91-.36l64-16a11.4,11.4,0,0,0,1.79-.6l38.82-16.54c.23-.09.45-.19.67-.3a28.61,28.61,0,0,0,4.57-48.32ZM36,196H24V164H36Zm181.68-31.39-37.51,16L118.52,196H60V157l21.46-21.46A11.93,11.93,0,0,1,89.94,132H140a8,8,0,0,1,0,16H112a12,12,0,0,0,0,24h32a12.19,12.19,0,0,0,2.69-.3l67-15.41.47-.12a4.61,4.61,0,0,1,5.82,4.44A4.58,4.58,0,0,1,217.68,164.61ZM164,100a40.36,40.36,0,0,0,5.18-.34,40,40,0,1,0,29.67-59.32A40,40,0,1,0,164,100Zm40-36a16,16,0,1,1-16,16A16,16,0,0,1,204,64ZM164,44a16,16,0,0,1,12.94,6.58A39.9,39.9,0,0,0,164.2,76H164a16,16,0,0,1,0-32Z"/></symbol>
+  <symbol id="i-pencil-simple" viewBox="0 0 256 256"><path d="M230.14,70.54,185.46,25.85a20,20,0,0,0-28.29,0L33.86,149.17A19.85,19.85,0,0,0,28,163.31V208a20,20,0,0,0,20,20H92.69a19.86,19.86,0,0,0,14.14-5.86L230.14,98.82a20,20,0,0,0,0-28.28ZM91,204H52V165l84-84,39,39ZM192,103,153,64l18.34-18.34,39,39Z"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 256 256"><path d="M228,128a12,12,0,0,1-12,12H140v76a12,12,0,0,1-24,0V140H40a12,12,0,0,1,0-24h76V40a12,12,0,0,1,24,0v76h76A12,12,0,0,1,228,128Z"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 256 256"><path d="M216,48H180V36A28,28,0,0,0,152,8H104A28,28,0,0,0,76,36V48H40a12,12,0,0,0,0,24h4V208a20,20,0,0,0,20,20H192a20,20,0,0,0,20-20V72h4a12,12,0,0,0,0-24ZM100,36a4,4,0,0,1,4-4h48a4,4,0,0,1,4,4V48H100Zm88,168H68V72H188ZM116,104v64a12,12,0,0,1-24,0V104a12,12,0,0,1,24,0Zm48,0v64a12,12,0,0,1-24,0V104a12,12,0,0,1,24,0Z"/></symbol>
+</svg>
+
+<div class="app">
+  <header class="head">
+    <button class="rbtn" type="button" id="backHome" aria-label="Back to Home" hidden><svg class="i"><use href="#i-caret-left"/></svg></button>
+    <span class="av" id="avatar"><img class="e" src="assets/3d/farmer.png" width="36" height="36" alt=""></span>
+    <div class="grow">
+      <div class="sub" id="headSub"></div>
+      <h1 id="headTitle">Family Money</h1>
+    </div>
+    <button class="rbtn" id="syncBtn" type="button" aria-label="Sync now"><svg class="i"><use href="#i-arrows-clockwise"/></svg><span class="dot" hidden></span></button>
+  </header>
+
+  <main>
+    <section id="setup" hidden>
+      <div class="pcard" style="background:var(--sky)">
+        <div style="display:flex;gap:12px;align-items:center;margin-bottom:12px"><span class="disc s" style="background:#fff"><svg class="i"><use href="#i-link"/></svg></span><div><b style="font-weight:600">Connect to your Google Sheet</b><div class="t-sm muted">Open the setup link from WhatsApp, or paste it here.</div></div></div>
+        <form id="setupForm" style="display:flex;flex-direction:column;gap:10px">
+          <label><span class="lbl" style="color:rgba(11,11,12,.62)">Setup link</span><input class="field" id="setupLink" autocomplete="off" required style="background:#fff;color:#0B0B0C"></label>
+          <p class="err" id="setupErr"></p>
+          <button class="btn ink" type="submit">Connect</button>
+        </form>
+      </div>
+    </section>
+
+    <section id="home">
+      <div class="pcard hero" style="background:var(--lavender)">
+        <div class="grow">
+          <img class="e" src="assets/3d/bag.png" width="44" height="44" alt="">
+          <div class="muted t-sm" id="heroLabel">Saved this month</div>
+          <div class="big num" id="heroSaved">₹0</div>
+        </div>
+        <button type="button" class="pie hpie" id="heroPie" data-tab="insights" aria-label="Where income went. Open Insights"></button>
+      </div>
+      <div class="picks">
+        <button type="button" class="pick" data-new="Income" style="background:var(--mint)"><span class="ptop"><img class="e" src="assets/3d/up.png" width="30" height="30" alt=""><span class="plus"><svg class="i sm"><use href="#i-plus"/></svg></span></span><small>Income</small><b class="num" id="heroIn">₹0</b></button>
+        <button type="button" class="pick" data-new="Expense" style="background:var(--blush)"><span class="ptop"><img class="e" src="assets/3d/wings.png" width="30" height="30" alt=""><span class="plus"><svg class="i sm"><use href="#i-plus"/></svg></span></span><small>Expenses</small><b class="num" id="heroOut">₹0</b></button>
+      </div>
+      <div id="homeLimit"></div>
+      <div class="sec"><h2>Latest</h2><span class="secr"><span class="pill" id="syncPill"></span><button class="rbtn sm" type="button" id="openHistory" aria-label="History: all entries"><svg class="i sm"><use href="#i-clock-counter-clockwise"/></svg></button></span></div>
+      <div class="list" id="recent"></div>
+    </section>
+
+    <section id="history" hidden>
+      <label class="search"><svg class="i sm"><use href="#i-magnifying-glass"/></svg><input id="q" type="search" placeholder="Search reason or amount" autocomplete="off" aria-label="Search entries"><button type="button" class="rbtn xs" id="qClear" aria-label="Clear search" hidden><svg class="i sm"><use href="#i-x"/></svg></button></label>
+      <div class="filters">
+        <div class="dd"><button type="button" class="fbtn" id="fYear" aria-expanded="false" aria-controls="ddYear"></button><div class="ddlist c4" id="ddYear" hidden></div></div>
+        <div class="dd"><button type="button" class="fbtn" id="fMonth" aria-expanded="false" aria-controls="ddMonth"></button><div class="ddlist c4" id="ddMonth" hidden></div></div>
+        <div class="dd"><button type="button" class="fbtn" id="fCat" aria-expanded="false" aria-controls="ddCat"></button><div class="ddlist" id="ddCat" hidden></div></div>
+      </div>
+      <div class="hsum"><span id="hSum"></span><button type="button" class="link" id="hClear" hidden>Clear filters</button></div>
+      <div class="list" id="historyList"></div>
+      <p class="foot" id="hFoot"></p>
+    </section>
+
+    <section id="loans" hidden>
+      <!-- Shared by the Loans tab (money borrowed) and the Given tab (money given to others); app.js fills in the words. -->
+      <div class="pcard" id="loanSummary">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+          <div><div class="muted t-sm" id="loanLeftLabel">Still owed</div><div class="big num" id="loanOwed">₹0</div></div>
+          <img class="e" id="loanPic" src="assets/3d/bank.png" width="72" height="72" alt="">
+        </div>
+        <div class="inlist">
+          <div class="row"><svg class="i" style="color:#0B0B0C"><use id="loanTotalIcon" href="#i-arrow-down-left"/></svg><div class="grow"><b class="t-sm" id="loanTotalLabel">Borrowed</b><div class="t-xs muted" id="loanTotalSub">All loans</div></div><b class="num" id="loanBorrowed">₹0</b></div>
+          <div class="row"><svg class="i" style="color:#0B0B0C"><use id="loanBackIcon" href="#i-arrow-up-right"/></svg><div class="grow"><b class="t-sm" id="loanBackLabel">Repaid</b><div class="t-xs muted" id="loanBackSub">Paid back so far</div></div><b class="num" id="loanRepaid">₹0</b></div>
+          <div class="row" id="loanIntRow" hidden><svg class="i" style="color:#0B0B0C"><use href="#i-clock"/></svg><div class="grow"><b class="t-sm">Interest</b><div class="t-xs muted" id="loanIntSub">Each month, on what is still owed</div></div><b class="num" id="loanInt">₹0</b></div>
+        </div>
+      </div>
+      <button type="button" class="btn" id="addLoan"><svg class="i sm"><use href="#i-plus"/></svg><span id="addLoanText">Add a loan</span></button>
+      <div class="sec"><h2 id="loanListTitle">Loans</h2><span class="see" id="loanCount"></span></div>
+      <div class="list" id="loanList"></div>
+      <p class="foot" id="loanFoot"></p>
+    </section>
+
+    <section id="insights" hidden>
+      <div class="seg" role="group" aria-label="Period">
+        <button type="button" data-view="week">Week</button>
+        <button type="button" data-view="month">Month</button>
+        <button type="button" data-view="year">Year</button>
+      </div>
+      <div class="period">
+        <button class="rbtn sm" type="button" id="prev" aria-label="Previous"><svg class="i sm"><use href="#i-caret-left"/></svg></button>
+        <span id="periodLabel"></span>
+        <button class="rbtn sm" type="button" id="next" aria-label="Next"><svg class="i sm"><use href="#i-caret-right"/></svg></button>
+      </div>
+      <div class="stats">
+        <div class="stat" style="background:var(--mint)"><span>Income</span><b class="num" id="sIn"></b></div>
+        <div class="stat" style="background:var(--blush)"><span>Expenses</span><b class="num" id="sOut"></b></div>
+        <div class="stat" style="background:var(--lavender)"><span>Saved</span><b class="num" id="sSave"></b></div>
+      </div>
+      <div class="card"><h2>Where income went<span class="pill bad" id="pieOver" hidden></span></h2><div class="pie" id="pie"></div><div id="split"></div></div>
+      <div id="insLimit"></div>
+      <div class="card"><h2>Profit by source</h2><div id="net"></div></div>
+      <div id="insLoans"></div>
+      <div id="insForecast"></div>
+      <div class="card">
+        <h2>Income vs expenses<span class="pill" id="byLabel"></span></h2>
+        <div class="legend"><span><i style="background:var(--mint-d)"></i>Income</span><span><i style="background:var(--blush-d)"></i>Expenses</span></div>
+        <div class="chart" id="cols" role="group" aria-label="Income and expenses"></div>
+        <div class="ticks" id="ticks"></div>
+      </div>
+      <div class="sec"><h2>Entries</h2><span class="see" id="entryCount"></span></div>
+      <div class="list" id="entries"></div>
+    </section>
+  </main>
+
+  <nav class="navwrap" aria-label="Main">
+    <div class="nav">
+      <button type="button" data-tab="home" aria-current="page"><svg class="i"><use href="#i-house-fill"/></svg>Home</button>
+      <button type="button" data-tab="loans"><svg class="i"><use href="#i-hand-arrow-down"/></svg>Loans</button>
+      <button type="button" data-tab="given"><svg class="i"><use href="#i-hand-arrow-up"/></svg>Given</button>
+      <button type="button" data-tab="insights"><svg class="i"><use href="#i-chart-bar"/></svg>Insights</button>
+    </div>
+  </nav>
+</div>
+
+<dialog id="sheet" aria-labelledby="sheetTitle">
+  <form class="sheet" id="entryForm" method="dialog">
+    <div class="grab"></div>
+    <div class="sh">
+      <span class="disc l" id="sheetDisc"><img class="e" id="sheetImg" width="40" height="40" alt=""></span>
+      <div class="grow"><h3 id="sheetTitle"></h3><span class="pill" id="sheetKind"></span></div>
+      <button class="rbtn sm" type="button" id="cancel" aria-label="Close"><svg class="i sm"><use href="#i-x"/></svg></button>
+    </div>
+    <div class="dd" id="catBox" hidden>
+      <button type="button" class="field ddbtn" id="catBtn" aria-expanded="false" aria-controls="catList" aria-label="Category"></button>
+      <div class="ddlist" id="catList" hidden></div>
+    </div>
+    <div class="amount" aria-live="polite"><span id="amountText"></span><span class="caret"></span></div>
+    <div class="chips" id="quick"></div>
+    <label id="noteBox"><span class="lbl" id="noteLabel">Reason</span><input class="field" id="note" maxlength="200" autocomplete="off" placeholder="What was it for?"></label>
+    <div class="chips" id="noteChips"></div>
+    <div id="loanOpts" hidden>
+      <span class="lbl">Priority (high shows first)</span>
+      <div class="seg prio" role="group" aria-label="Priority"><button type="button" data-prio="high">High</button><button type="button" data-prio="medium">Medium</button><button type="button" data-prio="low">Low</button></div>
+      <span class="lbl" style="margin-top:12px">Interest (optional)</span>
+      <div class="rate">
+        <label class="field ratein"><input id="rate" inputmode="decimal" autocomplete="off" maxlength="6" placeholder="0" aria-label="Interest percent"><b>%</b></label>
+        <div class="seg" role="group" aria-label="Interest is charged"><button type="button" data-per="month">per month</button><button type="button" data-per="year">per year</button></div>
+      </div>
+      <div class="chips" id="rateChips" style="margin-top:8px"></div>
+    </div>
+    <div class="when"><svg class="i sm"><use href="#i-clock"/></svg><span id="whenText">Now</span><button type="button" class="link" id="changeWhen">Change</button></div>
+    <label id="whenBox" hidden><span class="lbl">Date and time</span><input class="field" type="datetime-local" id="when"></label>
+    <div class="keys" id="keys"></div>
+    <p class="err" id="err" role="alert"></p>
+    <button type="submit" class="btn" id="saveBtn"><svg class="i sm"><use href="#i-check"/></svg><span id="saveText">Save</span></button>
+    <button type="button" class="btn danger" id="deleteBtn" hidden><svg class="i sm"><use href="#i-trash"/></svg><span id="deleteText">Delete</span></button>
+  </form>
+</dialog>
+
+<div id="toast" role="status" hidden></div>
+
+<script src="shared.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

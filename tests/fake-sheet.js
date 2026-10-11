@@ -2,28 +2,41 @@
 // Each tab is a grid (tab.rows[r][c], 0-based) of values; formulas are kept as their "=..." text.
 const fs = require('fs'), vm = require('vm'), path = require('path');
 const root = path.join(__dirname, '..');
-const FORMATTING = ['setNumberFormat', 'setFontWeight', 'setFontSize', 'merge', 'setBackground', 'setFontColor', 'setHorizontalAlignment', 'setWrap'];
+const FORMATTING = ['setNumberFormat', 'setFontWeight', 'setFontSize', 'merge', 'setBackground', 'setFontColor', 'setHorizontalAlignment', 'setWrap',
+  'setBorder', 'clearFormat', 'setFontStyle', 'setVerticalAlignment', 'setBackgrounds'];
 
 function fakeSheet(name) {
   const sh = {
-    name, rows: [], hidden: false, hiddenCols: [],
+    name, rows: [], notes: [], hidden: false, hiddenCols: [], bandings: [],
     getName() { return this.name; },
     setName(n) { this.name = n; return this; },
     hideSheet() { this.hidden = true; return this; },
-    hideColumns(c) { this.hiddenCols.push(c); },
-    setColumnWidth() {}, setFrozenRows() {},
+    hideColumns(c) { if (!this.hiddenCols.includes(c)) this.hiddenCols.push(c); },
+    setColumnWidth() {}, setFrozenRows() {}, setHiddenGridlines() {}, setTabColor() {}, setRowHeight() {},
+    getBandings() { return this.bandings.slice(); },
     getLastRow() { for (let r = this.rows.length; r > 0; r--) if ((this.rows[r - 1] || []).some(v => v !== '' && v != null)) return r; return 0; },
     getRange(row, col, n = 1, w = 1) {
       const self = this, range = {
         getValues: () => Array.from({ length: n }, (_, i) => Array.from({ length: w }, (_, j) => { const v = (self.rows[row - 1 + i] || [])[col - 1 + j]; return v == null ? '' : v; })),
         getValue: () => range.getValues()[0][0],
+        getNotes: () => Array.from({ length: n }, (_, i) => Array.from({ length: w }, (_, j) => (self.notes[row - 1 + i] || [])[col - 1 + j] || '')),
+        setNotes(v) { v.forEach((r, i) => { const dst = self.notes[row - 1 + i] || (self.notes[row - 1 + i] = []); r.forEach((x, j) => { dst[col - 1 + j] = x; }); }); return range; },
         setValues(v) {
           if (v.length !== n || v.some(r => r.length !== w)) throw new Error(`setValues: ${v.length}x${v[0] && v[0].length} into ${n}x${w}`);
           v.forEach((r, i) => { const dst = self.rows[row - 1 + i] || (self.rows[row - 1 + i] = []); r.forEach((x, j) => { dst[col - 1 + j] = x; }); });
           return range;
         },
         setValue(x) { return range.setValues([[x]]); },
-        setFormulas(v) { return range.setValues(v); }
+        setFormulas(v) { return range.setValues(v); },
+        // Like Sheets: alternating colours may not overlap ones already there.
+        applyRowBanding() {
+          const box = { row, col, n, w };
+          if (self.bandings.some(b => b.row < row + n && row < b.row + b.n && b.col < col + w && col < b.col + b.w)) throw new Error('banding overlaps another');
+          const b = { ...box, remove() { self.bandings.splice(self.bandings.indexOf(b), 1); } };
+          ['setHeaderRowColor', 'setFirstRowColor', 'setSecondRowColor', 'setFooterRowColor'].forEach(f => { b[f] = () => b; });
+          self.bandings.push(b);
+          return b;
+        }
       };
       FORMATTING.forEach(f => { range[f] = () => range; });
       return range;
@@ -40,6 +53,7 @@ function fakeSpreadsheet() {
     getSheetByName: n => tabs.find(t => t.name === n) || null,
     insertSheet(n, index) { const t = fakeSheet(n); tabs.splice(index == null ? tabs.length : index, 0, t); return t; },
     deleteSheet(t) { tabs.splice(tabs.indexOf(t), 1); },
+    getName: () => 'Family Money',
     getSpreadsheetTimeZone: () => 'Asia/Kolkata'
   };
 }

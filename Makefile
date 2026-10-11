@@ -1,8 +1,8 @@
 # Family Money. Run `make` to list the commands.
 PORT       ?= 8000
 PLAYWRIGHT := 1.48.2
-CLASP      := $(TOOLS)/clasp/node_modules/.bin/clasp
 TOOLS      := .tools
+CLASP      := $(TOOLS)/clasp/node_modules/.bin/clasp
 E2E_ENV    := NODE_PATH=$(TOOLS)/node_modules PLAYWRIGHT_BROWSERS_PATH=$(TOOLS)/browsers
 
 .PHONY: help test check e2e demo run apps-script push clean
@@ -52,15 +52,15 @@ apps-script: ## Put Code.gs + shared.gs in build/apps-script, ready to paste int
 	@echo "Paste both files from build/apps-script/ into Extensions > Apps Script,"
 	@echo "then Deploy > Manage deployments > edit > New version."
 
-# Each sheet in .env: <NAME>_SCRIPT_ID, <NAME>_DEPLOYEMENT_ID, <NAME>_WEB_APP_URL and its key. The key is never printed.
+# Each sheet in .env: <WHO>_SCRIPT_ID, <WHO>_KEY, <NAME>_DEPLOYEMENT_ID and <NAME>_WEB_APP_URL. The key is never printed.
 # clasp pull brings the live appsscript.json, so the web app's access settings ship unchanged (without them phones are cut off).
 push: test $(CLASP) ## Push Code.gs + shared.gs to both Google Sheets and update their web apps (same URLs). Once: npx @google/clasp login
 	@test -f .env || { echo "No .env"; exit 1; }; set -a; . ./.env; set +a; \
-	for s in SHEET:FAMILY_KEY PERSONAL_SHEET:PERSONAL_KEY; do \
-		name=$${s%%:*}; id=$$(printenv $${name}_SCRIPT_ID); dep=$$(printenv $${name}_DEPLOYEMENT_ID); \
-		url=$$(printenv $${name}_WEB_APP_URL); key=$$(printenv $${s##*:}); dir=build/clasp/$$name; \
+	for s in SHEET:FAMILY PERSONAL_SHEET:PERSONAL; do \
+		name=$${s%%:*}; who=$${s##*:}; id=$$(printenv $${who}_SCRIPT_ID); dep=$$(printenv $${name}_DEPLOYEMENT_ID); \
+		url=$$(printenv $${name}_WEB_APP_URL); key=$$(printenv $${who}_KEY); dir=build/clasp/$$name; \
 		if [ -z "$$id" ] || [ -z "$$dep" ] || [ -z "$$url" ] || [ -z "$$key" ]; then \
-			echo "$$name: .env needs $${name}_SCRIPT_ID (Apps Script > Project Settings > IDs), $${name}_DEPLOYEMENT_ID, $${name}_WEB_APP_URL and $${s##*:}"; exit 1; fi; \
+			echo "$$who: .env needs $${who}_SCRIPT_ID (Apps Script > Project Settings > IDs), $${who}_KEY, $${name}_DEPLOYEMENT_ID and $${name}_WEB_APP_URL"; exit 1; fi; \
 		rm -rf $$dir && mkdir -p $$dir && printf '{"scriptId":"%s"}\n' "$$id" > $$dir/.clasp.json; \
 		(cd $$dir && $(CURDIR)/$(CLASP) pull >/dev/null) || exit 1; \
 		grep -q '"ANYONE_ANONYMOUS"' $$dir/appsscript.json || { echo "$$name: its appsscript.json has no public web app settings, not pushing"; exit 1; }; \

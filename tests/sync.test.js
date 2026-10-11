@@ -29,10 +29,10 @@ eq(tab('Loans & Settings').hiddenCols, [9, 14, 15, 25, 30, 31, 41, 46, 47], 'Id 
 eq(ctx.doPost({ postData: { contents: JSON.stringify({ key: 'nope', ops: [] }) } }), { error: 'wrong key' });
 eq(ctx.doPost({ postData: { contents: '{oops' } }), { error: 'bad request' });
 
-// ---- Old phones: {pending: [entry]}; the reason is required
-let r = post({ pending: [entry('aaaaaaaa-1'), entry('bbbbbbbb-2', { note: '' })] });
+// ---- Old phones: {pending: [entry]}; a bad entry is refused
+let r = post({ pending: [entry('aaaaaaaa-1'), entry('bbbbbbbb-2', { amount: 0 })] });
 eq(r.done, ['aaaaaaaa-1']);
-eq(r.rejected, [{ opId: 'bbbbbbbb-2', error: 'reason required' }]);
+eq(r.rejected, [{ opId: 'bbbbbbbb-2', error: 'bad amount' }]);
 eq(B.ss.getSheets().map(t => t.name), ['2026', 'Loans & Settings'], 'the 2026 tab is made by the first 2026 entry, before the common tab');
 
 // ---- The year tab: title, summary (live formulas), 12 month tables side by side
@@ -51,6 +51,11 @@ props.SUMMARY = '1';
 y.rows[2][5] = 'Income';
 post({ ops: [] });
 eq([y.rows[2][5], y.rows[2][6], props.SUMMARY], ['', 'Income', ctx.SUMMARY], 'old summary rewritten once');
+// Looks: one set of alternating colours per month table and per loan / payments table; bumping LOOK repaints, never stacking them
+eq([props.LOOK, y.bandings.length, tab('Loans & Settings').bandings.length], [ctx.LOOK, 12, 6]);
+props.LOOK = '0';
+post({ ops: [] });
+eq([props.LOOK, y.bandings.length, tab('Loans & Settings').bandings.length, y.rows[0][0]], [ctx.LOOK, 12, 6, '2026 · Family Money'], 'repainted in place');
 eq(cells(month(2026, OCT)), [['Dairy', '', 450, 'Cattle feed']]);
 assert.ok(month(2026, OCT)[0][0] instanceof Date);
 
@@ -70,8 +75,8 @@ r = post({ ops: [op('o4', 'entry', 'update', 'cccccccc-3', entry('cccccccc-3', {
 eq(B.ss.getSheets().map(t => t.name), ['2027', '2026', 'Loans & Settings'], 'a 2027 tab appears only now, newest first');
 eq(month(2026, SEP), []);
 eq(cells(month(2027, 0)), [['Dairy', '', 450, 'Next year']]);
-r = post({ ops: [op('o5', 'entry', 'update', 'cccccccc-3', entry('cccccccc-3', { note: ' ' }))] });
-eq(r.rejected, [{ opId: 'o5', error: 'reason required' }]);
+r = post({ ops: [op('o5', 'entry', 'update', 'cccccccc-3', entry('cccccccc-3', { note: ' ', dateTime: '2027-01-03T04:30:00.000Z' }))] });
+eq([r.rejected, cells(month(2027, 0))], [[], [['Dairy', '', 450, '']]], 'the reason is optional');
 
 // ---- Month boundary uses India time: 31 Oct 23:30 IST is still October
 post({ ops: [op('o6', 'entry', 'add', 'dddddddd-4', entry('dddddddd-4', { dateTime: '2026-10-31T18:00:00.000Z', note: 'Last day' }))] });
@@ -211,14 +216,54 @@ eq(cpost([]).cats.Expense, ['House', 'Crops', 'goats', 'Others'], 'kept between 
 C.typeRow(2026, OCT, [new Date(T), 'GOATS', '', 50, 'Typed']);
 assert.ok(cpost([]).rows.some(x => x.note === 'Typed' && x.category === 'goats'), 'hand-typed rows match the new list');
 
-// ---- A new, empty sheet starts with only Others (saved at setup); a sheet with entries but no saved list keeps the starting categories
+// ---- A new, empty sheet starts with the household list (saved at setup); a sheet with entries but no saved list keeps the starting categories
 const N = createBackend();
 N.ctx.setup();
-eq(JSON.parse(N.props.CATS), { Income: ['Others'], Expense: ['Others'] });
+eq(JSON.parse(N.props.CATS), N.ctx.NEW_CATEGORIES);
+eq(N.ctx.NEW_CATEGORIES.Expense.slice(0, 3), ['Rent', 'Kirana', 'Milk'], 'a household list, Others last');
 const E = createBackend();
 E.props.KEY = 'k';
 E.ss.insertSheet('2025'); // made before categories could change
 eq(E.ctx.doPost({ postData: { contents: JSON.stringify({ key: 'k', ops: [] }) } }).cats, { Income: ['Job', 'Dairy', 'Crops', 'Others'], Expense: ['House', 'Dairy', 'Crops', 'Others'] });
 assert.strictEqual(E.props.CATS, undefined, 'nothing saved for it');
+
+// ---- Who added it: the note on the Date cell; a hand-typed row has none
+const S = createBackend();
+S.props.KEY = 'k';
+S.props.CATS = JSON.stringify(S.ctx.CATEGORIES);
+const spost = ops => S.ctx.doPost({ postData: { contents: JSON.stringify({ key: 'k', ops }) } });
+r = spost([op('b1', 'entry', 'add', 'by-000001', entry('by-000001', { by: 'Sunita' })), op('b2', 'entry', 'add', 'by-000002', entry('by-000002', { dateTime: early }))]);
+const so = S.tab('2026'), dcol = 7 * OCT;
+eq([so.notes[20][dcol], (so.notes[21] || [])[dcol]], ['', 'Added by Sunita'], '2 Oct (no one) sorts first, 11 Oct is Sunita\'s');
+eq([r.rows.find(x => x.id === 'by-000001').by, 'by' in r.rows.find(x => x.id === 'by-000002')], ['Sunita', false]);
+so.notes[21][dcol] = 'Added by Kavita'; // changed by hand in the sheet
+eq(spost([]).rows.find(x => x.id === 'by-000001').by, 'Kavita');
+spost([op('b3', 'entry', 'delete', 'by-000002')]);
+eq([so.notes[20][dcol], so.notes[21][dcol]], ['Added by Kavita', ''], 'notes move with their rows; the freed row loses its note');
+
+// ---- Settings: kept in the SET property; the Others budget is cell B1; categories and loans keep them tidy
+const set = (opId, key, value, id) => op(opId, 'set', 'update', undefined, { key, id, value });
+const rent = { name: 'Rent', category: 'House', amount: 12000, day: 1, every: 1, next: '2026-11' };
+r = spost([set('s1', 'daily', 20000), set('s2', 'budget', 8000, 'Dairy'), set('s3', 'bill', rent, 'bill-0001'), set('s4', 'focus', 'grow'), set('s5', 'budget', 600, 'Others'),
+  set('s6', 'focus', 'rich'), set('s7', 'bill', { ...rent, day: 40 }, 'bill-0002')]);
+eq([r.done, r.rejected.map(x => x.error)], [['s1', 's2', 's3', 's4', 's5'], ['bad setting', 'bad setting']]);
+eq([r.settings.daily, r.settings.budgets, r.settings.bills['bill-0001'].name, r.settings.focus, r.othersLimit], [20000, { Dairy: 8000, Others: 600 }, 'Rent', 'grow', 600]);
+eq([S.tab('Loans & Settings').rows[0][1], JSON.parse(S.props.SET).budgets], [600, { Dairy: 8000 }], 'the Others budget lives in B1 only');
+S.tab('Loans & Settings').rows[0][1] = 2500; // changed by hand
+eq(spost([]).settings.budgets.Others, 2500);
+r = spost([cat('s8', 'rename', { name: 'Dairy', to: 'Milk' }), cat('s9', 'rename', { name: 'House', to: 'Home' })]);
+eq([r.settings.budgets, r.settings.bills['bill-0001'].category], [{ Milk: 8000, Others: 2500 }, 'Home'], 'budgets and bills follow a rename');
+// Loan extras (EMI, SIP, goal) go with their loan; money added to an investment is a negative withdrawal, refused for anything else
+const sloan = { id: 'sl-000001', dateTime: T, reason: 'Personal loan', amount: 120000, interest: 14, per: 'year' };
+const sinv = { id: 'si-000001', dateTime: T, reason: 'SIP', amount: 50000, interest: 12, per: 'year', dir: 'invested' };
+r = spost([op('s10', 'loan', 'add', sloan.id, sloan), op('s11', 'loan', 'add', sinv.id, sinv), set('s12', 'loan', { emi: 5600, day: 5 }, sloan.id),
+  op('s13', 'repay', 'add', 'su-000001', { id: 'su-000001', loanId: sinv.id, dateTime: T, amount: -5000 }), op('s14', 'repay', 'add', 'su-000002', { id: 'su-000002', loanId: sloan.id, dateTime: T, amount: -5000 })]);
+eq([r.done, r.rejected], [['s10', 's11', 's12', 's13'], [{ opId: 's14', error: 'bad amount' }]]);
+const SL = S.tab('Loans & Settings');
+eq(SL.rows[4].slice(43, 46), ['SIP', -5000, 'si-000001'], 'added money sits in WITHDRAWN as a negative amount');
+eq(SL.rows[4][39], '=AI5-AM5', 'so "Still invested" counts it');
+eq(spost([]).repays.map(x => x.amount), [-5000], 'and it reads back');
+r = spost([op('s15', 'loan', 'delete', sloan.id)]);
+eq(r.settings.loans, {}, 'its EMI goes with it');
 
 console.log('Code.gs harness passed');

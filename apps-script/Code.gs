@@ -4,6 +4,8 @@
 //   - one "Loans & Settings" tab: the Others limit (B1), then side by side: money borrowed + what we paid back, money given + what we
 //     got back, and investments + what was withdrawn (DIRS in shared.js).
 // The category list lives in the script property CATS (not in a tab, so a hand edit can't orphan entries); changing it rewrites every summary.
+// Settings (budgets, bills, EMIs, SIPs, goals, the focus) live in the property SET (shared.js validateSet); the Others budget is cell B1.
+// Who added an entry is the note on its Date cell ("Added by Sunita"), so the month tables keep their columns.
 // Every sync loads everything, applies the phone's ops in memory, and rewrites only the month tables / tables that changed.
 var COMMON = 'Loans & Settings';
 var MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -21,6 +23,13 @@ var TABLES = {
 };
 var DATE_FORMAT = 'dd mmm yyyy, h:mm am/pm';
 var SUMMARY = '2'; // the year summary's layout; 2: steps over the hidden Id columns
+var LOOK = '1';    // colours and number formats; bump it and every tab is repainted on the next sync
+var ROWS = 1000;   // how far down the month and loan tables are formatted
+// The app's Pastel theme (src/index.html): mint = income, blush = expenses, lavender = saved.
+var COLOR = { ink: '#0B0B0C', muted: '#8A8A8E', line: '#D9D9DE', head: '#F1F1F3', band: '#FAFAFB', white: '#FFFFFF', good: '#15803D', bad: '#B42318',
+  income: '#D7F2DC', incomeD: '#8FD6A0', expense: '#F7D9D9', expenseD: '#EE9F9F', saved: '#E8DDFB', savedD: '#B9A5F3', month: '#DCDDF6',
+  butter: '#F8E9B8', butterD: '#EBC75E', sky: '#D9EEF6', skyD: '#8DC8E2' };
+var MONEY = '#,##0;-#,##0;"–"', SAVED_MONEY = '#,##0;[Red]-#,##0;"–"';
 var VALIDATE = { entry: validateEntry, loan: validateLoan, repay: validateRepay };
 var LIST_OF = { entry: 'rows', loan: 'loans', repay: 'repays' };
 
@@ -33,8 +42,9 @@ function setup() {
 }
 
 // Body: {key, ops: [op]} (older phones send {key, pending: [entry]}).
-// op = {opId, kind: 'entry'|'loan'|'repay', action: 'add'|'update'|'delete', id, data} or {opId, kind: 'cat', action, data} (applyCat).
-// Reply: {rows, loans, repays, othersLimit, cats, done: [opId], rejected: [{opId, error}]} or {error}.
+// op = {opId, kind: 'entry'|'loan'|'repay', action: 'add'|'update'|'delete', id, data} or {opId, kind: 'cat', action, data} (applyCat)
+// or {opId, kind: 'set', action: 'update', data: {key, id, value}} (applySet).
+// Reply: {rows, loans, repays, othersLimit, cats, settings, done: [opId], rejected: [{opId, error}]} or {error}.
 function doPost(e) {
   var body;
   try { body = JSON.parse(e.postData.contents); } catch (err) { return reply({ error: 'bad request' }); }
@@ -62,9 +72,16 @@ function doPost(e) {
   }
 
   return reply({
-    rows: st.rows.map(function (r) { return { id: r.id, dateTime: r.dateTime, type: r.type, category: r.category, amount: r.amount, note: r.note }; }),
-    loans: st.loans, repays: st.repays, othersLimit: st.limit, cats: st.cats, done: done, rejected: rejected
+    rows: st.rows.map(function (r) { var e = { id: r.id, dateTime: r.dateTime, type: r.type, category: r.category, amount: r.amount, note: r.note }; if (r.by) e.by = r.by; return e; }),
+    loans: st.loans, repays: st.repays, othersLimit: st.limit, cats: st.cats, settings: settingsReply(st), done: done, rejected: rejected
   });
+}
+
+// The settings as the phone sees them: the Others budget is the sheet's Others limit (B1).
+function settingsReply(st) {
+  var out = settingsOf(st.settings);
+  if (st.limit > 0) out.budgets.Others = st.limit;
+  return out;
 }
 
 // ---- Load: everything the sheet holds, plus what must be rewritten.
@@ -75,8 +92,9 @@ function loadAll(ss) {
   var cats = PropertiesService.getScriptProperties().getProperty('CATS');
   var used = ss.getSheets().some(function (sh) { return /^\d{4}$/.test(sh.getName()) || sh.getName() === 'Entries'; });
   var start = cats ? JSON.parse(cats) : used ? CATEGORIES : NEW_CATEGORIES;
+  var set = PropertiesService.getScriptProperties().getProperty('SET');
   var st = { ss: ss, tz: ss.getSpreadsheetTimeZone(), rows: [], loans: [], repays: [], keep: {}, size: {}, dirty: {}, dirtyCats: !cats && !used,
-    cats: { Income: start.Income.slice(), Expense: start.Expense.slice() },
+    cats: { Income: start.Income.slice(), Expense: start.Expense.slice() }, settings: settingsOf(set ? JSON.parse(set) : null), dirtySet: false, dirtyLimit: false,
     keepL: {}, keepR: {}, sizeL: {}, sizeR: {}, payDir: {}, dirtyL: false, dirtyR: false, limit: 0, seen: {} };
   DIRS.forEach(function (d) { st.keepL[d] = []; st.keepR[d] = []; st.sizeL[d] = st.sizeR[d] = 0; });
   ss.getSheets().forEach(function (sh) { if (/^\d{4}$/.test(sh.getName())) readYear(st, sh); });
@@ -96,7 +114,7 @@ function freshId(st, id) {
 function readYear(st, sh) {
   var last = sh.getLastRow();
   if (last < M_FIRST) return;
-  var vals = sh.getRange(M_FIRST, 1, last - M_FIRST + 1, 12 * M_STEP).getValues();
+  var block = sh.getRange(M_FIRST, 1, last - M_FIRST + 1, 12 * M_STEP), vals = block.getValues(), notes = block.getNotes();
   for (var m = 0; m < 12; m++) {
     var home = sh.getName() + '-' + pad2(m + 1);
     st.keep[home] = [];
@@ -109,6 +127,8 @@ function readYear(st, sh) {
       var id = freshId(st, e.id);
       if (id !== e.id) { e.id = id; st.dirty[home] = true; }
       e.home = home;
+      var by = /^Added by (.+)$/.exec(String(notes[i][m * M_STEP] || '').trim());
+      if (by) e.by = by[1].slice(0, 30);
       st.rows.push(e);
     });
   }
@@ -139,7 +159,7 @@ function readCommon(st, sh) {
       var p = row.slice(PAY_COL[dir] - 1, PAY_COL[dir] - 1 + R_COLS);
       if (!isBlank(p)) {
         st.sizeR[dir] = i + 1;
-        var repay = parseRepay(p[0], p[2], p[3], p[4]);
+        var repay = parseRepay(p[0], p[2], p[3], p[4], dir);
         if (!repay) st.keepR[dir].push(p);
         else { if (claim(st, repay)) st.dirtyR = true; st.payDir[repay.id] = dir; st.repays.push(repay); }
       }
@@ -160,9 +180,10 @@ function parseLoan(date, reason, amount, rate, per, sixth, id, dir) {
   return l;
 }
 
-function parseRepay(date, amount, loanId, id) {
-  var d = toDate(date);
-  if (!d || !(Number(amount) > 0) || !String(loanId).trim()) return null;
+// Below 0, in the WITHDRAWN table: money added to the investment.
+function parseRepay(date, amount, loanId, id, dir) {
+  var d = toDate(date), a = Number(amount);
+  if (!d || !(a > 0 || (dir === 'invested' && a < 0)) || !String(loanId).trim()) return null;
   return { id: String(id).trim(), loanId: String(loanId).trim(), dateTime: d.toISOString(), amount: Number(amount) };
 }
 
@@ -170,8 +191,19 @@ function parseRepay(date, amount, loanId, id) {
 function applyOp(st, op) {
   if (op && op.kind === 'cat') {
     var bad = applyCat(st.cats, st.rows, op, function (r) { st.dirty[r.home] = true; });
-    if (!bad) st.dirtyCats = true;
+    if (!bad) {
+      st.dirtyCats = st.dirtySet = true;
+      catInSettings(st.settings, st.cats, op);
+      delete st.settings.budgets.Others; // B1 keeps the Others budget
+    }
     return bad;
+  }
+  if (op && op.kind === 'set') {
+    var wrong = validateSet(op.data);
+    if (wrong) return wrong;
+    if (op.data.key === 'budget' && op.data.id === 'Others') { st.limit = op.data.value; st.dirtyLimit = true; }
+    else { applySet(st.settings, op.data); st.dirtySet = true; }
+    return '';
   }
   if (!op || !LIST_OF.hasOwnProperty(op.kind)) return 'bad op';
   if (!checkId(op.id)) return 'bad id';
@@ -182,6 +214,7 @@ function applyOp(st, op) {
       var before = st.repays.length;
       st.repays = st.repays.filter(function (r) { return r.loanId !== op.id; });
       if (st.repays.length !== before) st.dirtyR = true;
+      if (st.settings.loans[op.id]) { delete st.settings.loans[op.id]; st.dirtySet = true; }
     }
     return '';
   }
@@ -190,6 +223,7 @@ function applyOp(st, op) {
   if (err) return err;
   if (d.id !== op.id) return 'bad id';
   if (op.kind === 'repay' && findIndex(st.loans, d.loanId) < 0) return 'loan not found';
+  if (op.kind === 'repay' && d.amount < 0 && st.loans[findIndex(st.loans, d.loanId)].dir !== 'invested') return 'bad amount'; // only an investment takes money added
   if ((op.action === 'add') === (i >= 0)) return ''; // add of a known id, or update of one deleted elsewhere: nothing to do
   if (op.kind === 'entry') {
     // A phone that missed a rename still sends the old name: bring the category back rather than lose the entry.
@@ -204,7 +238,7 @@ function applyOp(st, op) {
 
 function record(st, kind, d) {
   if (kind === 'entry') {
-    return { id: d.id, dateTime: d.dateTime, type: d.type, category: d.category, amount: d.amount, note: d.note.trim(), home: homeOf(st, d.dateTime) };
+    return { id: d.id, dateTime: d.dateTime, type: d.type, category: d.category, amount: d.amount, note: (d.note || '').trim(), by: d.by || '', home: homeOf(st, d.dateTime) };
   }
   if (kind === 'loan') {
     var l = { id: d.id, dateTime: d.dateTime, reason: d.reason.trim(), amount: d.amount, interest: d.interest > 0 ? d.interest : 0,
@@ -230,23 +264,36 @@ function writeDirty(st) {
   Object.keys(st.dirty).sort().forEach(function (home) { writeMonth(st, home); });
   var props = PropertiesService.getScriptProperties();
   if (st.dirtyCats) props.setProperty('CATS', JSON.stringify(st.cats));
+  if (st.dirtySet) props.setProperty('SET', JSON.stringify(st.settings));
+  if (st.dirtyLimit) ensureCommon(st.ss).getRange(1, 2).setValue(st.limit);
   // Summaries written by an older layout (SUMMARY) are rewritten once, on the first sync after an update.
   if (st.dirtyCats || props.getProperty('SUMMARY') !== SUMMARY) {
     st.ss.getSheets().forEach(function (sh) { if (/^\d{4}$/.test(sh.getName())) writeSummary(sh, st.cats, true); });
     props.setProperty('SUMMARY', SUMMARY);
   }
   var sh = ensureCommon(st.ss);
+  if (props.getProperty('LOOK') !== LOOK) {
+    st.ss.getSheets().forEach(function (y) { if (/^\d{4}$/.test(y.getName())) { styleYear(y, st.ss.getName()); styleSummary(y, st.cats); } });
+    styleCommon(sh);
+    props.setProperty('LOOK', LOOK);
+  }
   if (st.dirtyL) writeLoans(st, sh);
   if (st.dirtyR) writeRepays(st, sh);
   removeBlankDefault(st.ss);
 }
 
 function writeMonth(st, home) {
-  var m = Number(home.slice(5)) - 1;
-  var out = st.rows.filter(function (r) { return r.home === home; }).sort(byOldest).map(function (r) {
+  var m = Number(home.slice(5)) - 1, keep = st.keep[home] || [], old = st.size[home] || 0;
+  var rows = st.rows.filter(function (r) { return r.home === home; }).sort(byOldest);
+  var out = rows.map(function (r) {
     return [new Date(r.dateTime), r.category, r.type === 'Income' ? r.amount : '', r.type === 'Expense' ? r.amount : '', safeText(r.note), r.id];
-  }).concat(st.keep[home] || []);
-  writeBlock(ensureYearTab(st.ss, home.slice(0, 4), st.cats), M_FIRST, 1 + m * M_STEP, M_COLS, out, st.size[home] || 0);
+  }).concat(keep);
+  var sh = ensureYearTab(st.ss, home.slice(0, 4), st.cats);
+  writeBlock(sh, M_FIRST, 1 + m * M_STEP, M_COLS, out, old);
+  // Who added each one, as the note on its Date cell; rows below the table lose theirs.
+  var notes = rows.map(function (r) { return [r.by ? 'Added by ' + r.by : '']; }).concat(keep.map(function () { return ['']; }));
+  while (notes.length < old) notes.push(['']);
+  if (notes.length) sh.getRange(M_FIRST, 1 + m * M_STEP, notes.length, 1).setNotes(notes);
   st.size[home] = out.length;
 }
 
@@ -292,20 +339,59 @@ function ensureYearTab(ss, year, cats) {
   if (sh) return sh;
   var newer = ss.getSheets().filter(function (s) { return /^\d{4}$/.test(s.getName()) && s.getName() > year; }).length;
   sh = ss.insertSheet(year, newer); // newest year first
-  sh.getRange(1, 1).setValue(year + ' · Family Money');
-  sh.getRange(1, 1).setFontWeight('bold').setFontSize(16);
   writeSummary(sh, cats);
   sh.getRange(17, 1).setValue('To add by hand: use the first empty row of the month and put the amount under Income or Expense. Leave the Id column alone.');
   for (var m = 0; m < 12; m++) {
     var c = 1 + m * M_STEP;
     sh.getRange(M_TITLE, c).setValue(MONTH_NAMES[m].toUpperCase());
     sh.getRange(M_HEAD, c, 1, M_COLS).setValues([['Date', 'Category', 'Income', 'Expense', 'Reason', 'Id']]);
-    sh.getRange(M_TITLE, c, 2, M_COLS).setFontWeight('bold');
-    sh.getRange(M_FIRST, c, 1000, 1).setNumberFormat(DATE_FORMAT);
-    sh.setColumnWidth(c + 4, 180);
+  }
+  styleYear(sh, ss.getName());
+  return sh;
+}
+
+// ---- Looks: colours, number formats, widths. Never values (except the title), so a repaint is always safe.
+// The summary and the month tables share columns, so widths suit both and only the Id columns are hidden.
+function styleYear(sh, name) {
+  sh.setHiddenGridlines(true);
+  sh.setTabColor(COLOR.incomeD);
+  sh.getRange(1, 1).setValue(sh.getName() + ' · ' + name).setFontSize(18).setFontWeight('bold').setFontColor(COLOR.ink);
+  sh.setRowHeight(1, 40);
+  sh.getRange(17, 1).setFontStyle('italic').setFontSize(9).setFontColor(COLOR.muted);
+  sh.getBandings().forEach(function (b) { b.remove(); });
+  for (var m = 0; m < 12; m++) {
+    var c = 1 + m * M_STEP;
+    sh.getRange(M_TITLE, c, 1, M_COLS - 1).setBackground(COLOR.month).setFontWeight('bold').setFontColor(COLOR.ink);
+    sh.getRange(M_HEAD, c, ROWS + 1, M_COLS - 1).applyRowBanding().setHeaderRowColor(COLOR.head).setFirstRowColor(COLOR.white).setSecondRowColor(COLOR.band);
+    sh.getRange(M_HEAD, c, 1, M_COLS - 1).setFontWeight('bold').setBorder(null, null, true, null, null, null, COLOR.line, null);
+    sh.getRange(M_FIRST, c, ROWS, 1).setNumberFormat(DATE_FORMAT);
+    sh.getRange(M_FIRST, c + 2, ROWS, 1).setNumberFormat(MONEY).setFontColor(COLOR.good);
+    sh.getRange(M_FIRST, c + 3, ROWS, 1).setNumberFormat(MONEY).setFontColor(COLOR.bad);
+    [150, 110, 95, 95, 180].forEach(function (px, k) { sh.setColumnWidth(c + k, px); });
     sh.hideColumns(c + 5);
   }
-  return sh;
+}
+
+// Rows 2-16. Repainted whenever the summary is rewritten, since the category list sets its width.
+function styleSummary(sh, cats) {
+  var nI = cats.Income.length, nE = cats.Expense.length, cols = summaryCols(nI + nE + 4), w = cols[cols.length - 1];
+  var inc = [cols[1], cols[1 + nI]], exp = [cols[2 + nI], cols[2 + nI + nE]], saved = cols[3 + nI + nE];
+  function span(row, a, b, n) { return sh.getRange(row, a, n || 1, b - a + 1); }
+  sh.getRange(2, 1, 15, Math.max(w, 12 * M_STEP)).clearFormat(); // a longer old list leaves no colours behind
+  span(2, 1, w).setFontWeight('bold').setFontSize(9);
+  [[inc, COLOR.incomeD, COLOR.income], [exp, COLOR.expenseD, COLOR.expense], [[saved, saved], COLOR.savedD, COLOR.saved]].forEach(function (g) {
+    span(2, g[0][0], g[0][1]).setBackground(g[1]);
+    span(3, g[0][0], g[0][1]).setBackground(g[2]);
+  });
+  span(3, 1, 1).setBackground(COLOR.head);
+  span(3, 1, w).setFontWeight('bold').setWrap(true).setVerticalAlignment('middle');
+  span(3, 2, w).setHorizontalAlignment('center');
+  sh.getRange(4, 1, 12, w).setBackgrounds([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map(function (m) { return blankRow(w).map(function () { return m % 2 ? COLOR.band : COLOR.white; }); }));
+  span(4, 2, w, 13).setNumberFormat(MONEY);
+  span(4, saved, saved, 13).setNumberFormat(SAVED_MONEY);
+  [inc[1], exp[1], saved].forEach(function (c) { span(4, c, c, 13).setFontWeight('bold'); });
+  span(16, 1, w).setFontWeight('bold').setBackground(COLOR.head).setBorder(true, null, null, null, null, null, COLOR.ink, null);
+  span(2, 1, w, 15).setBorder(true, true, true, true, null, null, COLOR.line, null);
 }
 
 // The summary sits above the month tables, so it shares their columns: it steps over each month's hidden Id column (F, M, T, …),
@@ -331,8 +417,7 @@ function writeSummary(sh, cats, pad) {
     r.forEach(function (v, k) { row[cols[k] - 1] = v; });
     return row;
   }));
-  sh.getRange(2, 1, 2, w).setFontWeight('bold');
-  sh.getRange(16, 1, 1, w).setFontWeight('bold');
+  styleSummary(sh, cats);
 }
 
 // Rows 4-15: one per month, row 16: totals. With the starting categories, columns B:N = Job Dairy Crops Others | (F hidden) Income |
@@ -359,10 +444,10 @@ function ensureCommon(ss) {
   var sh = ss.getSheetByName(COMMON);
   if (!sh) {
     sh = ss.insertSheet(COMMON, ss.getSheets().length);
-    sh.getRange(1, 1, 1, 2).setValues([['Others monthly limit', 3000]]).setFontWeight('bold');
+    sh.getRange(1, 1, 1, 2).setValues([['Others monthly limit', 3000]]);
   }
   // Each table is laid out the first time it is needed, so a sheet made before a table existed (INVESTED) gets it on its next sync.
-  var titles = sh.getRange(3, 1, 1, LAST_COL).getValues()[0];
+  var titles = sh.getRange(3, 1, 1, LAST_COL).getValues()[0], laid = false;
   DIRS.forEach(function (dir) {
     var t = TABLES[dir], c = LOAN_COL[dir], p = PAY_COL[dir];
     if (titles[c - 1] === t[0]) return;
@@ -370,14 +455,36 @@ function ensureCommon(ss) {
     sh.getRange(4, c, 1, L_COLS).setValues([['Date', t[1], 'Amount', t[2], 'Per', t[3], t[4], t[5], 'Id']]);
     sh.getRange(3, p).setValue(t[6]);
     sh.getRange(4, p, 1, R_COLS).setValues([['Date', t[7], 'Amount', 'LoanId', 'Id']]);
-    [[c, L_COLS], [p, R_COLS]].forEach(function (x) {
-      sh.getRange(3, x[0], 2, x[1]).setFontWeight('bold');
-      sh.getRange(L_FIRST, x[0], 1000, 1).setNumberFormat(DATE_FORMAT);
+    laid = true;
+  });
+  if (laid) styleCommon(sh);
+  return sh;
+}
+
+// The Others limit, then per direction a coloured table and its payments table (Id columns hidden).
+var TINT = { borrowed: [COLOR.expenseD, COLOR.expense], given: [COLOR.skyD, COLOR.sky], invested: [COLOR.incomeD, COLOR.income] };
+function styleCommon(sh) {
+  sh.setHiddenGridlines(true);
+  sh.setTabColor(COLOR.butterD);
+  sh.getRange(1, 1).setFontWeight('bold');
+  sh.getRange(1, 2).setNumberFormat(MONEY).setFontWeight('bold').setBackground(COLOR.butter).setBorder(true, true, true, true, null, null, COLOR.butterD, null);
+  sh.getBandings().forEach(function (b) { b.remove(); });
+  DIRS.forEach(function (dir) {
+    var c = LOAN_COL[dir], p = PAY_COL[dir];
+    // Visible part: the loan table without its Id, the payments table without LoanId and Id.
+    [[c, L_COLS - 1, TINT[dir][0]], [p, R_COLS - 2, TINT[dir][1]]].forEach(function (x) {
+      sh.getRange(3, x[0], 1, x[1]).setBackground(x[2]).setFontWeight('bold').setFontColor(COLOR.ink);
+      sh.getRange(4, x[0], ROWS + 1, x[1]).applyRowBanding().setHeaderRowColor(COLOR.head).setFirstRowColor(COLOR.white).setSecondRowColor(COLOR.band);
+      sh.getRange(4, x[0], 1, x[1]).setFontWeight('bold').setBorder(null, null, true, null, null, null, COLOR.line, null);
+      sh.getRange(L_FIRST, x[0], ROWS, 1).setNumberFormat(DATE_FORMAT);
+      sh.getRange(L_FIRST, x[0] + 2, ROWS, 1).setNumberFormat(MONEY);
+      sh.setColumnWidth(x[0], 150);
+      sh.setColumnWidth(x[0] + 1, 200);
     });
-    sh.setColumnWidth(c + 1, 200);
+    sh.getRange(L_FIRST, c + 6, ROWS, 2).setNumberFormat(MONEY);
+    sh.getRange(L_FIRST, c + 7, ROWS, 1).setFontWeight('bold');
     [c + 8, p + 3, p + 4].forEach(function (x) { sh.hideColumns(x); });
   });
-  return sh;
 }
 
 // A new spreadsheet starts with an empty "Sheet1"; once the real tabs exist it is just clutter.

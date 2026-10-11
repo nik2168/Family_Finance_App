@@ -182,12 +182,11 @@ async function connect(ctx) {
     const page = await ctx.newPage(), errors = [];
     page.on('pageerror', e => errors.push(e.message));
     page.on('console', m => { if (m.type() === 'error' && !/ERR_INTERNET_DISCONNECTED/.test(m.text())) errors.push(m.text()); });
-    page.on('dialog', d => d.accept());
+    page.on('dialog', d => { errors.push('a browser dialog: ' + d.message()); d.dismiss(); });
     const synced = () => page.waitForFunction(() => /Synced/.test(document.querySelector('#syncPill').textContent), null, { timeout: 30000 });
     const tab = async x => {
-      if (x !== 'history') return page.click(`.nav [data-tab="${x}"]`);
-      await page.click('.nav [data-tab="home"]');
-      await page.click('#openHistory'); // History opens from Home
+      if (x === 'loans' || x === 'given') { await page.click('.nav [data-tab="money"]'); return page.click(`#moneySeg [data-tab="${x}"]`); }
+      return page.click(`.nav [data-tab="${x}"]`);
     };
     const shot = name => SHOTS ? page.screenshot({ path: path.join(SHOTS, name + '.png'), fullPage: true }) : null;
 
@@ -199,25 +198,27 @@ async function connect(ctx) {
     const renderMs = await page.evaluate(() => { const t = performance.now(); for (let i = 0; i < 5; i++) render(); return Math.round((performance.now() - t) / 5); });
     check('screen redraw with 2 years of data stays quick', renderMs < 150, renderMs + ' ms per redraw');
 
-    // Home
+    // Home: this month's tiles, the latest 5 by day, and the plan for a family with loans
     const month = s.summarize(st.rows, 'month', new Date(), 3000);
-    check('Home: latest 3 entries', await page.locator('#recent .lrow').count() === 3);
-    check('Home: Income / Expenses buttons show this month', eqv([await page.textContent('#heroIn'), await page.textContent('#heroOut')], [money.format(month.income), money.format(month.expense)]),
+    check('Home: latest 5 entries, by day', await page.locator('#recent .lrow').count() === 5 && await page.locator('#recent .dayh').count() > 0);
+    check('Home: Expenses / Income buttons show this month', eqv([await page.textContent('#heroIn'), await page.textContent('#heroOut')], [money.format(month.income), money.format(month.expense)]),
       `${await page.textContent('#heroIn')} / ${await page.textContent('#heroOut')}`);
-    check('Home: Saved this month', (await page.textContent('#heroSaved')) === (month.savings < 0 ? '−' : '') + money.format(Math.abs(month.savings)), await page.textContent('#heroSaved'));
+    const hero = await page.textContent('#hero'), heroDate = await page.textContent('#heroDate');
+    check('Home: more owed than saved, so the focus is clearing the loans', /Focus: clear loans.*Debt-free by/.test(hero), heroDate);
+    await page.click('#hero .tchip >> nth=0');
+    check('Home: a plan chip says what it takes', /more than now/.test(await page.textContent('#hero .tout')), await page.textContent('#hero .tout'));
     await shot('demo-01-home');
 
-    // History
+    // History: every entry can be changed
     await tab('history');
     const total = st.rows.length;
-    check('History: newest 100 listed, 20 editable', await page.locator('#historyList .lrow').count() === 100 && await page.locator('#historyList .lrow.tap').count() === 20);
+    check('History: newest 100 listed, every one editable', await page.locator('#historyList .lrow').count() === 100 && await page.locator('#historyList .lrow.tap').count() === 100);
     check('History: says how many in all', (await page.textContent('#hFoot')).includes(`of ${total}`));
     const fpick = async (btn, v) => { await page.click(btn); await page.click(`${btn} + .ddlist [data-v="${v}"]`); };
-    await fpick('#fYear', '2025');
-    await fpick('#fMonth', '2');
+    await fpick('#fWhen', '2025-2');
     let want = s.filterEntries(st.rows, { q: '', year: '2025', month: '2', cat: '' });
-    check('History: filter 2025 / March', await page.locator('#historyList .lrow').count() === want.length && (await page.textContent('#hSum')).startsWith(want.length + ' entries'), want.length + ' entries');
-    await fpick('#fMonth', '');
+    check('History: filter March 2025', await page.locator('#historyList .lrow').count() === want.length && (await page.textContent('#hSum')).startsWith(want.length + ' entries'), want.length + ' entries');
+    await fpick('#fWhen', '2025-');
     await page.fill('#q', 'salary');
     want = s.filterEntries(st.rows, { q: 'salary', year: '2025', month: '', cat: '' });
     check('History: search "salary" in 2025', await page.locator('#historyList .lrow').count() === want.length, want.length + ' found');
@@ -238,42 +239,31 @@ async function connect(ctx) {
       if (y === 2025) await shot('demo-03-insights-2025');
       if (y > 2024) await page.click('#prev');
     }
-    check('Insights: pie legend shows', await page.locator('#split .slice').count() > 0);
-    const yearCount = s.summarize(st.rows, 'year', new Date(2024, 0, 1), 0).entries.length;
-    check('Insights: a year lists the newest 10, not hundreds', await page.locator('#entries .lrow').count() === Math.min(10, yearCount), yearCount + ' in 2024');
-    await page.click('#seeAll');
-    check('Insights: "See all" opens History filtered to that year', await page.textContent('#fYear') === '2024' && await page.locator('#historyList .lrow').count() === Math.min(100, yearCount));
+    check('Insights: where the income went', await page.locator('#splitLeg > div').count() > 0);
+    const y24 = s.summarize(st.rows, 'year', new Date(2024, 0, 1), 0), topCat = Object.keys(y24.spent).sort((a, b) => y24.spent[b] - y24.spent[a])[0];
+    await page.click('#insCats .crow >> nth=0');
+    want = s.filterEntries(st.rows, { q: '', year: '2024', month: '', cat: 'Expense-' + topCat });
+    check('Insights: the biggest category opens History filtered to it and that year', await page.textContent('#fWhen') === '2024' && await page.locator('#historyList .lrow').count() === Math.min(100, want.length), topCat + ', ' + want.length);
     await page.click('#hClear');
     await tab('insights');
     await page.click('.seg [data-view="month"]');
 
-    // Money forecast: the card says what forecast() says, for the saving rate of the last 3 months
-    const M = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'], my = d => M[d.getMonth()] + ' ' + d.getFullYear();
-    const rate = s.savingRate(st.rows, new Date(), 3), fc = s.forecast(st.loans, st.repays, rate.perMonth, new Date());
-    const head = await page.textContent('#insForecast .fc-head');
-    check('Forecast: loans paid off in N months, by month', fc.payoff && head.includes(`${fc.payoff.months} months`) && head.includes(my(fc.payoff.date)), head);
-    check('Forecast: saving rate shown', (await page.textContent('#insForecast')).includes(money.format(Math.round(rate.perMonth)) + ' a month'), money.format(Math.round(rate.perMonth)) + ' a month');
-    await page.locator('#fcChart').scrollIntoViewIfNeeded();
-    const box = await page.locator('#fcChart').boundingBox();
-    await page.mouse.click(box.x + box.width * 0.5, box.y + box.height * 0.5);
-    check('Forecast: tapping the graph shows that month', /still owed|saved/.test(await page.textContent('#fcChart .ttip')), await page.textContent('#fcChart .ttip'));
-    await page.locator('#insForecast').screenshot({ path: SHOTS ? path.join(SHOTS, 'demo-06-forecast.png') : path.join(require('os').tmpdir(), 'fc.png') });
-    await page.click('[data-fc="12"]');
-    const r12 = s.savingRate(st.rows, new Date(), 12);
-    check('Forecast: "Last 12 months" uses the 12-month average', (await page.textContent('#insForecast')).includes(money.format(Math.round(r12.perMonth)) + ' a month'));
-    await page.click('[data-fc="3"]');
+    // The loan plan says what the Home hero says
+    const plan = await page.textContent('#insPlan');
+    check('Insights: the loan plan matches Home', plan.includes('Loan plan') && plan.includes(heroDate === 'Not yet' ? 'Not paid off' : 'Debt-free by ' + heroDate), plan.slice(0, 60));
+    await page.locator('#insPlan').screenshot({ path: SHOTS ? path.join(SHOTS, 'demo-06-plan.png') : path.join(require('os').tmpdir(), 'fc.png') });
 
     // Loans (money borrowed) and Given (money given to others): each tab shows only its own
     await tab('loans');
     const LS = s.summarizeLoans(st.loans.filter(l => l.dir !== 'given'), st.repays);
     check('Loans: High first, repaid last', eqv(await page.$$eval('#loanList .what', x => x.map(e => e.textContent)), LS.loans.map(l => l.reason)), LS.loans.map(l => l.priority + (l.done ? ' (repaid)' : '')).join(' > '));
-    check('Loans: still owed and monthly interest', eqv([await page.textContent('#loanOwed'), await page.textContent('#loanInt')], [money.format(LS.owed), '≈ ' + money.format(Math.round(LS.monthlyInterest))]),
-      `${await page.textContent('#loanOwed')}, interest ${await page.textContent('#loanInt')}`);
+    check('Loans: still owed and monthly interest', await page.textContent('#loanOwed') === money.format(LS.owed) && (await page.textContent('#loanSummary')).includes('≈ ' + money.format(Math.round(LS.monthlyInterest))),
+      `${await page.textContent('#loanOwed')}, interest ${money.format(Math.round(LS.monthlyInterest))}`);
     await shot('demo-04-loans');
     await tab('given');
     const GS = s.summarizeLoans(st.loans.filter(l => l.dir === 'given'), st.repays);
-    check('Given: still to get back, monthly interest, high first', eqv([await page.textContent('#loanOwed'), await page.textContent('#loanInt'), await page.$$eval('#loanList .what', x => x.map(e => e.textContent))],
-      [money.format(GS.owed), '≈ ' + money.format(Math.round(GS.monthlyInterest)), GS.loans.map(l => l.reason)]), `${await page.textContent('#loanOwed')} to get`);
+    check('Given: still to get back, monthly interest, high first', eqv([await page.textContent('#loanOwed'), await page.$$eval('#loanList .what', x => x.map(e => e.textContent))], [money.format(GS.owed), GS.loans.map(l => l.reason)]) &&
+      (await page.textContent('#loanSummary')).includes('≈ ' + money.format(Math.round(GS.monthlyInterest))), `${await page.textContent('#loanOwed')} to get`);
     await shot('demo-05-given');
 
     // Edit in History: move the newest entry into last year
@@ -307,15 +297,14 @@ async function connect(ctx) {
 
     st = sheetChecks('after edits and the offline burst');
 
-    // With no loans the forecast shows savings instead (loans deleted offline only, then put back)
+    // With no loans the plan is about savings instead (loans deleted offline only, then put back)
     online = false;
     await ctx.setOffline(true);
     await page.evaluate(ids => { localStorage.setItem('fm.ops', JSON.stringify(ids.map((id, i) => ({ opId: 'tmp-del-' + i, kind: 'loan', action: 'delete', id })))); }, st.loans.map(l => l.id));
     await tab('insights');
-    const noLoans = s.forecast([], [], s.savingRate(st.rows, new Date(), 3).perMonth, new Date());
-    const head2 = await page.textContent('#insForecast .fc-head');
-    check('Forecast without loans: saved in 1 year', head2.includes('In 1 year') && !(await page.textContent('#insForecast')).includes('Debt-free'), head2 + ' (' + noLoans.months[11].position + ')');
-    await page.locator('#insForecast').screenshot({ path: SHOTS ? path.join(SHOTS, 'demo-07-forecast-no-loans.png') : path.join(require('os').tmpdir(), 'fc2.png') });
+    const plan2 = await page.textContent('#insPlan');
+    check('Without loans: a savings plan, not a debt-free date', plan2.includes('Savings plan') && !plan2.includes('Debt-free'), plan2.slice(0, 60));
+    await page.locator('#insPlan').screenshot({ path: SHOTS ? path.join(SHOTS, 'demo-07-plan-no-loans.png') : path.join(require('os').tmpdir(), 'fc2.png') });
     await page.evaluate(() => localStorage.setItem('fm.ops', '[]'));
     online = true;
     await ctx.setOffline(false);

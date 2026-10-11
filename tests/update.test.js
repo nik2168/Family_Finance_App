@@ -16,21 +16,21 @@ fs.cpSync(path.join(__dirname, '..', 'src'), DIR, { recursive: true });
     await page.waitForFunction(() => navigator.serviceWorker.ready);
     await page.reload();
     await page.waitForFunction(() => !!navigator.serviceWorker.controller);
-    assert.strictEqual(await page.textContent('.pick small'), 'Income');
+    assert.strictEqual(await page.textContent('[data-new="Income"] small'), 'Income');
 
     // "Deploy" a change.
     const f = DIR + '/index.html';
     fs.writeFileSync(f, fs.readFileSync(f, 'utf8').replace('<small>Income</small>', '<small>Income v2</small>'));
 
     await page.reload();                       // served from cache, refresh happens in background
-    assert.strictEqual(await page.textContent('.pick small'), 'Income');
+    assert.strictEqual(await page.textContent('[data-new="Income"] small'), 'Income');
     await page.waitForTimeout(1000);
     await page.reload();                       // next open shows the new deploy
-    assert.strictEqual(await page.textContent('.pick small'), 'Income v2');
+    assert.strictEqual(await page.textContent('[data-new="Income"] small'), 'Income v2');
 
     await ctx.setOffline(true);                // still opens offline, with the new version
     await page.reload();
-    assert.strictEqual(await page.textContent('.pick small'), 'Income v2');
+    assert.strictEqual(await page.textContent('[data-new="Income"] small'), 'Income v2');
     assert.ok(await page.isVisible('.pick'));
     console.log('Update test passed');
   } finally { await browser.close(); srv.kill(); fs.rmSync(DIR, { recursive: true, force: true }); }

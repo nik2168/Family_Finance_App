@@ -2,54 +2,68 @@
 // Each connected Google Sheet keeps its own copy on the phone under a prefix: the first one 'fm.' (as before), others 'fm.<id>.'.
 function keys(p) {
   var k = {};
-  ['cfg', 'rows', 'loans', 'repays', 'ops', 'limit', 'synced', 'cats'].forEach(function (n) { k[n] = p + n; });
+  ['cfg', 'rows', 'loans', 'repays', 'ops', 'limit', 'synced', 'cats', 'settings'].forEach(function (n) { k[n] = p + n; });
   return k;
 }
 var P = load('fm.active', 'fm.'), K = keys(P);
 // Pictures handed out to new sheets in this order, each with its own background.
-var SHEET_PICS = { farmer: '--butter', house: '--peri', job: '--sky', crops: '--mint', dairy: '--blush', bank: '--lavender', bag: '--butter', others: '--sky' };
-var IMG = { Job: 'job', Salary: 'job', Dairy: 'dairy', Milk: 'dairy', Crops: 'crops', House: 'house', Home: 'house', Others: 'others' };
-var DISC = { 'Income-Job': '--sky', 'Income-Dairy': '--mint', 'Income-Crops': '--butter', 'Income-Others': '--sky', 'Expense-House': '--peri', 'Expense-Dairy': '--blush', 'Expense-Crops': '--butter', 'Expense-Others': '--lavender' };
+var SHEET_PICS = { home2: '--mint', house: '--peri', job: '--sky', crops: '--mint', dairy: '--blush', bank: '--lavender', bag: '--butter', others: '--sky', farmer: '--butter' };
+// Category pictures: by name, then by a word in it ("Petrol & diesel" gets the fuel pump); anything else gets the Others picture.
+var IMG = { Job: 'job', Dairy: 'dairy', Crops: 'crops', House: 'house', Others: 'others', Interest: 'coin', 'Loan interest': 'bank' };
+var PICS = [[/salary|job|wage|pension/, 'job'], [/rent|house|home|ghar/, 'house'], [/kirana|grocer|ration|mart/, 'cart'], [/milk|doodh/, 'milk'],
+  [/sabzi|vegetable|fruit/, 'leafy'], [/petrol|diesel|fuel|cng/, 'fuel'], [/medic|doctor|health|pharma|hospital|dawa/, 'pill'],
+  [/mobile|recharge|phone|wifi|internet|broadband|dth/, 'mobile'], [/school|fee|college|education/, 'school'], [/tuition|book|coaching|class/, 'books'],
+  [/electric|bijli|power|bill/, 'volt'], [/eat|food|restaurant|hotel|swiggy|zomato|dining/, 'food'], [/chai|tea|snack/, 'tea'],
+  [/diwali|festival|puja|pooja|holi|eid|christmas/, 'diya'], [/gift|shagun|wedding|shaadi/, 'gift'], [/gas|lpg|cylinder/, 'fire'],
+  [/bike|scooter|car|vehicle/, 'scooter'], [/travel|bus|train|auto|taxi|trip|transport/, 'bus'], [/tailor|stitch|sewing/, 'thread'],
+  [/cloth|kapde|dress|shoe/, 'shirt'], [/donat|temple|mandir|church|masjid|charity/, 'pray'], [/gold|jewel/, 'gem'],
+  [/loan|emi|bank/, 'bank'], [/interest/, 'coin'], [/insurance|lic/, 'shield'], [/invest|sip|mutual|fund/, 'up'],
+  [/business|shop|dukaan|sale/, 'bag'], [/farm|crop|kheti/, 'crops'], [/dairy|cattle|cow|buffalo/, 'dairy']];
+var PIC_BG = { cart: '--butter', milk: '--sky', leafy: '--mint', fuel: '--butter', pill: '--blush', mobile: '--sky', school: '--sky', books: '--mint', volt: '--mint',
+  food: '--blush', tea: '--butter', diya: '--butter', gift: '--lavender', fire: '--sky', scooter: '--peri', bus: '--peri', thread: '--lavender', shirt: '--lavender',
+  pray: '--butter', gem: '--lavender', bank: '--blush', coin: '--butter', shield: '--sky', up: '--lavender', bag: '--butter', crops: '--butter', dairy: '--blush',
+  job: '--sky', house: '--peri' };
 var PASTELS = ['--sky', '--mint', '--butter', '--peri', '--blush', '--lavender'];
-var TABS = { home: ['house', 'Home'], history: ['clock-counter-clockwise', 'History'], cats: ['', 'Categories'], loans: ['hand-arrow-down', 'Loans'], given: ['hand-arrow-up', 'Money given'], invested: ['trend-up', 'Investments'], insights: ['chart-bar', 'Insights'] };
-// Words for the three kinds of loan (DIRS): money we borrowed (Loans tab), gave to others (Given tab) or invested (Invested tab).
+var TABS = { home: ['house', 'Home'], history: ['clock-counter-clockwise', 'History'], cats: ['', 'Categories'], settings: ['', 'Settings'], insights: ['chart-bar', 'Insights'],
+  money: ['hand-coins', 'Money'], loans: ['hand-coins', 'Money'], given: ['hand-coins', 'Money'], invested: ['hand-coins', 'Money'] };
+var MONEY_TABS = { loans: 'borrowed', given: 'given', invested: 'invested' };
+// Words for the three kinds of loan (DIRS): money we borrowed, gave to others or invested. All three live in the Money tab.
 var LOAN_TEXT = {
-  borrowed: { color: '--blush', pic: 'bank', left: 'Still owed', total: 'Borrowed', totalSub: 'All loans', back: 'Repaid', backSub: 'Paid back so far',
-    intSub: 'Each month, on what is still owed', add: 'Add a loan', list: 'Loans', none: ['No loans', 'Tap "Add a loan" when you borrow money'],
-    foot: 'Loans are kept apart from income and expenses, so Saved stays correct.', newTitle: 'New loan', editTitle: 'Edit loan',
+  borrowed: { color: '--blush', pic: 'bank', left: 'We owe', add: 'Add a loan', list: 'Loans', none: ['No loans', 'Tap "Add a loan" when you borrow money'],
+    foot: 'Interest you pay counts as an expense. Paying back lowers what you owe. Loans are kept apart from income and expenses.', newTitle: 'New loan', editTitle: 'Edit loan',
     kind: 'Money borrowed', kindIcon: 'arrow-down-left', label: 'Borrowed from, and why', ph: 'e.g. From Ramesh, tractor repair',
-    need: 'Write who you borrowed from and why', left2: ' owed', over: ' still owed', done: 'Repaid', small: 'Borrowed ', action: 'Pay back', actionIcon: 'hand-coins',
-    paid: 'Repaid ', save: 'Save loan', saved: 'Loan saved', paidToast: 'Paid back ', what: 'this loan', payments: ['repayment', 'repayments'], deleted: 'Loan deleted', pill: 'bad',
-    int: 'Interest', ins: 'We owe', rate: 'Interest (optional)', rates: [0, 1, 1.5, 2, 3], per: 'month' },
-  given: { color: '--mint', pic: 'bag', left: 'Still to get back', total: 'Given', totalSub: 'All money given', back: 'Got back', backSub: 'Received so far',
-    intSub: 'Each month, on what is still to get', add: 'Give money', list: 'Money given', none: ['Nothing given', 'Tap "Give money" when you lend to someone'],
-    foot: 'Money given is kept apart from income and expenses, so Saved stays correct.', newTitle: 'Give money', editTitle: 'Edit money given',
+    need: 'Write who you borrowed from and why', left2: ' owed', over: ' still owed', done: 'Repaid', small: 'Borrowed ', paid: 'Paid back ',
+    save: 'Save loan', saved: 'Loan saved', what: 'this loan', payments: ['payment', 'payments'], deleted: 'Loan deleted', pill: 'bad',
+    rate: 'Interest (optional)', rates: [0, 1, 1.5, 2, 3], per: 'month' },
+  given: { color: '--mint', pic: 'hand', left: 'Still to get back', add: 'Give money', list: 'Money given', none: ['Nothing given', 'Tap "Give money" when you lend to someone'],
+    foot: '"Got interest" adds it to Income › Interest. Money given is kept apart from income and expenses.', newTitle: 'Give money', editTitle: 'Edit money given',
     kind: 'Money given', kindIcon: 'arrow-up-right', label: 'Given to, and why', ph: 'e.g. To Raju, for his shop',
-    need: 'Write who you gave it to and why', left2: ' to get', over: ' still to get', done: 'Got back', small: 'Gave ', action: 'Got back', actionIcon: 'hand-arrow-down',
-    paid: 'Got back ', save: 'Save', saved: 'Saved', paidToast: 'Received ', what: 'this', payments: ['payment received', 'payments received'], deleted: 'Deleted', pill: 'ok',
-    int: 'Interest', ins: 'Others owe us', rate: 'Interest (optional)', rates: [0, 1, 1.5, 2, 3], per: 'month' },
-  // Funds and deposits: "worth now" grows at the expected return (an estimate, for the forecast); withdrawals take money out.
-  invested: { color: '--lavender', pic: 'up', left: 'Worth now (estimate)', total: 'Invested', totalSub: 'All investments', back: 'Withdrawn', backSub: 'Taken out so far',
-    intSub: 'This month, at the expected returns', add: 'Add an investment', list: 'Investments', none: ['No investments', 'Tap "Add an investment" for a fund or deposit'],
-    foot: 'Investments are kept apart from income and expenses. "Worth now" is an estimate from the expected return; the forecast uses it.', newTitle: 'New investment', editTitle: 'Edit investment',
-    kind: 'Investment', kindIcon: 'trend-up', label: 'Fund or scheme', ph: 'e.g. HDFC Liquid Fund', need: 'Write the fund or scheme', left2: ' now', over: '', done: 'Withdrawn', small: 'Invested ', action: 'Withdraw', actionIcon: 'hand-arrow-down',
-    paid: 'Withdrawn ', save: 'Save investment', saved: 'Investment saved', paidToast: 'Withdrew ', what: 'this investment', payments: ['withdrawal', 'withdrawals'], deleted: 'Investment deleted', pill: 'ok',
-    int: 'Growth', ins: 'Investments, worth about', rate: 'Expected return (average XIRR)', rates: [6, 7, 8, 10, 12], per: 'year' }
+    need: 'Write who you gave it to and why', left2: ' to get', over: ' still to get', done: 'Got back', small: 'Gave ', paid: 'Got back ',
+    save: 'Save', saved: 'Saved', what: 'this', payments: ['payment received', 'payments received'], deleted: 'Deleted', pill: 'ok',
+    rate: 'Interest (optional)', rates: [0, 1, 1.5, 2, 3], per: 'month' },
+  // Funds and deposits: "worth now" grows at the expected return (an estimate); money added and withdrawals change it.
+  invested: { color: '--lavender', pic: 'up', left: 'Worth now (estimate)', add: 'Add an investment', list: 'Investments', none: ['No investments', 'Tap "Add an investment" for an FD, RD, SIP or PPF'],
+    foot: '"Worth now" is an estimate from the expected return, not live prices. Money added and taken out are kept apart from income and expenses.',
+    newTitle: 'New investment', editTitle: 'Edit investment', kind: 'Investment', kindIcon: 'trend-up', label: 'Name', ph: 'e.g. HDFC SIP, Post office RD',
+    need: 'Write its name', left2: ' now', over: '', done: 'Withdrawn', small: 'Invested ', paid: 'Withdrawn ', save: 'Save investment', saved: 'Investment saved',
+    what: 'this investment', payments: ['withdrawal or top-up', 'withdrawals and top-ups'], deleted: 'Investment deleted', pill: 'ok',
+    rate: 'Expected return', rates: [6.5, 7, 8, 10, 12], per: 'year' }
 };
 function loansOf(v, dir) { return v.loans.filter(function (l) { return loanDir(l) === dir; }); }
-function tabDir() { return state.tab === 'given' || state.tab === 'invested' ? state.tab : 'borrowed'; }
+function tabDir() { return MONEY_TABS[state.tab] || 'borrowed'; }
 var QUICK = [100, 500, 1000, 2000];
-var HISTORY_LIMIT = 20, HISTORY_SHOW = 100, HOME_LATEST = 3, INSIGHTS_SHOW = 10;
+var HISTORY_SHOW = 100, HOME_LATEST = 5;
 var $ = function (s) { return document.querySelector(s); };
-// Tablets and laptops: sidebar with the sheet switcher and History, page titles in the toolbar (index.html, same width).
+// Tablets and laptops: sidebar with the sheet switcher, page titles in the toolbar (index.html, same width).
 var wide = matchMedia('(min-width:768px)');
 var money = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0, maximumFractionDigits: 2 });
-var stamp = new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
 var day = new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+var dayName = new Intl.DateTimeFormat('en-IN', { weekday: 'short', day: 'numeric', month: 'short' });
 var clock = new Intl.DateTimeFormat('en-IN', { hour: 'numeric', minute: '2-digit' });
 
-// sheet: {mode: 'add'|'edit'|'loan-add'|'loan-edit'|'repay', type, category, id, loan, owed}
-var state = { tab: 'home', view: 'month', date: new Date(), bar: -1, slice: '', fcN: 3, fcPick: -1, f: { q: '', year: '', month: '', cat: '' }, sheet: null, amt: '', syncing: false, again: false, error: '', out: 'given' }; // out: the Given tab's side last shown (lent or invested)
+// sheet: {mode: 'add'|'edit'|'loan-add'|'loan-edit'|'repay'|'bill', type, category, id, dir, loan, pay, bill, day}
+var state = { tab: 'home', view: 'month', date: new Date(), f: { q: '', year: '', month: '', cat: '', who: '' }, sheet: null, amt: '', syncing: false, again: false, error: '',
+  out: '', pick: {}, again2: [], due: [], ask: null }; // out: the Money sub-tab last shown; pick: the plan chip picked per focus
 
 function load(k, d) {
   try { var v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; }
@@ -61,20 +75,64 @@ function esc(s) {
   return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return '&#' + c.charCodeAt(0) + ';'; });
 }
 function icon(id, cls) { return '<svg class="i ' + (cls || '') + '"><use href="#i-' + id + '"/></svg>'; }
-// Categories named by the family get the Others picture and a pastel picked from their name.
-function pic(cat) { return IMG[cat] || 'others'; }
-function discOf(type, cat) {
-  for (var h = 0, i = 0; i < cat.length; i++) h = (h * 31 + cat.charCodeAt(i)) % 997;
-  return DISC[type + '-' + cat] || PASTELS[h % PASTELS.length];
+function pic(cat) {
+  if (IMG[cat]) return IMG[cat];
+  var s = String(cat).toLowerCase();
+  for (var i = 0; i < PICS.length; i++) if (PICS[i][0].test(s)) return PICS[i][1];
+  return 'others';
 }
-function img(cat, size) { return '<img class="e" src="assets/3d/' + pic(cat) + '.png" width="' + size + '" height="' + size + '" alt="">'; }
+function discOf(type, cat) {
+  var p = pic(cat);
+  if (PIC_BG[p]) return PIC_BG[p];
+  for (var h = 0, i = 0; i < cat.length; i++) h = (h * 31 + cat.charCodeAt(i)) % 997;
+  return PASTELS[h % PASTELS.length];
+}
+function img3d(name, size) { return '<img class="e" src="assets/3d/' + name + '.png" width="' + size + '" height="' + size + '" alt="">'; }
+function img(cat, size) { return img3d(pic(cat), size); }
+function disc(type, cat, cls, size) { return '<span class="disc ' + (cls || 's') + '" style="background:var(' + discOf(type, cat) + ')">' + img(cat, size || 26) + '</span>'; }
 function signed(n) { return (n < 0 ? '−' : n > 0 ? '+' : '') + money.format(Math.abs(n)); }
-function toast(msg) {
+function plain(n) { return (n < 0 ? '−' : '') + money.format(Math.abs(n)); }
+function monthYear(d) { return MONTHS[d.getMonth()] + ' ' + d.getFullYear(); }
+function inMonths(now, n) { return new Date(now.getFullYear(), now.getMonth() + n, 1); }
+function lakh(n) { var a = Math.abs(n); return (n < 0 ? '−' : '') + (a >= 100000 ? '₹' + (Math.round(a / 10000) / 10) + ' lakh' : money.format(Math.round(a))); }
+function pct(x) { return Math.round(x * 100) + '%'; }
+function monthsText(n) { return n === 1 ? '1 month' : n + ' months'; }
+function spanText(m) { return m < 1 ? Math.max(0, Math.round(m * 30)) + ' days' : (Math.round(m * 10) / 10) + ' months'; }
+function toast(msg, long) {
   var t = $('#toast');
   t.innerHTML = icon('check', 'sm') + esc(msg);
   t.hidden = false;
   clearTimeout(toast.timer);
-  toast.timer = setTimeout(function () { t.hidden = true; }, 2200);
+  toast.timer = setTimeout(function () { t.hidden = true; }, long ? 5000 : 2200);
+}
+function me() { return load('fm.me', ''); }
+
+// ---- In-app questions instead of the browser's prompt() and confirm(): ask({title, text, input, ok, check}) resolves to the
+// typed text (input), true (a plain yes) or null (cancelled). check(value) returns why the answer can't be used, or ''.
+function ask(o) {
+  $('#askTitle').textContent = o.title;
+  $('#askText').textContent = o.text || '';
+  $('#askText').hidden = !o.text;
+  $('#askInput').hidden = o.input == null;
+  $('#askInput').value = o.input || '';
+  $('#askErr').textContent = '';
+  $('#askOk').textContent = o.ok || 'OK';
+  $('#askOk').className = 'btn' + (o.danger ? ' danger' : '');
+  $('#ask').showModal();
+  if (o.input != null) { $('#askInput').focus(); $('#askInput').select(); }
+  return new Promise(function (resolve) { state.ask = { resolve: resolve, o: o }; });
+}
+function answer(value) {
+  var a = state.ask;
+  if (!a) return;
+  if (value !== null && a.o.input != null) {
+    value = $('#askInput').value.trim();
+    var bad = !value ? 'Type a name' : a.o.check ? a.o.check(value) : '';
+    if (bad) { $('#askErr').textContent = bad; return; }
+  }
+  state.ask = null;
+  $('#ask').close();
+  a.resolve(value);
 }
 
 // ---- Setup link: https://…/#setup=<Apps Script /exec URL>|<family key>
@@ -95,12 +153,12 @@ function readSetupFromUrl() {
 }
 
 // ---- Sheets on this phone: [{p: key prefix, name, pic}]. Names stay on the phone.
-function sheets() { return load('fm.sheets', null) || [{ p: 'fm.', name: 'Family Money', pic: 'farmer' }]; }
+function sheets() { return load('fm.sheets', null) || [{ p: 'fm.', name: 'Family Money', pic: 'home2' }]; }
 function sheetOf(p) { return sheets().filter(function (s) { return s.p === p; })[0] || sheets()[0]; }
 function addSheet(name) {
   var list = sheets(), used = list.map(function (s) { return s.pic; });
   var free = Object.keys(SHEET_PICS).filter(function (x) { return used.indexOf(x) < 0; });
-  var s = { p: 'fm.' + crypto.randomUUID().slice(0, 8) + '.', name: name, pic: free[0] || Object.keys(SHEET_PICS)[list.length % 8] };
+  var s = { p: 'fm.' + crypto.randomUUID().slice(0, 8) + '.', name: name, pic: free[0] || Object.keys(SHEET_PICS)[list.length % 9] };
   save('fm.sheets', list.concat(s));
   return s.p;
 }
@@ -114,26 +172,32 @@ function connect(cfg) {
   return p;
 }
 function renameSheet(p) {
-  var list = sheets(), s = list.filter(function (x) { return x.p === p; })[0], name = prompt('Name for this sheet', s.name);
-  if (!name || !name.trim()) return;
-  s.name = name.trim().slice(0, 40);
-  save('fm.sheets', list);
-  render();
+  var list = sheets(), s = list.filter(function (x) { return x.p === p; })[0] || sheets()[0];
+  ask({ title: 'Name for this sheet', input: s.name, ok: 'Save' }).then(function (name) {
+    if (!name) return;
+    s.name = name.slice(0, 40);
+    if (!load('fm.sheets', null)) list = [s]; // the first sheet before any was added
+    save('fm.sheets', list);
+    render();
+  });
 }
 // Only this phone's copy is removed; the Google Sheet is not touched.
 function removeSheet(p) {
   var list = sheets(), s = sheetOf(p), k = keys(p), n = load(k.ops, []).length;
-  if (!confirm('Remove "' + s.name + '" from this device? The Google Sheet stays as it is.' + (n ? ' ' + n + ' changes not synced yet will be lost.' : ''))) return;
-  Object.keys(k).forEach(function (x) { localStorage.removeItem(k[x]); }); // exactly its keys: 'fm.' is a prefix of every other key
-  save('fm.sheets', list.filter(function (x) { return x.p !== p; }));
-  if (p === P) useSheet(sheets()[0].p); else render();
+  ask({ title: 'Remove "' + s.name + '" from this phone?', text: 'The Google Sheet stays as it is.' + (n ? ' ' + n + ' changes not synced yet will be lost.' : ''), ok: 'Remove', danger: true }).then(function (yes) {
+    if (!yes) return;
+    Object.keys(k).forEach(function (x) { localStorage.removeItem(k[x]); }); // exactly its keys: 'fm.' is a prefix of every other key
+    save('fm.sheets', list.filter(function (x) { return x.p !== p; }));
+    if (p === P) useSheet(sheets()[0].p); else render();
+  });
 }
 
 // ---- Data: last server snapshot + queued ops (src/shared.js applyOps)
 function view() {
-  // Before its script has replied, an added sheet shows only Others; the first one (the family's) the starting categories.
-  var cats = load(K.cats, null) || (P === 'fm.' ? null : NEW_CATEGORIES);
-  return applyOps({ rows: load(K.rows, []), loans: load(K.loans, []), repays: load(K.repays, []), cats: cats }, load(K.ops, []));
+  // Before its script has replied, an added sheet shows the household list; the first one (the family's) the starting categories.
+  var cats = load(K.cats, null) || (P === 'fm.' ? null : NEW_CATEGORIES), set = load(K.settings, null);
+  if (!set) { set = newSettings(); if (load(K.limit, 0) > 0) set.budgets.Others = load(K.limit, 0); } // a script from before settings
+  return applyOps({ rows: load(K.rows, []), loans: load(K.loans, []), repays: load(K.repays, []), cats: cats, settings: set }, load(K.ops, []));
 }
 
 function waiting() {
@@ -147,6 +211,17 @@ function queue(kind, action, id, data) {
   ops.push({ opId: crypto.randomUUID(), kind: kind, action: action, id: id, data: data });
   return save(K.ops, ops) ? '' : 'Phone storage is full. Not saved.';
 }
+function setOp(key, value, id) {
+  var d = { key: key, id: id, value: value }, err = validateSet(d) || queue('set', 'update', undefined, d);
+  if (err) toast(err === 'bad setting' ? 'That can\'t be saved' : err, true);
+  return err;
+}
+// The category, added to the sheet's list first when it isn't there yet (Interest, Loan interest).
+function ensureCat(type, name) {
+  var hit = matchName(view().cats[type], name);
+  if (!hit) queue('cat', 'add', null, { type: type, name: name });
+  return hit || name;
+}
 
 // Older versions queued plain entries in fm.pending; turn them into add ops of the first sheet once.
 function migratePending() {
@@ -156,16 +231,22 @@ function migratePending() {
   if (save('fm.ops', ops)) localStorage.removeItem('fm.pending');
 }
 
+// A script from before settings (its reply has none) would refuse these: settings, money added to an investment, and entries
+// without a reason. They wait on the phone until the script is updated.
+function needsNew(op) {
+  return op.kind === 'set' || (op.kind === 'repay' && op.data && op.data.amount < 0) || (op.kind === 'entry' && op.data && !String(op.data.note || '').trim());
+}
 function trySync() {
   var cfg = load(K.cfg, null);
   if (!cfg) return;
   if (state.syncing) { state.again = true; return; }
   state.syncing = true;
   renderSync();
+  var all = load(K.ops, []), ops = load(K.settings, null) ? all : all.filter(function (op) { return !needsNew(op); });
   fetch(cfg.url, {
     method: 'POST',
     headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // text/plain avoids a CORS preflight Apps Script can't answer
-    body: JSON.stringify({ key: cfg.key, ops: load(K.ops, []) })
+    body: JSON.stringify({ key: cfg.key, ops: ops })
   }).then(function (res) { return res.json(); }).then(function (data) {
     if (data.error) throw new Error(data.error);
     var gone = {};
@@ -173,17 +254,19 @@ function trySync() {
     data.rejected.forEach(function (r) { gone[r.opId] = true; });
     // Re-read the queue: changes made while this request was running must stay.
     save(K.ops, load(K.ops, []).filter(function (op) { return !gone[op.opId]; }));
-    // Apps Script takes 500 changes per request: keep going while each round makes progress.
-    if ((data.done.length || data.rejected.length) && load(K.ops, []).length) state.again = true;
+    var left = load(K.ops, []);
+    // Apps Script takes 500 changes per request: keep going while each round makes progress. Held ops go once settings arrive.
+    if (((data.done.length || data.rejected.length) || (data.settings && ops.length < all.length)) && left.length) state.again = true;
     save(K.rows, data.rows);
     save(K.loans, data.loans || []);
     save(K.repays, data.repays || []);
     save(K.limit, data.othersLimit);
     if (data.cats) save(K.cats, data.cats);
+    if (data.settings) save(K.settings, data.settings);
     save(K.synced, Date.now());
-    // A script deployed before History/Loans ignores ops and never returns loans: say so instead of "waiting" forever.
-    state.error = Array.isArray(data.loans) ? '' : 'old script';
-    if (data.rejected.length) alert(data.rejected.length + ' change could not be saved: ' + data.rejected[0].error);
+    // A script deployed before History/Loans (or before settings, with changes that need it) is named instead of "waiting" forever.
+    state.error = !Array.isArray(data.loans) || (!data.settings && left.some(needsNew)) ? 'old script' : '';
+    if (data.rejected.length) toast(data.rejected.length + (data.rejected.length === 1 ? ' change' : ' changes') + ' could not be saved: ' + data.rejected[0].error, true);
   }).catch(function (err) {
     state.error = /wrong key/.test(err.message) ? 'wrong key' : 'offline';
   }).then(function () {
@@ -217,334 +300,560 @@ function renderSync() {
 // Entry row; editable rows are buttons that open the edit sheet.
 function entryRow(e, w, editable) {
   var isIn = e.type === 'Income', tag = editable ? 'button' : 'div';
-  return '<' + tag + (editable ? ' type="button" data-edit="' + esc(e.id) + '" class="lrow tap"' : ' class="lrow"') + '>' +
-    '<span class="disc s" style="background:var(' + discOf(e.type, e.category) + ')">' + img(e.category, 26) + '</span>' +
+  return '<' + tag + (editable ? ' type="button" data-edit="' + esc(e.id) + '" class="lrow tap"' : ' class="lrow"') + '>' + disc(e.type, e.category) +
     '<div class="grow"><div class="what">' + esc(e.note || e.category) + '</div>' +
-    '<small>' + esc((e.note ? e.category + ', ' : '') + stamp.format(new Date(e.dateTime))) + '</small>' +
+    '<small>' + esc((e.note ? e.category + ' · ' : '') + (e.by ? e.by + ' · ' : '') + clock.format(new Date(e.dateTime))) + '</small>' +
     (w[e.id] ? '<small style="color:var(--ink-2)">' + icon('clock-countdown', 'sm') + 'Waiting to sync</small>' : '') + '</div>' +
     '<span class="amt num' + (isIn ? ' pos' : '') + '">' + (isIn ? '+' : '−') + esc(money.format(e.amount)) + '</span>' +
     (editable ? '<span class="edit">' + icon('pencil-simple', 'sm') + '</span>' : '') + '</' + tag + '>';
 }
-
-function emptyRow(title, text, picture) {
-  return '<div class="lrow"><span class="disc s" style="background:var(--mint)"><img class="e" src="assets/3d/' + (picture || 'check') + '.png" width="26" height="26" alt=""></span><div class="grow"><div class="what">' + title + '</div><small>' + text + '</small></div></div>';
+// Entries grouped by day ("Today", "Yesterday", "Fri 9 Oct"), each day with its total.
+function byDay(list, w) {
+  var now = new Date(), today = now.toDateString(), yest = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1).toDateString(), out = '', key = null, rows = [], total = 0;
+  function flush() {
+    if (key == null) return;
+    var d = new Date(key), name = key === today ? 'Today' : key === yest ? 'Yesterday' : dayName.format(d);
+    out += '<div class="dayh"><span>' + esc(name) + '</span><span class="num' + (total > 0 ? ' pos' : '') + '">' + esc(signed(round2(total))) + '</span></div>' + rows.join('');
+  }
+  list.forEach(function (e) {
+    var k = new Date(e.dateTime).toDateString();
+    if (k !== key) { flush(); key = k; rows = []; total = 0; }
+    rows.push(entryRow(e, w, true));
+    total += e.type === 'Income' ? e.amount : -e.amount;
+  });
+  flush();
+  return out;
 }
 
-// Others-limit card: calm when under the limit, a warning when over.
-function limitCard(s) {
-  if (!(s.othersLimit > 0)) return '';
-  var pct = Math.min(100, s.others / s.othersLimit * 100);
-  if (s.overLimit) {
-    return '<div class="pcard" style="background:var(--butter);display:flex;gap:12px;align-items:center;padding:14px 16px"><img class="e" src="assets/3d/warn.png" width="38" height="38" alt="">' +
-      '<div class="grow"><div style="font-weight:600">Others is over the limit</div><div class="muted t-sm">' + money.format(s.others) + ' spent of ' + money.format(s.othersLimit) + '</div></div>' +
-      '<span class="pill white">' + money.format(s.others - s.othersLimit) + ' over</span></div>';
+function emptyRow(title, text, picture) {
+  return '<div class="lrow"><span class="disc s" style="background:var(--mint)">' + img3d(picture || 'check', 26) + '</span><div class="grow"><div class="what">' + title + '</div><small>' + text + '</small></div></div>';
+}
+
+function ring(rate, sub) {
+  var p = rate == null ? 0 : Math.max(0, Math.min(1, rate)) * 100;
+  return '<div class="ringbox"><span class="ring"><svg viewBox="0 0 36 36"><circle class="rt" cx="18" cy="18" r="15.915"/><circle class="rv" cx="18" cy="18" r="15.915" stroke-dasharray="' + p.toFixed(1) + ' 100"/></svg>' +
+    '<b>' + (rate == null ? '–' : Math.round(rate * 100) + '%') + '</b></span><small>' + sub + '</small></div>';
+}
+
+// ---- The plan behind Home and Insights: the family's focus and its numbers, from the last 6 complete months.
+function planOf(v, now) {
+  var set = v.settings, focus = focusOf(v.loans, v.repays, set, now), months = lastMonths(v.rows, now, 6, v.cats);
+  // For the loans: interest paid is added back and interest got left out, as the forecast counts both itself (savingRate)
+  var adj = lastMonths(v.rows.filter(function (e) { return !matchName([e.type === 'Income' ? INTEREST : LOAN_INTEREST], e.category); }), now, 6, v.cats);
+  var inc = 0, exp = 0, sav = 0, n = 0;
+  months.forEach(function (m, i) { if (!m.income && !m.expense) return; n++; inc += m.income; exp += m.expense; sav += adj[i].savings; });
+  var given = summarizeLoans(loansOf(v, 'given'), v.repays, null, null, now), inv = summarizeLoans(loansOf(v, 'invested'), v.repays, null, null, now);
+  var p = { focus: focus, months: months, n: n, avgIncome: n ? inc / n : 0, avgExpense: n ? exp / n : 0, savingsRate: inc > 0 ? (inc - exp) / inc : null,
+    interestIn: 0, sips: 0, growth: 0, worth: inv.owed, inv: inv };
+  given.loans.forEach(function (l) { if (!l.done) p.interestIn += l.monthly; });
+  inv.loans.forEach(function (l) { if (!l.done) { p.sips += (set.loans[l.id] || {}).sip || 0; p.growth += l.monthly; } });
+  var r = periodRange('month', now);
+  p.added = cashFlow(v.loans, v.repays, r.start, r.end).invested;
+  if (focus === 'debt') {
+    var B = summarizeLoans(loansOf(v, 'borrowed'), v.repays, null, null, now), cash = Math.max(0, Math.round((n ? sav / n : 0) + p.interestIn - p.sips));
+    p.cash = cash; p.owed = B.owed; p.borrowed = B.borrowed; p.repaid = round2(B.borrowed - B.owed); p.open = B.loans.filter(function (l) { return !l.done; });
+    p.f = forecast(borrowedOnly(v.loans), v.repays, cash, now);
+    p.pace = p.f.payoff ? p.f.payoff.months : null;
+    p.chips = targets(p.pace).map(function (m) {
+      var need = m === p.pace ? cash : neededToClear(v.loans, v.repays, m, now);
+      return { months: m, need: need, interest: need == null ? 0 : forecast(borrowedOnly(v.loans), v.repays, need, now).totalInterest };
+    });
+  } else {
+    var lt = longTerm(v.loans, v.repays, set, now), goal = goalOf(set, lt.worth);
+    p.lt = lt; p.goal = goal; p.pace = monthsToGoal(lt.worth, lt.rate, lt.monthly, goal, lt.addRate);
+    p.chips = targets(p.pace).map(function (m) { return { months: m, need: m === p.pace ? lt.monthly : neededForGoal(lt.worth, lt.rate, goal, m, lt.addRate) }; });
+    // What the investments were worth on the 1st of each of the last 6 months, and now
+    p.spark = [6, 5, 4, 3, 2, 1].map(function (i) {
+      var at = new Date(now.getFullYear(), now.getMonth() - i + 1, 1), before = function (x) { return Date.parse(x.dateTime) < at; };
+      return worthNow(v.loans.filter(before), v.repays.filter(before), 'invested', at);
+    }).concat(p.worth);
   }
-  return '<div class="pcard" style="background:var(--butter);padding:14px 16px"><div style="display:flex;gap:12px;align-items:center;margin-bottom:10px">' + img('Others', 34) +
-    '<div class="grow"><div style="font-weight:600">Others this month</div><div class="muted t-sm">' + money.format(s.others) + ' of ' + money.format(s.othersLimit) + '</div></div>' +
-    '<span class="pill white">' + money.format(s.othersLimit - s.others) + ' left</span></div><span class="bar"><i style="width:' + pct + '%;background:var(--butter-d)"></i></span></div>';
+  return p;
+}
+// The plan chip picked (the pace, unless another was tapped) and what it means against today's pace.
+function chipText(p, c) {
+  if (p.focus === 'debt') {
+    if (c.months === p.pace) return 'Your pace now: what is left each month after expenses' + (p.sips ? ' and ' + money.format(p.sips) + ' of SIPs' : '') + (p.interestIn ? ', with the interest coming in' : '');
+    if (c.need == null) return 'More than this family can put aside';
+    var parts = [money.format(Math.max(0, c.need - p.cash)) + ' more than now'];
+    if (p.pace) parts.push(monthsText(p.pace - c.months) + ' sooner');
+    if (p.pace && p.f.totalInterest - c.interest >= 100) parts.push('about ' + money.format(Math.round((p.f.totalInterest - c.interest) / 100) * 100) + ' less interest');
+    return parts.join(' · ');
+  }
+  if (c.months === p.pace) return p.lt.monthly ? 'What you invest now (SIPs). Growth adds about ' + money.format(Math.round(p.growth)) + ' a month on top' : 'Growth alone, about ' + money.format(Math.round(p.growth)) + ' a month';
+  return money.format(Math.max(0, c.need - p.lt.monthly)) + ' more than now' + (p.pace ? ' · ' + monthsText(p.pace - c.months) + ' sooner' : '');
+}
+function chipsHtml(p, now) {
+  var pick = state.pick[p.focus], sel = p.chips.filter(function (c) { return c.months === pick; })[0] || p.chips[p.chips.length - 1];
+  return '<div class="tchips">' + p.chips.map(function (c) {
+    return '<button type="button" class="tchip" data-plan="' + c.months + '" aria-pressed="' + (c === sel) + '"><small>by ' + monthYear(inMonths(now, c.months)) + '</small>' +
+      '<b class="num">' + (c.need == null ? '–' : money.format(c.need)) + (c.months === p.pace ? ' ✓' : '') + '</b></button>';
+  }).join('') + '</div><p class="tout t-xs soft">' + esc(chipText(p, sel)) + '</p>';
+}
+
+function heroHtml(p, now) {
+  var rate = ring(p.savingsRate, 'saving<br>aim 20%' + (p.savingsRate >= 0.2 ? ' ✓' : ''));
+  if (p.focus === 'debt') {
+    var share = p.borrowed ? p.repaid / p.borrowed : 0;
+    return '<div class="pcard" style="background:var(--blush)"><div class="hrow"><div class="grow"><span class="pill white">' + img3d('rocket', 14) + 'Focus: clear loans</span>' +
+      '<div class="soft t-sm" style="margin-top:10px">Debt-free by</div><div class="big" id="heroDate">' + (p.pace ? monthYear(inMonths(now, p.pace)) : 'Not yet') + '</div>' +
+      '<div class="soft t-sm">' + (p.pace ? monthsText(p.pace) + ' at ' + money.format(p.cash) + ' a month' : p.cash ? 'Not paid off at ' + money.format(p.cash) + ' a month' : 'Nothing is left over each month to pay them') + '</div></div>' + rate + '</div>' +
+      '<div class="ptop"><span><b class="num">' + money.format(p.repaid) + '</b> paid</span><span class="num"><b>' + money.format(p.owed) + '</b> left</span></div>' +
+      '<span class="bar"><i style="width:' + (share * 100).toFixed(1) + '%;background:#0B0B0C"></i></span>' +
+      '<div class="t-xs soft" style="margin:5px 0 10px">' + Math.round(share * 100) + '% of ' + money.format(p.borrowed) + ' borrowed · ' + p.open.length + (p.open.length === 1 ? ' loan' : ' loans') + '</div>' +
+      '<div class="t-sm" style="font-weight:500;margin-bottom:6px">' + (p.pace ? 'Want it sooner? Put aside each month:' : 'To pay them off, put aside each month:') + '</div>' + chipsHtml(p, now) + '</div>';
+  }
+  var lt = p.lt, goalShare = Math.min(1, lt.worth / p.goal), kept = round2(p.worth - lt.worth), sp = p.spark, lo = Math.min.apply(null, sp), hi = Math.max.apply(null, sp);
+  var spark = hi > lo ? '<svg class="spark" viewBox="0 0 120 36" preserveAspectRatio="none" aria-hidden="true"><path d="' + sp.map(function (x, i) { return (i ? 'L' : 'M') + (i * 20) + ' ' + (34 - (x - lo) / (hi - lo) * 30).toFixed(1); }).join(' ') +
+    '" fill="none" stroke="#0B0B0C" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linejoin="round"/></svg>' : '';
+  var start = !p.worth;
+  return '<div class="pcard" style="background:var(--mint)"><div class="hrow"><div class="grow"><span class="pill white">' + img3d('seed', 14) + 'Focus: grow savings</span>' +
+    '<div class="soft t-sm" style="margin-top:10px">' + (start ? 'Start your savings' : 'Savings worth now') + '</div><div class="big num" id="heroWorth">' + money.format(Math.round(p.worth)) + '</div>' +
+    '<div class="soft t-sm">' + (start ? 'Add an FD, RD or SIP in Money to see it grow' : (p.added + p.growth >= 0 ? '▲ ' : '▼ ') + money.format(Math.abs(Math.round(p.added + p.growth))) + ' this month · ' + plain(Math.round(p.added)) + ' added + ' + money.format(Math.round(p.growth)) + ' growth') + '</div></div>' + rate + '</div>' + spark +
+    '<div class="ptop"><span><b>' + lakh(p.goal) + ' goal</b> · ' + (p.pace ? monthYear(inMonths(now, p.pace)) + ' at your pace' : 'set your SIPs to see when') + '</span><span class="num">' + Math.round(goalShare * 100) + '%</span></div>' +
+    '<span class="bar"><i style="width:' + (goalShare * 100).toFixed(1) + '%;background:#0B0B0C"></i></span>' +
+    '<div class="t-xs soft" style="margin:5px 0 10px">' + lakh(lt.worth) + ' of ' + lakh(p.goal) + (kept > 0 ? ' · ' + lakh(kept) + ' kept for goals is apart' : '') + '</div>' +
+    '<div class="t-sm" style="font-weight:500;margin-bottom:6px">' + (p.pace ? 'Reach it sooner? Invest each month:' : 'To get there, invest each month:') + '</div>' + chipsHtml(p, now) + '</div>';
+}
+
+// Left to spend: the daily-spending budget against this month's everyday spending (categories without a bill).
+function stripHtml(b) {
+  var over = b.over.length ? '<span class="pill bad">' + esc(b.over[0].cat) + ' ' + money.format(b.over[0].over) + ' over' + (b.over.length > 1 ? ' +' + (b.over.length - 1) : '') + '</span>' : '';
+  if (!b.daily) {
+    return '<button type="button" class="card strip" data-tab="settings" style="text-align:left;width:100%"><div class="l1">' + img3d('bag', 30) + '<div class="grow"><b>Set a monthly budget</b>' +
+      '<div class="t-sm muted">See what is left to spend each day</div></div>' + (over || icon('caret-right', 'sm muted')) + '</div></button>';
+  }
+  var d = b.daily, used = Math.min(1, d.spent / d.limit);
+  return '<div class="card strip" id="leftToSpend"><div class="l1">' + img3d('bag', 30) + '<div class="grow"><div class="t-sm muted">Left to spend this month</div>' +
+    (d.left >= 0 ? '<b class="num" style="font-size:18px">' + money.format(d.left) + '</b> <span class="t-sm muted">· about ' + money.format(d.perDay) + ' a day</span>'
+      : '<b class="num neg" style="font-size:18px">' + money.format(-d.left) + ' over</b> <span class="t-sm muted">the budget</span>') + '</div></div>' +
+    '<span class="bar"><i style="width:' + (used * 100).toFixed(1) + '%;background:var(' + (d.left < 0 ? '--blush-d' : used > 0.85 ? '--butter-d' : '--mint-d') + ')"></i></span>' +
+    '<div class="l3 t-xs muted"><span>' + money.format(d.spent) + ' of the ' + money.format(d.limit) + ' everyday budget · ' + d.days + (d.days === 1 ? ' day' : ' days') + ' to go</span>' + over + '</div></div>';
+}
+
+// Due soon: the next bills, EMIs, SIPs and monthly interest.
+var DUE_ICON = { emi: 'bank', sip: 'up', int: 'coin' };
+function dueText(d, now) {
+  var today = new Date(now.getFullYear(), now.getMonth(), now.getDate()), days = Math.round((d.date - today) / 864e5);
+  return dayName.format(d.date) + (days < 0 ? ' · overdue' : days === 0 ? ' · today' : days === 1 ? ' · tomorrow' : days <= 7 ? ' · in ' + days + ' days' : '');
+}
+function dueHtml(list, now) {
+  if (!list.length) return '';
+  return '<div class="card"><h2>Due soon <button type="button" class="see" data-tab="settings">All bills</button></h2>' + list.map(function (d, i) {
+    var picture = d.kind === 'bill' ? pic(d.category) : DUE_ICON[d.kind], late = d.date < new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    var what = d.kind === 'emi' ? 'EMI · ' : d.kind === 'sip' ? 'Add money · ' : d.kind === 'int' ? (d.dir === 'given' ? 'Interest to get · ' : 'Interest · ') : '';
+    var btn = d.kind === 'sip' ? 'Add' : d.kind === 'int' && d.dir === 'given' ? 'Got it' : d.kind === 'bill' ? 'Paid' : 'Pay';
+    return '<div class="row"><span class="disc xs" style="background:var(' + (late ? '--blush' : PIC_BG[picture] || '--sky') + ')">' + img3d(picture, 22) + '</span>' +
+      '<div class="grow"><b class="t-sm">' + esc(d.name) + '</b><small' + (late ? ' class="neg"' : '') + '>' + esc(what + dueText(d, now)) + '</small></div>' +
+      '<b class="num t-sm">' + money.format(d.amount) + '</b><button type="button" class="pay' + (late || d.kind === 'emi' ? '' : ' soft') + '" data-due="' + i + '">' + btn + '</button></div>';
+  }).join('') + '</div>';
 }
 
 function renderHome(v) {
-  var now = new Date(), s = summarize(v.rows, 'month', now, load(K.limit, 0), v.cats), w = waiting();
-  $('#heroLabel').textContent = 'Saved in ' + now.toLocaleString('en-IN', { month: 'long' });
-  $('#heroSaved').textContent = signed(s.savings).replace(/^\+/, '');
-  $('#heroPie').innerHTML = donut(spendShare(s), '');
+  var now = new Date(), s = summarize(v.rows, 'month', now, 0, v.cats), w = waiting(), p = planOf(v, now);
+  $('#hero').innerHTML = heroHtml(p, now);
+  $('#strip').innerHTML = stripHtml(budgetStatus(v.rows, v.settings, v.cats, now));
   $('#heroIn').textContent = money.format(s.income);
   $('#heroOut').textContent = money.format(s.expense);
   $('[data-new="Income"]').setAttribute('aria-label', 'Add income. ' + money.format(s.income) + ' this month');
   $('[data-new="Expense"]').setAttribute('aria-label', 'Add expense. ' + money.format(s.expense) + ' this month');
-  $('#homeLimit').innerHTML = limitCard(s);
-  var rows = recentEntries(v.rows, wide.matches ? 8 : HOME_LATEST); // a wide screen has room for more
-  $('#recent').innerHTML = rows.length
-    ? rows.map(function (e) { return entryRow(e, w, true); }).join('')
-    : emptyRow('No entries yet', 'Tap Income or Expenses above to add the first one');
+  state.again2 = frequent(v.rows, now, 4);
+  $('#again').innerHTML = state.again2.length ? '<div class="clbl">Add again</div><div class="chips" style="margin-top:12px">' + state.again2.map(function (g, i) {
+    return '<button type="button" class="chip card" data-again="' + i + '">' + img(g.category, 18) + esc(g.note || g.category) + (g.amount ? ' ' + money.format(g.amount) : '') + '</button>';
+  }).join('') + '</div>' : '';
+  state.due = dueItems(v.loans, v.repays, v.settings, now).slice(0, 3);
+  $('#due').innerHTML = dueHtml(state.due, now);
+  var rows = recentEntries(v.rows, wide.matches ? 10 : HOME_LATEST); // a wide screen has room for more
+  $('#recent').innerHTML = rows.length ? byDay(rows, w) : emptyRow('No entries yet', 'Tap Expenses or Income above to add the first one');
 }
 
-// History: every entry, filtered by search, year, month and category. Only the newest 20 can be changed here.
+// History: every entry, filtered by search, period, category and who added it. Every one can be changed.
 function renderHistory(v) {
-  var f = state.f, w = waiting(), editable = {}, years = {}, inSum = 0, outSum = 0;
-  var all = filterEntries(v.rows, f), shown = all.slice(0, HISTORY_SHOW), on = !!(f.q || f.year || f.month !== '' || f.cat);
-  recentEntries(v.rows, HISTORY_LIMIT).forEach(function (e) { editable[e.id] = true; });
-  years[new Date().getFullYear()] = true;
-  v.rows.forEach(function (e) { years[new Date(e.dateTime).getFullYear()] = true; });
+  var f = state.f, w = waiting(), years = {}, who = {}, inSum = 0, outSum = 0;
+  var all = filterEntries(v.rows, f), shown = all.slice(0, HISTORY_SHOW), on = !!(f.q || f.year || f.month !== '' || f.cat || f.who);
+  years[new Date().getFullYear()] = {};
+  v.rows.forEach(function (e) { var d = new Date(e.dateTime); (years[d.getFullYear()] = years[d.getFullYear()] || {})[d.getMonth()] = true; if (e.by) who[e.by] = true; });
   all.forEach(function (e) { if (e.type === 'Income') inSum += e.amount; else outSum += e.amount; });
 
-  function opt(key, val, label, cls, pic) {
-    return '<button type="button" class="opt' + (cls ? ' ' + cls : '') + '" data-f="' + key + '" data-v="' + esc(val) + '" aria-pressed="' + (String(f[key]) === String(val)) + '">' + (pic || '') + esc(label) + '</button>';
+  function opt(key, val, label, cls, picture) {
+    var cur = key === 'when' ? f.year + '-' + f.month : String(f[key]);
+    return '<button type="button" class="opt' + (cls ? ' ' + cls : '') + '" data-f="' + key + '" data-v="' + esc(val) + '" aria-pressed="' + (cur === String(val)) + '">' + (picture || '') + esc(label) + '</button>';
   }
   function fbtn(id, label, active) {
     $(id).className = 'fbtn' + (active ? ' on' : '');
     $(id).innerHTML = '<span>' + label + '</span>' + icon('caret-right', 'sm dda');
   }
   var catLabel = !f.cat ? 'Category' : f.cat === 'Income' ? 'All income' : f.cat === 'Expense' ? 'All expenses' : esc(f.cat.slice(f.cat.indexOf('-') + 1));
-  fbtn('#fYear', f.year || 'Year', f.year);
-  fbtn('#fMonth', f.month !== '' ? MONTHS[f.month] : 'Month', f.month !== '');
-  fbtn('#fCat', (f.cat.indexOf('-') > 0 ? icon(f.cat.indexOf('Income') === 0 ? 'arrow-down-left' : 'arrow-up-right', 'sm') : '') + catLabel, f.cat);
-  $('#ddYear').innerHTML = opt('year', '', 'All years', 'txt full') + Object.keys(years).sort().reverse().map(function (y) { return opt('year', y, y, 'txt'); }).join('');
-  $('#ddMonth').innerHTML = opt('month', '', 'All months', 'txt full') + MONTHS.map(function (m, i) { return opt('month', i, m, 'txt'); }).join('');
+  fbtn('#fWhen', !f.year ? 'All time' : f.month !== '' ? MONTHS[f.month] + ' ' + f.year : f.year, f.year);
+  fbtn('#fCat', catLabel, f.cat);
+  fbtn('#fWho', f.who ? esc(f.who) : 'Everyone', f.who);
+  $('#whoBox').hidden = !Object.keys(who).length && !f.who;
+  $('#filters').classList.toggle('two', $('#whoBox').hidden);
+  $('#ddWhen').innerHTML = opt('when', '-', 'All time', 'txt full') + Object.keys(years).sort().reverse().map(function (y) {
+    return '<h4>' + y + '</h4>' + opt('when', y + '-', 'All of ' + y, 'txt full') + MONTHS.map(function (m, i) { return years[y][i] ? opt('when', y + '-' + i, m, 'txt') : ''; }).join('');
+  }).join('');
   $('#ddCat').innerHTML = opt('cat', '', 'Everything', 'txt full') + opt('cat', 'Income', 'All income', 'txt') + opt('cat', 'Expense', 'All expenses', 'txt') +
     ['Income', 'Expense'].map(function (type) {
       return '<h4>' + (type === 'Income' ? 'Income' : 'Expenses') + '</h4>' + v.cats[type].map(function (c) {
         return opt('cat', type + '-' + c, c, '', '<span class="disc xs" style="background:var(' + discOf(type, c) + ')">' + img(c, 24) + '</span>');
       }).join('');
     }).join('');
+  $('#ddWho').innerHTML = opt('who', '', 'Everyone', 'txt full') + Object.keys(who).sort().map(function (n) { return opt('who', n, n, 'txt full'); }).join('');
 
   $('#qClear').hidden = !f.q;
   $('#hClear').hidden = !on;
   $('#hSum').innerHTML = all.length ? all.length + (all.length === 1 ? ' entry' : ' entries') +
     (inSum ? ' · <span class="pos">+' + esc(money.format(round2(inSum))) + '</span>' : '') + (outSum ? ' · −' + esc(money.format(round2(outSum))) : '') : '';
-  $('#historyList').innerHTML = shown.length
-    ? shown.map(function (e) { return entryRow(e, w, editable[e.id]); }).join('')
+  $('#historyList').innerHTML = shown.length ? byDay(shown, w)
     : on ? emptyRow('No matches', 'Try another search or clear the filters') : emptyRow('Nothing yet', 'Entries you add show up here');
-  $('#hFoot').innerHTML = (all.length > shown.length ? 'Showing the newest ' + HISTORY_SHOW + ' of ' + all.length + '. Use the filters to find older ones.<br>' : '') +
-    'Only the newest ' + HISTORY_LIMIT + ' entries (with ' + icon('pencil-simple', 'sm') + ') can be changed here. Change older ones in the Google Sheet.';
+  $('#hFoot').innerHTML = all.length > shown.length ? 'Showing the newest ' + HISTORY_SHOW + ' of ' + all.length + '. Use the filters to find older ones.' : '';
 }
 
-function loanCard(l, w, T) {
-  var pct = l.amount ? Math.min(100, l.repaid / l.amount * 100) : 0;
+// Share: the entries History shows, as a spreadsheet (CSV) file; where the phone can't share a file, it is downloaded.
+function shareHistory() {
+  var all = filterEntries(view().rows, state.f), q = function (x) { return '"' + String(x == null ? '' : x).replace(/"/g, '""') + '"'; };
+  var csv = ['Date,Type,Category,Amount,Reason,Added by'].concat(all.map(function (e) {
+    return [new Date(e.dateTime).toISOString().slice(0, 10), e.type, e.category, e.amount, e.note, e.by].map(q).join(',');
+  })).join('\n');
+  var name = sheetOf(P).name.replace(/[^\w ]+/g, '').trim() + ' entries.csv', file = new File([csv], name, { type: 'text/csv' });
+  if (navigator.canShare && navigator.canShare({ files: [file] })) return navigator.share({ files: [file], title: name }).catch(function () {});
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(file);
+  a.download = name;
+  a.click();
+  setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
+}
+
+// ---- Money: Loans, Given and Investments
+function rateText(l) { return l.dir === 'invested' ? 'about ' + l.interest + '% a ' + l.per + (l.compound ? '' : ', same each month') : l.interest + '% a ' + l.per; }
+function annual(l) { return l.interest > 0 ? (l.per === 'year' ? l.interest : l.interest * 12) : 0; }
+// About how many EMIs are left (reducing balance), or null when the EMI doesn't cover the interest.
+function emisLeft(l, emi) {
+  var r = l.interest > 0 ? l.interest / (l.per === 'year' ? 1200 : 100) : 0;
+  if (!r) return Math.ceil(l.owed / emi);
+  return emi > l.owed * r ? Math.ceil(-Math.log(1 - r * l.owed / emi) / Math.log(1 + r)) : null;
+}
+function loanCard(l, w, T, x, now) {
+  var dir = l.dir, ym = monthKey(now), paidNow = l.repays.some(function (r) { return monthKey(new Date(r.dateTime)) === ym && r.amount > 0; });
+  var addedNow = l.repays.some(function (r) { return monthKey(new Date(r.dateTime)) === ym && r.amount < 0; });
+  var type = x.type && INVEST[x.type], picture = dir === 'invested' ? (x.goal ? 'diya' : { fd: 'bank', rd: 'bank', liquid: 'bag', sip: 'up', ppf: 'lock', gold: 'gem', lic: 'shield', chit: 'hand' }[x.type] || 'up') : T.pic;
+  var info = [];
+  if (dir === 'invested') info.push((type ? type.name + ' · ' : '') + rateText(l));
+  else if (l.interest) info.push(rateText(l) + (l.monthly ? ', about ' + money.format(Math.round(l.monthly)) + ' a month' : ''));
+  else info.push('No interest');
+  if (x.emi) info.push('EMI ' + money.format(x.emi) + (x.day ? ' on the ' + ordinal(x.day) : ''));
+  if (x.sip) info.push(money.format(x.sip) + ' a month' + (x.day ? ' on the ' + ordinal(x.day) : ''));
+  var amount = dir === 'invested' ? money.format(Math.round(l.owed)) : esc(money.format(l.owed)) + T.left2;
+  var bar = '', lines = [], box = '';
+  if (dir === 'invested' && x.goal) {
+    var share = Math.min(1, l.owed / x.goal), left = x.goalBy ? Math.max(0, (Number(x.goalBy.slice(0, 4)) - now.getFullYear()) * 12 + Number(x.goalBy.slice(5)) - 1 - now.getMonth()) : 0;
+    var short = Math.max(0, Math.round(x.goal - l.owed - (x.sip || 0) * left));
+    bar = '<span class="bar"><i style="width:' + (share * 100).toFixed(1) + '%;background:var(--butter-d)"></i></span>';
+    lines.push(Math.round(share * 100) + '% of the ' + money.format(x.goal) + ' goal' + (x.goalBy ? ' by ' + monthYear(dayIn(x.goalBy, 1)) : '') + ' · ' + (short ? money.format(short) + ' short at this pace' : 'on track'));
+  } else if (dir !== 'invested') {
+    bar = '<span class="bar"><i style="width:' + (l.amount ? Math.min(100, l.repaid / l.amount * 100) : 0) + '%;background:var(--mint-d)"></i></span>';
+    lines.push(T.paid + money.format(l.repaid) + ' of ' + money.format(l.amount));
+    if (x.emi && !l.done) { var n = emisLeft(l, x.emi); lines.push(n ? 'about ' + n + ' EMIs left · ends ' + monthYear(inMonths(now, n - (paidNow ? 0 : 1))) : 'the EMI doesn\'t cover the interest'); }
+    if (x.emi && !l.done) box = '<div class="box">' + MONTHS[now.getMonth()] + ' EMI ' + (paidNow ? '✓ paid' : 'not paid yet') + '</div>';
+    else if (l.interest && !l.done) box = '<div class="box">' + MONTHS[now.getMonth()] + ' interest ' + (x.paid >= ym ? '✓ ' + (dir === 'given' ? 'received' : 'paid') : (dir === 'given' ? 'not received yet' : 'not paid yet')) + '</div>';
+  } else {
+    lines.push('Put in ' + money.format(l.principal) + (x.sip ? ' · ' + MONTHS[now.getMonth()] + (addedNow ? ' added ✓' : ' not added yet') : ''));
+  }
+  if (dir === 'invested' && type && type.liquid && !x.goal) lines.push('<span class="pill ok">' + img3d('shield', 14) + 'Counts as safety net</span>');
+  var acts = [];
+  if (!l.done || dir === 'invested') {
+    if (dir === 'borrowed') { if (l.interest && !x.emi) acts.push(['int', 'Pay interest']); acts.push(['back', x.emi ? 'Pay extra' : 'Pay back']); if (x.emi) acts.push(['emi', 'Pay EMI']); }
+    else if (dir === 'given') { acts.push(['back', 'Got back']); if (l.interest) acts.push(['int', 'Got interest']); }
+    else { acts.push(['back', 'Withdraw']); acts.push(['add', 'Add money']); }
+  }
   return '<div class="lcard' + (l.done ? ' ldone' : '') + '">' +
-    '<button type="button" class="lhead" data-loan-edit="' + esc(l.id) + '"><span class="disc s" style="background:var(' + T.color + ')"><img class="e" src="assets/3d/' + T.pic + '.png" width="26" height="26" alt=""></span>' +
-    '<div class="grow">' + (l.done || l.dir === 'invested' ? '' : prioTag(l.priority)) + '<div class="what" style="font-weight:600">' + esc(l.reason) + '</div><small>' + T.small + esc(money.format(l.amount)) + ', ' + esc(day.format(new Date(l.dateTime))) + '</small>' +
+    '<button type="button" class="lhead" data-loan-edit="' + esc(l.id) + '"><span class="disc s" style="background:var(' + (PIC_BG[picture] || T.color) + ')">' + img3d(picture, 26) + '</span>' +
+    '<div class="grow">' + (x.star && !l.done && dir === 'borrowed' ? '<span class="star">★ Pay first</span>' : '') + '<div class="what" style="font-weight:600">' + esc(l.reason) + '</div><small>' + esc(info.join(' · ')) + '</small>' +
     (w[l.id] ? '<small style="color:var(--ink-2)">' + icon('clock-countdown', 'sm') + 'Waiting to sync</small>' : '') + '</div>' +
-    '<span class="pill ' + (l.done ? 'ok' : T.pill) + '" style="font-weight:600">' + (l.done ? icon('check', 'sm') + T.done : esc(money.format(l.owed)) + T.left2) + '</span></button>' +
-    '<span class="bar"><i style="width:' + pct + '%;background:var(--mint-d)"></i></span>' +
-    (l.interest ? '<div class="lfoot">' + icon('clock', 'sm') + '<span class="grow">' + esc(rateText(l)) + (l.monthly ? ', about ' + esc(money.format(Math.round(l.monthly))) + ' a month now' : '') + '</span></div>' : '') +
-    '<div class="lfoot"><span>' + T.paid + esc(money.format(l.repaid)) + ' of ' + esc(money.format(l.amount)) + '</span>' +
-    (l.done ? '' : '<button type="button" class="chip dark" data-pay="' + esc(l.id) + '">' + icon(T.actionIcon, 'sm') + T.action + '</button>') + '</div>' +
+    '<span class="pill ' + (l.done && dir !== 'invested' ? 'ok' : x.goal ? 'warn' : T.pill) + ' num" style="font-weight:600">' + (l.done && dir !== 'invested' ? icon('check', 'sm') + T.done : amount) + '</span></button>' +
+    bar + lines.map(function (t) { return '<div class="lfoot"><span>' + (/^<span/.test(t) ? t : esc(t)) + '</span></div>'; }).join('') + box +
+    (acts.length ? '<div class="acts">' + acts.map(function (a, i) { return '<button type="button" class="pay' + (i === acts.length - 1 ? '' : ' soft') + '" data-pay="' + esc(l.id) + '" data-kind="' + a[0] + '">' + a[1] + '</button>'; }).join('') + '</div>' : '') +
     (l.repays.length ? '<details><summary>' + l.repays.length + ' ' + T.payments[l.repays.length === 1 ? 0 : 1] + '</summary>' +
       l.repays.map(function (r) {
-        return '<div class="rp"><span class="grow">' + esc(day.format(new Date(r.dateTime))) + (w[r.id] ? ', waiting to sync' : '') + '</span><b class="num" style="font-weight:600">' + esc(money.format(r.amount)) + '</b>' +
-          '<button type="button" data-del-repay="' + esc(r.id) + '" aria-label="Delete this repayment">' + icon('trash', 'sm') + '</button></div>';
+        return '<div class="rp"><span class="grow">' + esc(day.format(new Date(r.dateTime))) + (r.amount < 0 ? ', added' : '') + (w[r.id] ? ', waiting to sync' : '') + '</span><b class="num" style="font-weight:600">' + esc(money.format(Math.abs(r.amount))) + '</b>' +
+          '<button type="button" data-del-repay="' + esc(r.id) + '" aria-label="Delete this payment">' + icon('trash', 'sm') + '</button></div>';
       }).join('') + '</details>' : '') + '</div>';
 }
+function ordinal(n) { return n + (n % 10 === 1 && n !== 11 ? 'st' : n % 10 === 2 && n !== 12 ? 'nd' : n % 10 === 3 && n !== 13 ? 'rd' : 'th'); }
 
-// Priority label with a dot; the word is always shown, so colour is never the only cue.
-var PRIO = { high: ['High priority', '--blush-d'], medium: ['Medium priority', '--butter-d'], low: ['Low priority', '--mint-d'] };
-function prioTag(p) { return '<span class="prio-tag"><i style="background:var(' + PRIO[p][1] + ')"></i>' + PRIO[p][0] + '</span>'; }
-
-function rateText(l) { return l.dir === 'invested' ? l.interest + '% a ' + l.per + ' expected, ' + (l.compound ? 'compound' : 'simple') : l.interest + '% interest per ' + l.per; }
-
-// The Loans, Given and Invested tabs: same screen, each with its own loans and words.
 function renderLoans(v) {
-  var dir = tabDir(), T = LOAN_TEXT[dir], L = summarizeLoans(loansOf(v, dir), v.repays), w = waiting(), open = L.loans.filter(function (l) { return !l.done; }).length;
-  $('#givenSeg').hidden = dir === 'borrowed';
-  document.querySelectorAll('#givenSeg button').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.tab === dir)); });
+  var dir = tabDir(), T = LOAN_TEXT[dir], now = new Date(), L = summarizeLoans(loansOf(v, dir), v.repays, null, null, now), w = waiting(), set = v.settings;
+  var open = L.loans.filter(function (l) { return !l.done; });
+  document.querySelectorAll('#moneySeg button').forEach(function (b) { b.setAttribute('aria-pressed', String(MONEY_TABS[b.dataset.tab] === dir)); });
+  var rows = [], sub = '';
+  if (dir === 'borrowed') {
+    var emi = open.reduce(function (s, l) { return s + ((set.loans[l.id] || {}).emi || 0); }, 0);
+    if (open.length) { var p = planOf(v, now); sub = p.focus === 'debt' ? (p.pace ? 'Debt-free ≈ ' + monthYear(inMonths(now, p.pace)) : 'Not paid off at today\'s pace') : ''; }
+    if (emi) rows.push(['EMIs', 'Every month', money.format(emi) + '/mo']);
+    if (L.monthlyInterest) rows.push(['Interest', 'On what is still owed, an expense', '≈ ' + money.format(Math.round(L.monthlyInterest)) + '/mo']);
+    rows.push(['Borrowed', 'All loans', money.format(L.borrowed)], ['Paid back', 'So far', money.format(L.repaid)]);
+  } else if (dir === 'given') {
+    rows.push(['Given', 'All money given', money.format(L.borrowed)], ['Got back', 'So far', money.format(L.repaid)]);
+    if (L.monthlyInterest) rows.push(['Interest coming', 'Each month, on what is still to get', '≈ ' + money.format(Math.round(L.monthlyInterest)) + '/mo']);
+  } else {
+    var put = open.reduce(function (s, l) { return s + l.principal; }, 0), r = periodRange('month', now), grow = L.monthlyInterest + cashFlow(loansOf(v, 'invested'), v.repays, r.start, r.end).invested;
+    sub = (grow >= 0 ? '▲ ' : '▼ ') + money.format(Math.abs(Math.round(grow))) + ' this month';
+    rows.push(['Put in', 'What went in, less withdrawals', money.format(Math.round(put))], ['Growth so far', 'At the expected returns', '≈ ' + money.format(Math.round(L.owed - put))]);
+    if (L.monthlyInterest) rows.push(['Growth this month', 'At the expected returns', '≈ ' + money.format(Math.round(L.monthlyInterest))]);
+  }
   $('#loanSummary').style.background = 'var(' + T.color + ')';
-  $('#loanPic').src = 'assets/3d/' + T.pic + '.png';
-  $('#loanTotalIcon').setAttribute('href', '#i-' + (dir === 'borrowed' ? 'arrow-down-left' : 'arrow-up-right')); // money coming in / going out
-  $('#loanBackIcon').setAttribute('href', '#i-' + (dir === 'borrowed' ? 'arrow-up-right' : 'arrow-down-left'));
-  ['left', 'total', 'totalSub', 'back', 'backSub', 'int', 'intSub'].forEach(function (k) { $('#loan' + k.charAt(0).toUpperCase() + k.slice(1) + (/Sub$/.test(k) ? '' : 'Label')).textContent = T[k]; });
+  $('#loanSummary').innerHTML = '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px"><div><div class="soft t-sm" id="loanLeftLabel">' + T.left + '</div>' +
+    '<div class="big num" id="loanOwed">' + money.format(dir === 'invested' ? Math.round(L.owed) : L.owed) + '</div>' + (sub ? '<div class="soft t-sm">' + esc(sub) + '</div>' : '') + '</div>' + img3d(T.pic, 64) + '</div>' +
+    '<div class="inlist">' + rows.map(function (x) { return '<div class="row"><div class="grow"><b class="t-sm">' + x[0] + '</b><small>' + x[1] + '</small></div><b class="num">' + x[2] + '</b></div>'; }).join('') + '</div>';
   $('#addLoanText').textContent = T.add;
   $('#loanListTitle').textContent = T.list;
   $('#loanFoot').textContent = T.foot;
-  $('#loanOwed').textContent = money.format(L.owed);
-  $('#loanBorrowed').textContent = money.format(L.borrowed);
-  $('#loanRepaid').textContent = money.format(L.repaid);
-  $('#loanIntRow').hidden = !L.monthlyInterest;
-  $('#loanInt').textContent = '≈ ' + money.format(Math.round(L.monthlyInterest)); // an estimate: whole rupees
-  $('#loanCount').textContent = L.loans.length ? open + ' open, ' + (L.loans.length - open) + ' ' + T.done.toLowerCase() : '';
+  $('#loanCount').textContent = L.loans.length ? open.length + ' open' + (L.loans.length > open.length ? ', ' + (L.loans.length - open.length) + ' ' + T.done.toLowerCase() : '') : '';
   $('#loanList').innerHTML = L.loans.length
-    ? L.loans.map(function (l) { return loanCard(l, w, T); }).join('')
+    ? L.loans.map(function (l) { return loanCard(l, w, T, set.loans[l.id] || {}, now); }).join('')
     : emptyRow(T.none[0], T.none[1], T.pic);
 }
 
+// ---- Insights
+function lineSvg(sets, o) {
+  var W = 300, H = 120, top = 16, bottom = 100, n = Math.max.apply(null, sets.map(function (s) { return s.v.length - 1; })) || 1;
+  var hi = Math.max.apply(null, [].concat.apply([o.goal || 0, 1], sets.map(function (s) { return s.v; })));
+  var x = function (i) { return 8 + i / n * (W - 16); }, y = function (v) { return bottom - Math.max(0, v) / hi * (bottom - top); };
+  var path = function (v) { return v.map(function (val, i) { return (i ? 'L' : 'M') + x(i).toFixed(1) + ' ' + y(val).toFixed(1); }).join(' '); };
+  var a = sets[0].v, svg = '<path d="' + path(a) + ' L' + x(a.length - 1).toFixed(1) + ' ' + bottom + ' L' + x(0) + ' ' + bottom + ' Z" fill="var(' + o.fill + ')" opacity=".4"/>' +
+    '<line x1="0" x2="' + W + '" y1="' + bottom + '" y2="' + bottom + '" stroke="var(--muted)" stroke-width="1"/>';
+  if (o.goal) svg += '<line x1="0" x2="' + W + '" y1="' + y(o.goal) + '" y2="' + y(o.goal) + '" stroke="var(--muted)" stroke-width="1" stroke-dasharray="4 4"/><text class="lbl" x="0" y="' + (y(o.goal) - 5) + '">' + esc(o.goalText) + '</text>';
+  sets.slice().reverse().forEach(function (s) { svg += '<path d="' + path(s.v) + '" fill="none" stroke="var(--ink)" stroke-width="' + (s.dashed ? '1.5" stroke-dasharray="3 4" opacity=".55' : '2.2') + '" stroke-linejoin="round"/>'; });
+  svg += '<circle cx="' + x(0) + '" cy="' + y(a[0]) + '" r="4" fill="var(--ink)"/><text class="lbl" x="14" y="' + (y(a[0]) + (o.goal ? 14 : -6)) + '">' + esc(o.startText) + '</text>' +
+    '<circle cx="' + x(a.length - 1) + '" cy="' + y(a[a.length - 1]) + '" r="5" fill="var(--mint-d)" stroke="var(--surface)" stroke-width="2"/>';
+  [0, Math.round(n / 3), Math.round(2 * n / 3), n].forEach(function (i, k) {
+    svg += '<text x="' + x(i) + '" y="' + (H - 3) + '" text-anchor="' + (k === 0 ? 'start' : k === 3 ? 'end' : 'middle') + '">' + MONTHS[o.at(i).getMonth()] + ' ’' + String(o.at(i).getFullYear()).slice(2) + '</text>';
+  });
+  return '<div class="chart"><svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + esc(o.label) + '">' + svg + '</svg></div>';
+}
+// Worth month by month: `worth` growing at rate plus `monthly` growing at addRate, for n months.
+function growLine(lt, monthly, n) {
+  var out = [lt.worth], w = lt.worth, added = 0;
+  for (var i = 1; i <= n; i++) { w *= 1 + lt.rate; added = added * (1 + lt.addRate) + monthly; out.push(w + added); }
+  return out;
+}
+
+function noteHtml(n, prevLabel) {
+  var t;
+  if (n.kind === 'safety') t = n.aim === 1 ? ['shield', 'Build a ' + money.format(Math.max(1000, Math.round(n.need / 1000) * 1000)) + ' safety net first', 'Your savings cover about ' + spanText(n.months) + ' of expenses. One emergency could mean a new loan.']
+    : ['shield', 'The safety net covers ' + spanText(n.months), 'Aim for 6 months (about ' + lakh(n.need) + ' more). ' + (n.inHand > 0 ? 'Move some of the ' + money.format(Math.round(n.inHand)) + ' in hand to an FD or a liquid fund.' : 'Put a little aside each month in an FD or RD.')];
+  else if (n.kind === 'costly') t = ['rocket', n.name + ' costs ' + n.rate + '% a year', 'Savings earn about ' + n.earn + '%. After the safety net, extra money goes to this loan first.'];
+  else if (n.kind === 'sooner') t = ['rocket', money.format(n.more) + ' more a month: debt-free ' + monthsText(n.months) + ' sooner', n.saved >= 100 ? 'And about ' + money.format(Math.round(n.saved / 100) * 100) + ' less interest.' : ''];
+  else if (n.kind === 'emi') t = ['warn', 'EMIs take ' + pct(n.load) + ' of income', 'Keep them under 30–40%. Avoid a new loan until one ends.'];
+  else if (n.kind === 'interest') t = ['fire', 'About ' + money.format(Math.round(n.amount)) + ' went on interest this year', 'Paying the costliest loan first cuts this.'];
+  else if (n.kind === 'goal') t = ['diya', n.name + ' is ' + money.format(n.short) + ' short', n.by ? 'Add it before ' + monthYear(dayIn(n.by, 1)) + '.' : 'Add a little more each month.'];
+  else if (n.kind === 'streak') t = ['party', monthsText(n.months) + ' in a row saving 20% or more', 'Keep it going.'];
+  else if (n.kind === 'over') t = ['warn', n.cat + ' is ' + money.format(n.over) + ' over its budget', 'Budgets are set in Settings.'];
+  else t = [pic(n.cat), n.cat + ' is ' + money.format(round2(n.now - n.before)) + ' more than ' + prevLabel, money.format(n.now) + ' against ' + money.format(n.before) + '.'];
+  return '<div class="note">' + img3d(t[0], 30) + '<div><b>' + esc(t[1]) + '</b>' + (t[2] ? '<p>' + esc(t[2]) + '</p>' : '') + '</div></div>';
+}
+
 function renderInsights(v) {
-  var s = summarize(v.rows, state.view, state.date, load(K.limit, 0), v.cats);
-  document.querySelectorAll('[data-view]').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.view === state.view)); });
+  var now = new Date(), set = v.settings, yv = set.year === 'apr' ? 'fy' : 'year';
+  if (state.view !== 'month') state.view = yv; // Year follows Settings: calendar year or the financial year
+  var s = summarize(v.rows, state.view, state.date, 0, v.cats), r = periodRange(state.view, state.date), running = now >= r.start && now < r.end;
+  document.querySelectorAll('[data-view]').forEach(function (b) { b.setAttribute('aria-pressed', String((b.dataset.view === 'month') === (state.view === 'month'))); });
+  $('#yearBtn').textContent = yv === 'fy' ? 'Year (FY)' : 'Year';
   $('#periodLabel').textContent = s.label;
-  $('#next').disabled = s.end > new Date();
-  $('#sIn').textContent = money.format(s.income);
-  $('#sOut').textContent = money.format(s.expense);
-  $('#sSave').textContent = signed(s.savings).replace(/^\+/, '');
-  $('#insLimit').innerHTML = state.view === 'month' ? limitCard(s) : '';
+  var dim = Math.round((r.end - r.start) / 864e5), gone = Math.min(dim, Math.floor((now - r.start) / 864e5) + 1);
+  $('#periodSub').textContent = running ? (state.view === 'month' ? gone + ' of ' + dim + ' days' : 'so far') : '';
+  $('#next').disabled = s.end > now;
+  var ps = previousSpan(state.view, state.date, now), prev = totals(v.rows, ps.start, ps.end);
+  var prevLabel = ps.partial ? (state.view === 'month' ? 'these days last month' : 'this time last year') : (state.view === 'month' ? 'last month' : 'last year');
+  var rate = s.income > 0 ? s.savings / s.income : null, prate = prev.income > 0 ? prev.savings / prev.income : null, p = planOf(v, now);
 
-  $('#net').innerHTML = Object.keys(s.net).map(function (c) {
-    var val = s.net[c], isIn = v.cats.Income.indexOf(c) >= 0, isOut = v.cats.Expense.indexOf(c) >= 0;
-    var sub = isIn && !isOut ? 'Income' : isOut && !isIn ? 'Spent' : 'Income minus expenses';
-    return '<div class="row">' + img(c, 28) + '<div class="grow">' + esc(c) + '<div class="t-xs muted">' + sub + '</div></div>' +
-      '<span class="pill ' + (val > 0 ? 'ok' : val < 0 ? 'bad' : '') + '" style="font-weight:600">' + signed(val) + '</span></div>';
-  }).join('');
+  // Summary: saved, the savings rate, and against the same stretch of the period before
+  var diff = rate != null && prate != null ? Math.round((rate - prate) * 100) : null;
+  $('#insSummary').innerHTML = '<div class="pcard" style="background:var(--lavender)"><div class="hrow"><div class="grow"><div class="soft t-sm">' + (running ? 'Saved so far' : 'Saved') + '</div>' +
+    '<div class="big num" id="sSaveBig">' + esc(plain(s.savings)) + '</div><div class="soft t-sm">' + (diff == null ? '&nbsp;' : (diff >= 0 ? '▲ ' : '▼ ') + Math.abs(diff) + ' points vs ' + prevLabel + ' (' + pct(prate) + ')') + '</div></div>' +
+    ring(rate, running && state.view === 'month' && p.savingsRate != null ? 'so far<br>usually ' + pct(p.savingsRate) : 'of income') + '</div>' +
+    '<div class="stats"><div><span>Income</span><b class="num" id="sIn">' + money.format(s.income) + '</b></div><div><span>Spent</span><b class="num" id="sOut">' + money.format(s.expense) + '</b></div>' +
+    '<div><span>Saved</span><b class="num" id="sSave">' + esc(plain(s.savings)) + '</b></div></div></div>';
 
-  // Loans card: what we owe, what others owe us and what investments are worth, with this period's movements. Never part of income or expenses.
-  var rows = DIRS.map(function (dir) {
-    var L = summarizeLoans(loansOf(v, dir), v.repays, s.start, s.end), T = LOAN_TEXT[dir];
-    if (!L.loans.length) return '';
-    return '<div class="row"><img class="e" src="assets/3d/' + T.pic + '.png" width="28" height="28" alt=""><div class="grow">' + T.ins +
-      '<div class="t-xs muted">This period: ' + T.total.toLowerCase() + ' ' + esc(money.format(L.periodBorrowed)) + ', ' + T.back.toLowerCase() + ' ' + esc(money.format(L.periodRepaid)) + '</div></div>' +
-      '<span class="pill ' + T.pill + '" style="font-weight:600">' + esc(money.format(L.owed)) + '</span></div>';
-  }).join('');
-  $('#insLoans').innerHTML = rows ? '<div class="card"><h2>' + (loansOf(v, 'invested').length ? 'Loans & investments' : 'Loans') + '</h2>' + rows + '<p class="t-xs muted" style="margin-top:6px">Kept apart from income and expenses.</p></div>' : '';
+  // Where the income went: spent, loans paid, invested, lent, and what is left in hand
+  var cf = cashFlow(v.loans, v.repays, r.start, r.end), inHand = round2(s.savings - cf.loansPaid - cf.invested - cf.lent + cf.borrowed);
+  var parts = [['Spent', s.expense, '--blush-d'], ['Loans paid', cf.loansPaid, '--butter-d'], ['Invested', cf.invested, '--lavender-d'], ['Lent', cf.lent, '--sky-d'], [inHand < 0 ? 'Short' : 'In hand', Math.abs(inHand), inHand < 0 ? '--muted' : '--mint-d']]
+    .filter(function (x) { return x[1] > 0; }), base = parts.reduce(function (t, x) { return t + x[1]; }, 0);
+  $('#insSplit').innerHTML = s.income + cf.borrowed > 0 ? '<div class="card"><h2>Where the income went</h2><div class="split">' + parts.map(function (x) { return '<i style="width:' + (x[1] / base * 100).toFixed(2) + '%;background:var(' + x[2] + ')"></i>'; }).join('') + '</div>' +
+    '<div class="leg" id="splitLeg">' + parts.map(function (x) { return '<div><i style="background:var(' + x[2] + ')"></i>' + x[0] + '<b class="num">' + money.format(x[1]) + '</b></div>'; }).join('') + '</div>' +
+    '<p class="t-xs muted" style="margin-top:8px">Loans paid back and money invested come out of Saved; they are not expenses.' + (cf.borrowed ? ' Includes ' + money.format(cf.borrowed) + ' borrowed in this period.' : '') + '</p></div>' : '';
 
-  renderForecast(v);
-
-  $('#byLabel').textContent = { week: 'By day', month: 'By week', year: 'By month' }[state.view];
-  var max = Math.max.apply(null, s.incomeSeries.concat(s.expenseSeries)) || 1, n = s.labels.length;
-  $('#cols').innerHTML = s.labels.map(function (l, i) {
-    var a = s.incomeSeries[i], b = s.expenseSeries[i], on = i === state.bar;
-    var tip = on ? '<div class="ttip' + (i >= n - 2 ? ' r' : '') + '" style="bottom:calc(' + (Math.max(a, b) / max * 100) + '% + 8px)"><b>' + esc(l) + '</b><br>Income ' + esc(money.format(a)) + '<br>Expenses ' + esc(money.format(b)) + '</div>' : '';
-    return '<button type="button" class="col" data-i="' + i + '" aria-pressed="' + on + '" aria-label="' + esc(l + ': income ' + money.format(a) + ', expenses ' + money.format(b)) + '">' + tip +
-      '<i style="height:' + (a / max * 100) + '%;background:var(--mint-d)"></i><i style="height:' + (b / max * 100) + '%;background:var(--blush-d)"></i></button>';
-  }).join('');
-  $('#ticks').innerHTML = s.labels.map(function (l) { return '<span>' + esc(n === 12 ? l.charAt(0) : l) + '</span>'; }).join('');
-
-  renderPie(spendShare(s));
-
-  var w = waiting();
-  $('#entryCount').textContent = s.entries.length ? s.entries.length + (s.entries.length === 1 ? ' entry' : ' entries') : '';
-  // A year can hold hundreds of entries: show the newest few here, the rest in History with this period filtered.
-  $('#entries').innerHTML = s.entries.length
-    ? s.entries.slice(0, INSIGHTS_SHOW).map(function (e) { return entryRow(e, w, false); }).join('') +
-      (s.entries.length > INSIGHTS_SHOW ? '<button type="button" class="btn soft" id="seeAll">' + icon('clock-counter-clockwise', 'sm') + 'See all ' + s.entries.length + ' in History</button>' : '')
-    : emptyRow('Nothing here', 'No entries in this period');
-}
-
-function pct(x) { return x.pct < 1 ? '<1%' : Math.round(x.pct) + '%'; }
-// Expense categories take --pie-0…4 by their place in the list; Others and Saved keep their own colour.
-// ponytail: only 5 colours stay colour-blind safe next to each other, so a 6th category repeats the first; the legend names every slice.
-function pieColor(x) { return 'var(--pie-' + (x.name === 'Saved' || x.name === 'Others' ? x.name : x.i % 5) + ')'; }
-
-// Donut of where income went (spendShare), with the saved % (or the picked slice) in the middle. Used on Home and Insights.
-function donut(p, picked) {
-  var C = 2 * Math.PI * 48, at = 0, gap = p.slices.length > 1 ? 1.6 : 0, sel = null, saved = null;
-  p.slices.forEach(function (x) { if (x.name === picked) sel = x; if (x.name === 'Saved') saved = x; });
-  var mid = sel ? [pct(sel), sel.name] : [saved ? pct(saved) : '0%', 'saved'];
-  var rings = p.slices.length ? p.slices.map(function (x) {
-    var len = x.amount / p.base * C, on = sel === x;
-    var c = '<circle data-slice="' + esc(x.name) + '" cx="60" cy="60" r="48" transform="rotate(-90 60 60)" stroke="' + pieColor(x) + '" stroke-width="' + (on ? 20 : 15) + '"' +
-      ' stroke-dasharray="' + Math.max(0.01, len - gap) + ' ' + C + '" stroke-dashoffset="' + -at + '" opacity="' + (sel && !on ? 0.45 : 1) + '"/>';
-    at += len;
-    return c;
-  }).join('') : '<circle cx="60" cy="60" r="48" stroke="rgba(127,127,127,.2)" stroke-width="15"/>';
-  return '<svg viewBox="0 0 120 120" role="img" aria-label="' + esc(p.slices.length ? 'Where income went: ' + p.slices.map(function (x) { return x.name + ' ' + pct(x); }).join(', ') : 'Nothing yet') + '">' +
-    rings + '</svg><div class="mid"><b class="num">' + esc(mid[0]) + '</b><span>' + esc(mid[1]) + '</span></div>';
-}
-
-// Insights card: the donut plus one legend row per slice with its amount and %, so colour is never the only cue.
-function renderPie(p) {
-  var sel = p.slices.filter(function (x) { return x.name === state.slice; })[0];
-  $('#pieOver').hidden = !p.overBy;
-  $('#pieOver').textContent = 'Over by ' + money.format(p.overBy);
-  $('#pie').hidden = !p.slices.length;
-  if (!p.slices.length) {
-    $('#split').innerHTML = '<p class="muted t-sm">No income or expenses in this period.</p>';
-    return;
+  // 3 things to notice
+  var b = budgetStatus(v.rows, set, v.cats, now), inv = p.inv.loans.filter(function (l) { return !l.done; }), liquid = 0, earn = 0;
+  inv.forEach(function (l) { var x = set.loans[l.id] || {}; if (x.type && INVEST[x.type].liquid) { earn = Math.max(earn, annual(l)); if (!x.goal) liquid += l.owed; } });
+  var borrowed = summarizeLoans(loansOf(v, 'borrowed'), v.repays, null, null, now).loans.filter(function (l) { return !l.done; });
+  var costly = borrowed.slice().sort(function (a, c) { return annual(c) - annual(a); })[0], emiMonthly = 0;
+  borrowed.forEach(function (l) { var x = set.loans[l.id] || {}; emiMonthly += x.emi || l.monthly; });
+  var fy = periodRange(yv, now), streak = 0;
+  for (var i = p.months.length - 1; i >= 0 && p.months[i].income > 0 && p.months[i].savings / p.months[i].income >= 0.2; i--) streak++;
+  var ctx = { focus: p.focus, avgExpense: p.avgExpense, liquid: liquid, safety: p.avgExpense ? liquid / p.avgExpense : 0, inHand: running ? inHand : 0,
+    costly: costly && annual(costly) ? { name: costly.reason, rate: annual(costly) } : null, earn: earn || 6.5, emiLoad: p.avgIncome ? emiMonthly / p.avgIncome : 0,
+    interestYear: v.rows.filter(function (e) { var d = new Date(e.dateTime); return e.type === 'Expense' && matchName([LOAN_INTEREST], e.category) && d >= fy.start && d < fy.end; }).reduce(function (t, e) { return t + e.amount; }, 0),
+    goals: inv.filter(function (l) { return (set.loans[l.id] || {}).goal; }).map(function (l) {
+      var x = set.loans[l.id], left = x.goalBy ? Math.max(0, (Number(x.goalBy.slice(0, 4)) - now.getFullYear()) * 12 + Number(x.goalBy.slice(5)) - 1 - now.getMonth()) : 0;
+      return { name: l.reason, short: Math.max(0, Math.round(x.goal - l.owed - (x.sip || 0) * left)), by: x.goalBy };
+    }), streak: streak, over: running && state.view === 'month' ? b.over : [], rise: biggestRise(s.spent, prev.spent, b.fixed) };
+  if (p.focus === 'debt' && p.pace) {
+    var more = Math.max(500, Math.round(p.cash * 0.25 / 500) * 500), f2 = forecast(borrowedOnly(v.loans), v.repays, p.cash + more, now);
+    if (f2.payoff) ctx.sooner = { more: more, months: p.pace - f2.payoff.months, saved: p.f.totalInterest - f2.totalInterest };
   }
-  $('#pie').innerHTML = donut(p, state.slice);
-  $('#split').innerHTML = p.slices.map(function (x) {
-    var face = x.name === 'Saved' ? '<img class="e" src="assets/3d/bag.png" width="22" height="22" alt="">' : img(x.name, 22);
-    return '<button type="button" class="slice" data-slice="' + esc(x.name) + '" aria-pressed="' + (sel === x) + '"><i class="sw" style="background:' + pieColor(x) + '"></i>' + face +
-      '<span>' + esc(x.name) + '</span><b class="num" style="font-weight:600">' + money.format(x.amount) + ' <span class="pc">' + pct(x) + '</span></b></button>';
-  }).join('');
-}
+  var notes = notesFor(ctx);
+  $('#insNotes').innerHTML = notes.length ? '<div class="card"><h2>3 things to notice <span class="pill ' + (p.focus === 'debt' ? 'bad' : 'ok') + '">' + (p.focus === 'debt' ? 'Clear loans' : 'Grow savings') + '</span></h2>' +
+    notes.map(function (n) { return noteHtml(n, prevLabel); }).join('') + '</div>' : '';
 
-// ---- Money forecast: where today's saving rate leads. Below ₹0 is still owed on loans, above is saved.
-function monthYear(d) { return MONTHS[d.getMonth()] + ' ' + d.getFullYear(); }
-function lakh(n) { var a = Math.abs(n); return a >= 100000 ? '₹' + (Math.round(a / 10000) / 10) + ' lakh' : money.format(Math.round(a)); }
-function signedLakh(n) { return (n < 0 ? '−' : n > 0 ? '+' : '') + lakh(n); }
+  // Spending by category: biggest first, with budgets and the change against the period before. Tap one for History.
+  var cats = Object.keys(s.spent).filter(function (c) { return s.spent[c] > 0; }).sort(function (a, c) { return s.spent[c] - s.spent[a]; }), top = cats.length ? s.spent[cats[0]] : 1;
+  $('#insCats').innerHTML = cats.length ? '<div class="card"><h2>Spending by category <span class="see">Tap for History</span></h2>' + cats.map(function (c) {
+    var amt = s.spent[c], bud = state.view === 'month' ? set.budgets[c] : 0, was = prev.spent[c] || 0, d = round2(amt - was), note;
+    if (bud && amt > bud) note = '<small class="neg" style="font-weight:600">' + money.format(round2(amt - bud)) + ' over budget</small>';
+    else if (b.fixed[c]) note = '<small class="muted">bill</small>';
+    else if (!was) note = '<small class="muted">new</small>';
+    else if (!d) note = '<small class="muted">same as ' + esc(prevLabel) + '</small>';
+    else note = '<small class="' + (d > 0 ? 'neg' : 'pos') + '">' + (d > 0 ? '▲ ' : '▼ ') + money.format(Math.abs(d)) + (bud ? ' · ' + Math.round(amt / bud * 100) + '% of budget' : '') + '</small>';
+    return '<button type="button" class="crow" data-catf="Expense-' + esc(c) + '">' + disc('Expense', c, 'xs', 22) + '<div class="grow"><div class="cn">' + esc(c) + ' <span class="muted">' + Math.round(amt / s.expense * 100) + '%</span></div>' +
+      '<span class="bar thin"><i style="width:' + (amt / top * 100).toFixed(1) + '%' + (bud && amt > bud ? ';background:var(--blush-d)' : '') + '"></i></span></div><div class="ca"><b class="num">' + money.format(amt) + '</b>' + note + '</div></button>';
+  }).join('') + '</div>' : '<div class="card"><h2>Spending by category</h2><p class="muted t-sm">No expenses in this period.</p></div>';
 
-function renderForecast(v) {
-  if (!v.rows.length && !v.loans.length) { $('#insForecast').innerHTML = ''; return; }
-  var now = new Date(), r = savingRate(v.rows, now, state.fcN), f = forecast(v.loans, v.repays, r.perMonth, now);
-  // cash: what comes in each month to pay loans (savings + interest from money given); gain also counts investment growth
-  var head, note = '', cash = r.perMonth + f.interestIn, gain = cash + f.growthNow;
-  if (f.hasLoans && f.payoff) head = 'Loans paid off in about <b>' + f.payoff.months + (f.payoff.months === 1 ? ' month' : ' months') + '</b>, by <b>' + monthYear(f.payoff.date) + '</b>';
-  else if (f.hasLoans && cash > f.monthlyInterestNow) head = 'Loans paid off in <b>more than 10 years</b> at this rate';
-  else if (f.hasLoans) {
-    head = 'At this saving rate the loans <b>won\'t be paid off</b>';
-    note = cash > 0 ? 'Interest adds about ' + lakh(f.monthlyInterestNow) + ' a month; saving more than that starts paying them down.'
-      : 'Nothing was saved in these months. Interest adds about ' + lakh(f.monthlyInterestNow) + ' a month.';
-  } else if (gain > 0) head = 'In 1 year you\'d have saved about <b>' + lakh(f.months[11].position) + '</b>';
-  else if (gain < 0) head = 'Spending is more than income: about <b>' + lakh(gain) + ' short</b> each month';
-  else head = 'Nothing was saved in these months';
-  var basis = (r.perMonth >= 0 ? 'Saving about <b>' + esc(money.format(Math.round(r.perMonth))) + ' a month</b>' : 'Spending about <b>' + esc(money.format(Math.round(-r.perMonth))) + ' more than income</b> a month') +
-    ' (average of ' + MONTHS[r.from.getMonth()] + (state.fcN > 1 ? '–' + MONTHS[r.to.getMonth()] : '') + ')' +
-    (f.interestIn ? ', + <b>' + esc(money.format(Math.round(f.interestIn))) + ' a month</b> interest from money given' : '') +
-    (f.growthNow ? ', + about <b>' + esc(money.format(Math.round(f.growthNow))) + ' a month</b> growth on investments' : '') +
-    (f.hasLoans && f.payoff && f.totalInterest ? '. Loan interest on the way: about <b>' + esc(lakh(f.totalInterest)) + '</b>.' : '.');
+  // The last 6 complete months: saved each month, with the savings rate
+  var ms = p.months, best = Math.max.apply(null, ms.map(function (m) { return m.savings; }).concat(1)), avg = p.n ? ms.reduce(function (t, m) { return t + m.savings; }, 0) / p.n : 0;
+  $('#insTrend').innerHTML = p.n ? '<div class="card"><h2>Last 6 months <span class="see">Saved each month</span></h2><div class="trend">' +
+    (avg > 0 ? '<span class="avg" style="bottom:' + (avg / best * 100).toFixed(1) + '%"></span>' : '') + ms.map(function (m) {
+      var rr = m.income > 0 ? m.savings / m.income : null;
+      return '<div class="c"><span>' + (rr == null ? '–' : pct(rr)) + '</span><i' + (rr != null && rr < 0.15 ? ' class="lo"' : '') + ' style="height:' + (Math.max(0, m.savings) / best * 100).toFixed(1) + '%"></i></div>';
+    }).join('') + '</div><div class="ticks">' + ms.map(function (m) { return '<span>' + MONTHS[m.start.getMonth()] + '</span>'; }).join('') + '</div>' +
+    '<p class="t-xs muted" style="margin-top:8px">Dashed: the average, ' + esc(plain(Math.round(avg))) + ' a month' + (p.savingsRate != null ? ' (' + pct(p.savingsRate) + ' of income)' : '') + '.</p></div>' : '';
 
-  var seg = '<span class="lbl" style="margin:0 0 6px 4px">Saving rate from the last</span><div class="seg sm" role="group" aria-label="Saving rate from the last">' + [3, 6, 12].map(function (n) {
-    return '<button type="button" data-fc="' + n + '" aria-pressed="' + (state.fcN === n) + '">' + n + ' months</button>';
-  }).join('') + '</div>';
-  var chips = '<div class="fc-chips">' + [[6, 'In 6 months'], [12, 'In 1 year'], [24, 'In 2 years']].map(function (x) {
-    var p = f.months[x[0] - 1];
-    return p ? '<div><span>' + x[1] + '</span><b class="num ' + (p.position < 0 ? '' : 'pos') + '">' + esc(signedLakh(p.position)) + '</b></div>' : '';
-  }).join('') + '</div>';
-  var loans = f.hasLoans ? f.perLoan.map(function (l) {
-    return '<div class="row"><img class="e" src="assets/3d/bank.png" width="26" height="26" alt=""><div class="grow">' + esc(l.reason) +
-      '<div class="t-xs muted">' + (l.interest ? esc(l.interest + '% a ' + l.per) + ' · ' : 'No interest · ') + (l.months ? 'paid off in ' + l.months + (l.months === 1 ? ' month' : ' months') : 'not paid off at this rate') + '</div></div>' +
-      (l.months ? '<span class="pill ok">' + monthYear(l.date) + '</span>' : '') + '</div>';
-  }).join('') : '';
-  if (f.hasInvest) loans += '<div class="row"><img class="e" src="assets/3d/up.png" width="26" height="26" alt=""><div class="grow">Investments<div class="t-xs muted">Worth about ' + esc(lakh(f.investedNow)) + ' now' +
-    (f.months[11] ? ', about ' + esc(lakh(f.months[11].invested)) + ' in 1 year' : '') + '</div></div></div>';
-
-  $('#insForecast').innerHTML = '<div class="card"><h2>Money forecast<span class="pill">From today</span></h2>' +
-    '<p class="fc-head">' + head + '</p>' + (note ? '<p class="t-sm muted" style="margin-top:4px">' + note + '</p>' : '') +
-    '<p class="t-sm muted" style="margin:6px 0 10px">' + basis + '</p>' + seg + forecastChart(f) + chips + loans + '</div>';
-}
-
-// One line: today's position, then each month. Shaded blush below ₹0 (still owed), mint above (saved). Tap or hover for the value.
-function forecastChart(f) {
-  var pts = [{ date: new Date(), position: -f.owedNow, owed: f.owedNow, saved: 0 }].concat(f.months.slice(0, 60));
-  var W = 320, H = 150, T = 22, B = 128, n = pts.length - 1;
-  var vals = pts.map(function (p) { return p.position; }), lo = Math.min(0, Math.min.apply(null, vals)), hi = Math.max(0, Math.max.apply(null, vals));
-  if (hi === lo) hi = lo + 1;
-  var x = function (i) { return 6 + i / n * (W - 12); }, y = function (val) { return T + (hi - val) / (hi - lo) * (B - T); }, y0 = y(0);
-  var line = pts.map(function (p, i) { return (i ? 'L' : 'M') + x(i).toFixed(1) + ' ' + y(p.position).toFixed(1); }).join(' ');
-  var area = line + ' L' + x(n).toFixed(1) + ' ' + y0.toFixed(1) + ' L' + x(0).toFixed(1) + ' ' + y0.toFixed(1) + ' Z';
-  var svg = '<defs><clipPath id="fcUp"><rect x="0" y="0" width="' + W + '" height="' + y0 + '"/></clipPath><clipPath id="fcDown"><rect x="0" y="' + y0 + '" width="' + W + '" height="' + (H - y0) + '"/></clipPath></defs>' +
-    '<path d="' + area + '" fill="var(--mint-d)" opacity=".45" clip-path="url(#fcUp)"/><path d="' + area + '" fill="var(--blush-d)" opacity=".45" clip-path="url(#fcDown)"/>' +
-    '<line x1="0" x2="' + W + '" y1="' + y0 + '" y2="' + y0 + '" stroke="var(--muted)" stroke-width="1"/><text x="' + W + '" y="' + (y0 - 4) + '" text-anchor="end">₹0</text>' +
-    '<path d="' + line + '" fill="none" stroke="var(--ink)" stroke-width="2" stroke-dasharray="5 4" stroke-linejoin="round"/>' +
-    '<circle cx="' + x(0) + '" cy="' + y(pts[0].position) + '" r="4" fill="var(--ink)"/><text x="' + x(0) + '" y="' + (T - 8) + '">Today</text>';
-  if (f.payoff && f.payoff.months <= n) {
-    var px = x(f.payoff.months), side = px < W * 0.35 ? 'start' : px > W * 0.65 ? 'end' : 'middle';
-    svg += '<circle cx="' + px + '" cy="' + y0 + '" r="5" fill="var(--mint-d)" stroke="var(--surface)" stroke-width="2"/>' +
-      '<text class="lbl halo" x="' + (px + (side === 'start' ? 8 : side === 'end' ? -8 : 0)) + '" y="' + (y0 - 10) + '" text-anchor="' + side + '">Debt-free · ' + monthYear(f.payoff.date) + '</text>';
+  // The plan: Loan plan (clear loans) or Savings plan (grow savings)
+  if (p.focus === 'debt') {
+    var limit = Math.min(60, p.pace || 24), owedLine = [p.owed].concat(p.f.months.slice(0, limit).map(function (m) { return m.owed; }));
+    var mid = p.chips.length > 1 ? p.chips[p.chips.length - 2] : null, sets = [{ v: owedLine }];
+    if (mid && mid.need != null && p.pace) sets.push({ v: [p.owed].concat(forecast(borrowedOnly(v.loans), v.repays, mid.need, now).months.slice(0, limit).map(function (m) { return m.owed; })), dashed: true });
+    var maxM = Math.max.apply(null, p.f.perLoan.map(function (l) { return l.months || 0; }).concat(1));
+    $('#insPlan').innerHTML = '<div class="card" id="loanPlan"><h2>Loan plan <span class="see">Last ' + (p.n || 6) + ' months</span></h2><b style="font-size:19px;font-weight:600">' + (p.pace ? 'Debt-free by ' + monthYear(inMonths(now, p.pace)) : 'Not paid off at this pace') + '</b>' +
+      '<div class="t-sm muted">' + money.format(p.owed) + ' owed today · ' + money.format(p.cash) + ' a month toward loans</div>' +
+      lineSvg(sets, { fill: '--blush-d', startText: lakh(p.owed), label: 'Owed going down to nothing', at: function (i) { return inMonths(now, i); } }) +
+      (sets.length > 1 ? '<p class="t-xs muted">Solid: your pace. Dotted: ' + money.format(mid.need) + ' a month, debt-free by ' + monthYear(inMonths(now, mid.months)) + '.</p>' : '') +
+      '<div class="tl">' + p.f.perLoan.map(function (l, k) {
+        return '<div class="tlr"><span>' + esc(l.reason) + '<small>' + (l.interest ? l.interest + '% a ' + l.per : 'no interest') + (k === 0 && l.months ? ' · first' : '') + '</small></span><span class="tlt"><i style="width:' + ((l.months || maxM) / maxM * 100).toFixed(1) + '%' + (l.interest ? '' : ';background:var(--peri-d)') + '"></i></span>' +
+          '<b>' + (l.months ? MONTHS[l.date.getMonth()] + ' ’' + String(l.date.getFullYear()).slice(2) : '–') + '</b></div>';
+      }).join('') + '</div>' + (p.pace && p.f.totalInterest ? '<div class="box">Interest still to pay at your pace: about <b>' + lakh(Math.round(p.f.totalInterest / 100) * 100) + '</b>. The costliest loan goes first unless one is starred.</div>' : '') + '</div>';
+  } else {
+    var lt = p.lt, n = Math.min(120, p.pace || 60), mix = {}, total = 0, mid2 = p.chips.length > 1 ? p.chips[p.chips.length - 2] : null;
+    inv.forEach(function (l) { var x = set.loans[l.id] || {}, k = x.goal ? 'Goals' : x.type ? INVEST[x.type].name : 'Other'; mix[k] = (mix[k] || 0) + l.owed; total += l.owed; });
+    var colors = ['--lavender-d', '--sky-d', '--butter-d', '--mint-d', '--peri-d', '--blush-d'], keys2 = Object.keys(mix).sort(function (a, c) { return mix[c] - mix[a]; });
+    var gsets = [{ v: growLine(lt, lt.monthly, n) }];
+    if (mid2 && p.pace) gsets.push({ v: growLine(lt, mid2.need, mid2.months), dashed: true });
+    var goals = inv.filter(function (l) { return (set.loans[l.id] || {}).goal; });
+    $('#insPlan').innerHTML = '<div class="card" id="savePlan"><h2>Savings plan <span class="see">Expected returns</span></h2><b style="font-size:19px;font-weight:600">' + lakh(p.goal) + ' by ' + (p.pace ? monthYear(inMonths(now, p.pace)) : '…') + '</b>' +
+      '<div class="t-sm muted">' + money.format(Math.round(p.worth)) + ' now · ' + money.format(lt.monthly) + ' a month going in</div>' +
+      (total ? '<div class="t-xs muted" style="margin-top:10px">What it is in</div><div class="split">' + keys2.map(function (k, i) { return '<i style="width:' + (mix[k] / total * 100).toFixed(2) + '%;background:var(' + colors[i % 6] + ')"></i>'; }).join('') + '</div>' +
+        '<div class="leg">' + keys2.map(function (k, i) { return '<div><i style="background:var(' + colors[i % 6] + ')"></i>' + esc(k) + '<b class="num">' + Math.round(mix[k] / total * 100) + '%</b></div>'; }).join('') + '</div>' : '') +
+      lineSvg(gsets, { fill: '--mint-d', goal: p.goal, goalText: lakh(p.goal) + ' goal', startText: lakh(lt.worth), label: 'Savings growing toward the goal', at: function (i) { return inMonths(now, i); } }) +
+      '<p class="t-xs muted">' + (gsets.length > 1 ? 'Solid: ' + money.format(lt.monthly) + ' a month. Dotted: ' + money.format(mid2.need) + ', reaching it by ' + monthYear(inMonths(now, mid2.months)) + '. ' : '') + 'An estimate from the expected returns, not live prices.</p>' +
+      (goals.length ? '<div style="margin-top:8px">' + goals.map(function (l) {
+        var x = set.loans[l.id], g = ctx.goals.filter(function (q) { return q.name === l.reason; })[0];
+        return '<div class="row">' + img3d('diya', 30) + '<div class="grow"><b class="t-sm">' + esc(l.reason) + '</b><small>' + money.format(Math.round(l.owed)) + ' of ' + money.format(x.goal) + (x.goalBy ? ' · by ' + monthYear(dayIn(x.goalBy, 1)) : '') + '</small>' +
+          '<span class="bar thin" style="margin-top:6px"><i style="width:' + Math.min(100, l.owed / x.goal * 100).toFixed(1) + '%;background:var(--butter-d)"></i></span></div>' +
+          (g.short ? '<span class="pill warn">' + money.format(g.short) + ' short</span>' : '<span class="pill ok">On track</span>') + '</div>';
+      }).join('') + '</div>' : '') + '</div>';
   }
-  var endY = y(pts[n].position);
-  svg += '<text class="lbl" x="' + x(n) + '" y="' + (endY + (pts[n].position >= 0 ? -8 : 14)) + '" text-anchor="end">' + esc(signedLakh(pts[n].position)) + '</text>';
-  var step = Math.ceil(n / 4);
-  for (var i = step; i <= n; i += step) svg += '<text x="' + x(i) + '" y="' + (H - 4) + '" text-anchor="' + (i > n - step / 2 ? 'end' : 'middle') + '">' + MONTHS[pts[i].date.getMonth()] + ' ’' + String(pts[i].date.getFullYear()).slice(2) + '</text>';
-  var tip = '';
-  if (state.fcPick >= 0 && state.fcPick <= n) {
-    var p = pts[state.fcPick], cx = x(state.fcPick);
-    svg += '<line x1="' + cx + '" x2="' + cx + '" y1="' + T + '" y2="' + B + '" stroke="var(--ink)" stroke-width="1" opacity=".35"/><circle cx="' + cx + '" cy="' + y(p.position) + '" r="4.5" fill="var(--ink)"/>';
-    var what = p.owed > 0 ? lakh(p.owed) + ' still owed' : lakh(p.saved) + (p.saved < 0 ? ' short' : ' saved');
-    tip = '<div class="ttip' + (cx > W / 2 ? ' r' : '') + '" style="top:0' + (cx > W / 2 ? '' : ';left:' + Math.max(0, cx / W * 100 - 4) + '%') + '"><b>' + (state.fcPick ? monthYear(p.date) : 'Today') + '</b><br>' + esc(what) + '</div>';
-  }
-  return '<div class="fc-chart" id="fcChart" data-n="' + n + '"><svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Forecast line from today over ' + n + ' months">' + svg + '</svg>' + tip + '</div>' +
-    '<p class="t-xs muted">Dashed line = forecast. Below ₹0 is still owed on loans, above is saved. Tap the graph to see a month.</p>';
+
+  // Money health: savings rate, safety net, EMI load, net worth
+  var monthStart = periodRange('month', now).start.getTime(), nw = netWorth(v.loans, v.repays, now.getTime() + 1), nwThen = netWorth(v.loans, v.repays, monthStart), aim = p.focus === 'debt' ? 1 : 6;
+  var tile = function (bg, label, big, sub) { return '<div class="ht" style="background:var(' + bg + ')"><span>' + label + '</span><b class="num">' + big + '</b><small>' + sub + '</small></div>'; };
+  $('#insHealth').innerHTML = p.n || v.loans.length ? '<div class="card"><h2>Money health</h2><div class="health">' +
+    tile(p.savingsRate == null ? '--field' : p.savingsRate >= 0.2 ? '--mint' : p.savingsRate >= 0.1 ? '--butter' : '--blush', 'Savings rate', p.savingsRate == null ? '–' : pct(p.savingsRate), 'aim for 20%+' + (p.savingsRate >= 0.2 ? ' ✓' : '')) +
+    tile(ctx.safety >= aim ? '--mint' : ctx.safety >= 1 ? '--butter' : '--blush', 'Safety net', spanText(ctx.safety), liquid ? 'FD, RD, savings · aim for ' + (aim === 1 ? '1 month first' : '6') : 'mark FDs and savings in Money') +
+    tile(ctx.emiLoad < 0.3 ? '--mint' : ctx.emiLoad < 0.4 ? '--butter' : '--blush', 'EMI load', pct(ctx.emiLoad), 'of income · keep under 30%') +
+    tile('--peri', 'Net worth', lakh(nw), (nw - nwThen >= 0 ? '▲ ' : '▼ ') + lakh(Math.abs(nw - nwThen)) + ' this month') + '</div></div>' : '';
+
+  // Business profit: only for a category with both income and expenses (Dairy, a shop)
+  var biz = v.cats.Income.filter(function (c) { return c !== 'Others' && v.cats.Expense.indexOf(c) >= 0; });
+  $('#insBiz').innerHTML = biz.length ? '<div class="card"><h2>Business profit</h2>' + biz.map(function (c) {
+    var val = s.net[c] || 0;
+    return '<div class="row">' + img(c, 28) + '<div class="grow">' + esc(c) + '<small>Income minus expenses</small></div><span class="pill ' + (val > 0 ? 'ok' : val < 0 ? 'bad' : '') + '" style="font-weight:600">' + signed(val) + '</span></div>';
+  }).join('') + '</div>' : '';
+  $('#insShare').hidden = !s.entries.length;
 }
-// Tap or hover on the graph: pick the nearest month.
-function pickForecast(ev) {
-  var c = ev.target.closest && ev.target.closest('#fcChart');
-  if (!c) return false;
-  var box = c.getBoundingClientRect(), n = Number(c.dataset.n), i = Math.round((ev.clientX - box.left - box.width * 6 / 320) / (box.width * 308 / 320) * n);
-  i = Math.max(0, Math.min(n, i));
-  if (i !== state.fcPick) { state.fcPick = i; renderForecast(view()); }
-  return true;
+
+// A WhatsApp message with the period's numbers and the plan.
+function shareSummary() {
+  var v = view(), now = new Date(), s = summarize(v.rows, state.view, state.date, 0, v.cats), p = planOf(v, now);
+  var top = Object.keys(s.spent).filter(function (c) { return s.spent[c] > 0; }).sort(function (a, b) { return s.spent[b] - s.spent[a]; }).slice(0, 3);
+  var text = [sheetOf(P).name + ' · ' + s.label,
+    'Income ' + money.format(s.income) + ' · Spent ' + money.format(s.expense) + ' · Saved ' + plain(s.savings) + (s.income > 0 ? ' (' + pct(s.savings / s.income) + ')' : ''),
+    top.length ? 'Most spent on: ' + top.map(function (c) { return c + ' ' + money.format(s.spent[c]); }).join(', ') : '',
+    p.focus === 'debt' ? (p.pace ? 'Loans: ' + money.format(p.owed) + ' left, debt-free by ' + monthYear(inMonths(now, p.pace)) : 'Loans: ' + money.format(p.owed) + ' left')
+      : 'Savings: about ' + lakh(p.worth) + (p.pace ? ', ' + lakh(p.goal) + ' by ' + monthYear(inMonths(now, p.pace)) : ''),
+    '— Family Money'].filter(Boolean).join('\n');
+  if (navigator.share) return navigator.share({ text: text }).catch(function () {});
+  window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank', 'noopener');
+}
+
+// ---- Settings
+function sheetsHtml() {
+  var list = sheets();
+  return list.map(function (s) {
+    var n = load(keys(s.p).ops, []).length;
+    return '<div class="srow"><button type="button" class="opt" data-sheet="' + s.p + '" aria-pressed="' + (s.p === P) + '"><span class="disc xs" style="background:var(' + (SHEET_PICS[s.pic] || '--sky') + ')">' + img3d(s.pic, 24) + '</span>' +
+      '<span class="grow"><span class="what">' + esc(s.name) + '</span>' + (n ? '<small>' + n + ' waiting to sync</small>' : '') + '</span></button>' +
+      '<button type="button" class="rbtn xs" data-sren="' + s.p + '" aria-label="Rename ' + esc(s.name) + '">' + icon('pencil-simple', 'sm') + '</button>' +
+      (list.length > 1 ? '<button type="button" class="rbtn xs" data-sdel="' + s.p + '" aria-label="Remove ' + esc(s.name) + '">' + icon('trash', 'sm') + '</button>' : '') + '</div>';
+  }).join('') + '<button type="button" class="opt" id="addSheet"><span class="disc xs" style="background:var(--field)">' + icon('plus', 'sm') + '</span>Add a new sheet</button>';
+}
+function segHtml(attr, cur, opts) {
+  return '<div class="seg">' + opts.map(function (o) { return '<button type="button" data-' + attr + '="' + o[0] + '" aria-pressed="' + (o[0] === cur) + '">' + o[1] + '</button>'; }).join('') + '</div>';
+}
+function renderSettings(v) {
+  var set = v.settings, now = new Date(), synced = load(K.synced, 0), me2 = sheetOf(P), auto = focusOf(v.loans, v.repays, newSettings(), now);
+  var cfg = !!load(K.cfg, null) && !!load(K.settings, null); // settings need the updated script
+  var budgetRow = function (label, sub, attr, value, picture) {
+    return '<div class="row">' + picture + '<div class="grow">' + label + (sub ? '<small>' + sub + '</small>' : '') + '</div><input class="field num" inputmode="decimal" ' + attr + ' value="' + (value || '') + '" placeholder="₹ a month" aria-label="' + esc(label) + ' budget"></div>';
+  };
+  var bills = Object.keys(set.bills).sort(function (a, b) { return set.bills[a].day - set.bills[b].day; });
+  $('#setList').innerHTML =
+    '<div class="card set"><div class="row"><span class="av" style="background:var(' + (SHEET_PICS[me2.pic] || '--sky') + ')">' + img3d(me2.pic, 30) + '</span><div class="grow"><b>' + esc(me2.name) + '</b><small>Google Sheet' + (synced ? ' · synced ' + clock.format(new Date(synced)) : '') + '</small></div>' +
+      '<button type="button" class="rbtn xs" data-sren="' + P + '" aria-label="Rename">' + icon('pencil-simple', 'sm') + '</button></div>' +
+      '<div class="row">' + img3d('wave', 26) + '<div class="grow">This phone is used by<small>Shown as "Added by" on entries</small></div><input class="field" id="meName" value="' + esc(me()) + '" placeholder="Your name" maxlength="30" style="width:130px;text-align:left" aria-label="Your name"></div></div>' +
+    (cfg ? '' : '<div class="box">Budgets, bills and the focus are saved in the Google Sheet. Update its Apps Script (README: Updating Apps Script) to change them; until then they wait on this phone.</div>') +
+    '<div class="card"><h2>Focus</h2>' + segHtml('focus', set.focus, [['auto', 'Auto'], ['debt', 'Clear loans'], ['grow', 'Grow savings']]) +
+      '<p class="t-xs muted" style="margin-top:8px">' + (set.focus === 'auto' ? 'Auto picked <b>' + (auto === 'debt' ? 'Clear loans' : 'Grow savings') + '</b>: ' + (auto === 'debt' ? 'more is owed than the savings are worth.' : 'the savings are worth more than what is owed.') : 'Home and Insights show this focus.') + '</p>' +
+      '<div class="row" style="margin-top:6px">' + img3d('seed', 26) + '<div class="grow">Savings goal<small>' + (set.goal ? 'For Grow savings' : 'Auto: ' + lakh(goalOf(set, longTerm(v.loans, v.repays, set, now).worth))) + '</small></div><input class="field num" inputmode="decimal" id="goalIn" value="' + (set.goal || '') + '" placeholder="Auto" aria-label="Savings goal"></div></div>' +
+    '<div class="card set"><h2>Budgets</h2>' + budgetRow('Everyday spending', 'Every category without a bill', 'data-daily', set.daily, img3d('bag', 26)) +
+      v.cats.Expense.map(function (c) { return budgetRow(esc(c), '', 'data-budget="' + esc(c) + '"', set.budgets[c], img(c, 26)); }).join('') +
+      '<p class="t-xs muted" style="padding-top:6px">Rent, fees and EMIs are bills, not budgets. A blank budget is none.</p></div>' +
+    '<div class="card"><h2>Bills &amp; reminders <button type="button" class="see" id="addBill">+ Add</button></h2>' + (bills.length ? bills.map(function (id) {
+      var bl = set.bills[id];
+      return '<button type="button" class="row" data-bill="' + esc(id) + '" style="width:100%;text-align:left">' + img(bl.category, 26) + '<div class="grow">' + esc(bl.name) + '<small>' + ordinal(bl.day) + (bl.every === 1 ? ' of every month' : ', every ' + (bl.every === 12 ? 'year' : bl.every + ' months')) + ' · next ' + day.format(dayIn(bl.next, bl.day)) + '</small></div>' +
+        '<b class="num">' + money.format(bl.amount) + '</b>' + icon('pencil-simple', 'sm muted') + '</button>';
+    }).join('') : '<p class="t-sm muted">Rent, school fees, electricity, LIC: add them here, or switch on "Repeat every month" when you add an expense.</p>') +
+      '<p class="t-xs muted" style="padding-top:6px">EMIs and SIPs are set on their loan or investment in Money.</p></div>' +
+    '<div class="card"><h2>Year</h2>' + segHtml('year', set.year, [['jan', 'January–December'], ['apr', 'April–March (FY)']]) + '<p class="t-xs muted" style="margin-top:8px">What "Year" means in Insights. April–March is the Indian financial year.</p></div>' +
+    '<div class="card"><h2>Theme</h2>' + segHtml('theme', load('fm.theme', 'auto'), [['auto', 'Auto'], ['light', 'Light'], ['dark', 'Dark']]) + '</div>' +
+    '<div class="card"><h2>Sheets on this phone</h2><div style="display:grid;gap:2px">' + sheetsHtml() + '</div></div>' +
+    '<button type="button" class="btn soft" data-tab="cats">' + icon('pencil-simple', 'sm') + 'Edit categories</button>' +
+    '<button type="button" class="btn soft" id="shareMonth">' + icon('share', 'sm') + 'Share this month on WhatsApp</button>';
 }
 
 // The active sheet's picture and name: in the sidebar on a wide screen, in the Home header on a phone. Either opens the list of sheets.
 function renderHead() {
-  var phoneHome = state.tab === 'home' && !wide.matches, me = sheetOf(P), list = sheets();
+  var phoneHome = state.tab === 'home' && !wide.matches, me2 = sheetOf(P);
   $('#avatar').hidden = !phoneHome;
-  $('#backHome').hidden = !(state.tab === 'cats' || (state.tab === 'history' && !wide.matches)); // these open from Home (History has its own tab on a wide screen)
-  $('#headTitle').textContent = phoneHome ? me.name : TABS[state.tab][1];
-  $('#sideName').textContent = me.name;
-  ['#avatar', '#sideAv'].forEach(function (s) { $(s).style.background = 'var(' + SHEET_PICS[me.pic] + ')'; $(s + ' img').src = 'assets/3d/' + me.pic + '.png'; });
+  $('#backHome').hidden = !(state.tab === 'cats' || state.tab === 'settings');
+  $('#headTitle').textContent = phoneHome ? me2.name : TABS[state.tab][1];
+  $('#sideName').textContent = me2.name;
+  ['#avatar', '#sideAv'].forEach(function (s) { $(s).style.background = 'var(' + (SHEET_PICS[me2.pic] || '--sky') + ')'; $(s + ' img').src = 'assets/3d/' + me2.pic + '.png'; });
   if (phoneHome) {
     $('#headTitle').insertAdjacentHTML('beforeend', icon('caret-right', 'sm dda'));
-    $('#headSub').innerHTML = 'Namaste <img class="e" src="assets/3d/wave.png" width="16" height="16" alt="">';
+    $('#headSub').innerHTML = 'Namaste' + (me() ? ' ' + esc(me()) : '') + ' <img class="e" src="assets/3d/wave.png" width="16" height="16" alt="">';
   }
-  $('#ddSheets').innerHTML = '<h4>Sheets on this device</h4>' + list.map(function (s) {
-    var n = load(keys(s.p).ops, []).length;
-    return '<div class="srow"><button type="button" class="opt" data-sheet="' + s.p + '" aria-pressed="' + (s.p === P) + '"><span class="disc xs" style="background:var(' + SHEET_PICS[s.pic] + ')"><img class="e" src="assets/3d/' + s.pic + '.png" width="24" height="24" alt=""></span>' +
-      '<span class="grow"><span class="what">' + esc(s.name) + '</span>' + (n ? '<small>' + n + ' waiting to sync</small>' : '') + '</span></button>' +
-      '<button type="button" class="rbtn xs" data-sren="' + s.p + '" aria-label="Rename ' + esc(s.name) + '">' + icon('pencil-simple', 'sm') + '</button>' +
-      (list.length > 1 ? '<button type="button" class="rbtn xs" data-sdel="' + s.p + '" aria-label="Remove ' + esc(s.name) + '">' + icon('trash', 'sm') + '</button>' : '') + '</div>';
-  }).join('') +
-    '<button type="button" class="opt" id="addSheet"><span class="disc xs" style="background:var(--field)">' + icon('plus', 'sm') + '</span>Add a new sheet</button>' +
+  $('#ddSheets').innerHTML = '<h4>Sheets on this phone</h4>' + sheetsHtml() +
+    '<button type="button" class="opt" data-tab="settings"><span class="disc xs" style="background:var(--field)">' + img3d('spark', 22) + '</span>Settings: budgets, bills, focus</button>' +
     // Only once this sheet's Apps Script has sent its list: an older script would drop category changes.
     (load(K.cats, null) ? '<button type="button" class="opt" id="editCats"><span class="disc xs" style="background:var(--field)">' + icon('pencil-simple', 'sm') + '</span>Edit categories</button>' : '');
 }
@@ -564,24 +873,30 @@ function renderCats(v) {
 
 // Queued like any other change, so it waits offline and reaches the sheet in order with the entries.
 function editCat(action, type, name) {
-  var v = view(), what = type === 'Income' ? 'income' : 'expense', to = '';
+  var v = view(), what = type === 'Income' ? 'income' : 'expense';
   var n = name ? v.rows.filter(function (e) { return e.type === type && e.category === name; }).length : 0;
-  if (action === 'delete') {
-    if (!confirm('Delete ' + name + '?' + (n ? ' Its ' + n + (n === 1 ? ' entry moves' : ' entries move') + ' to Others.' : ''))) return;
-  } else {
-    to = prompt(action === 'add' ? 'Name of the new ' + what + ' category' : 'Rename ' + name + ' to', name || '');
-    to = to == null ? '' : to.trim();
-    if (!to || to === name) return;
-    if (!checkCatName(to)) return alert('Start with a letter, use at most 30 characters, and leave out " * ? ~ < > =');
-    var hit = matchName(v.cats[type], to);
-    if (hit && action === 'add') return alert('There is already an ' + what + ' category called ' + hit + '.');
-    if (hit && hit !== name && !confirm(hit + ' already exists. Move ' + (n === 1 ? 'the 1 ' + name + ' entry' : 'all ' + n + ' ' + name + ' entries') + ' into ' + hit + '?')) return;
+  function done(to) {
+    var err = queue('cat', action, null, { type: type, name: action === 'add' ? to : name, to: to });
+    if (err) return toast(err, true);
+    toast(action === 'add' ? 'Added ' + to : action === 'delete' ? 'Deleted ' + name : 'Renamed to ' + to);
+    render();
+    trySync();
   }
-  var err = queue('cat', action, null, { type: type, name: action === 'add' ? to : name, to: to });
-  if (err) return alert(err);
-  toast(action === 'add' ? 'Added ' + to : action === 'delete' ? 'Deleted ' + name : 'Renamed to ' + to);
-  render();
-  trySync();
+  if (action === 'delete') {
+    return ask({ title: 'Delete ' + name + '?', text: n ? 'Its ' + n + (n === 1 ? ' entry moves' : ' entries move') + ' to Others.' : '', ok: 'Delete', danger: true }).then(function (yes) { if (yes) done(''); });
+  }
+  ask({ title: action === 'add' ? 'Name of the new ' + what + ' category' : 'Rename ' + name + ' to', input: name || '', ok: action === 'add' ? 'Add' : 'Rename', check: function (to) {
+    if (!checkCatName(to)) return 'Start with a letter, use at most 30 characters, and leave out " * ? ~ < > =';
+    var hit = matchName(v.cats[type], to);
+    return hit && action === 'add' ? 'There is already an ' + what + ' category called ' + hit + '.' : '';
+  } }).then(function (to) {
+    if (!to || to === name) return;
+    var hit = matchName(v.cats[type], to);
+    if (hit && hit !== name) {
+      return ask({ title: hit + ' already exists', text: 'Move ' + (n === 1 ? 'the 1 ' + name + ' entry' : 'all ' + n + ' ' + name + ' entries') + ' into ' + hit + '?', ok: 'Move them' }).then(function (yes) { if (yes) done(to); });
+    }
+    done(to);
+  });
 }
 
 function render() {
@@ -589,15 +904,17 @@ function render() {
   $('#setup').hidden = !!load(K.cfg, null) && state.error !== 'wrong key';
   renderHead();
   renderSync();
-  ({ home: renderHome, history: renderHistory, cats: renderCats, loans: renderLoans, given: renderLoans, invested: renderLoans, insights: renderInsights })[state.tab](v);
+  ({ home: renderHome, history: renderHistory, cats: renderCats, settings: renderSettings, loans: renderLoans, given: renderLoans, invested: renderLoans, insights: renderInsights })[state.tab](v);
 }
 
-// ---- One bottom sheet for every form: amount (the phone's own number pad), reason, date and time
+// ---- One bottom sheet for every form: amount (the phone's own number pad), category, reason, date, and the loan's options
 function amountValue() { return Number(state.amt) || 0; }
 function amountText(a) {
   var parts = a.split('.');
   return '₹' + (Number(parts[0]) || 0).toLocaleString('en-IN') + (parts.length > 1 ? '.' + parts[1] : '');
 }
+function numberOf(s) { var n = Number(String(s || '').replace(/[,₹\s]/g, '')); return n > 0 && isFinite(n) ? Math.round(n * 100) / 100 : 0; }
+function dayOf(s) { var n = Number(String(s || '').trim()); return n === Math.floor(n) && n >= 1 && n <= 31 ? n : 0; }
 
 // Digits and one dot, at most 9 digits before it and 2 after. Commas typed as thousands separators are dropped.
 function cleanAmount(v) {
@@ -605,12 +922,28 @@ function cleanAmount(v) {
   return parts[0].replace(/^0+(?=\d)/, '').slice(0, 9) + (parts.length > 1 ? '.' + parts.slice(1).join('').slice(0, 2) : '');
 }
 
+function payLabel(dir, kind) { return { emi: 'Pay EMI', back: dir === 'borrowed' ? 'Pay back' : dir === 'given' ? 'Got back' : 'Withdraw', int: dir === 'borrowed' ? 'Pay interest' : 'Got interest', add: 'Add money' }[kind]; }
+// The EMI split: this month's interest on what is owed is an expense, the rest pays the loan back.
+function emiSplit(l, amount) {
+  var r = l.interest > 0 ? l.interest / (l.per === 'year' ? 1200 : 100) : 0, interest = round2(l.owed * r);
+  return { interest: interest, principal: round2(Math.min(l.owed, amount - interest)) };
+}
 function renderAmount() {
-  var txt = state.amt ? amountText(state.amt) : '';
+  var txt = state.amt ? amountText(state.amt) : '', sh = state.sheet;
   if ($('#amount').value !== state.amt) $('#amount').value = state.amt;
-  var T = LOAN_TEXT[state.sheet.dir || 'borrowed'];
-  var label = { add: 'Save', edit: 'Save changes', 'loan-add': T.save, 'loan-edit': 'Save changes', repay: T.action }[state.sheet.mode];
-  $('#saveText').textContent = amountValue() > 0 && state.sheet.mode !== 'edit' && state.sheet.mode !== 'loan-edit' ? label + ' ' + txt : label;
+  var T = LOAN_TEXT[sh.dir || 'borrowed'];
+  var label = { add: 'Save', edit: 'Save changes', 'loan-add': T.save, 'loan-edit': 'Save changes', repay: payLabel(sh.dir, sh.pay), bill: sh.id ? 'Save bill' : 'Add bill' }[sh.mode];
+  $('#saveText').textContent = amountValue() > 0 && (sh.mode === 'add' || sh.mode === 'loan-add' || sh.mode === 'repay') ? label + ' ' + txt : label;
+  if (sh.mode === 'repay') renderPayInfo();
+}
+function renderPayInfo() {
+  var sh = state.sheet, l = sh.loan, a = amountValue(), t;
+  if (sh.pay === 'emi') { var s = emiSplit(l, a); t = a ? '<b>' + money.format(s.interest) + '</b> interest (an expense) + <b>' + money.format(Math.max(0, s.principal)) + '</b> paid back. ' + money.format(round2(l.owed - Math.max(0, s.principal))) + ' left after this.' : 'This month\'s interest is about ' + money.format(s.interest) + '.'; }
+  else if (sh.pay === 'int') t = sh.dir === 'given' ? 'It goes into <b>Income › Interest</b>. It doesn\'t lower the ' + money.format(l.owed) + ' still to get.' : '<b>Interest is a cost.</b> It goes into Expenses › Loan interest and doesn\'t lower the ' + money.format(l.owed) + ' you owe.';
+  else if (sh.pay === 'add') t = 'Adds to it, like this month\'s SIP. It isn\'t an expense: it comes out of what you saved.';
+  else t = sh.dir === 'invested' ? 'Takes money out. Worth now is about ' + money.format(Math.round(l.owed)) + '.' : 'Lowers the ' + money.format(l.owed) + (sh.dir === 'given' ? ' still to get.' : ' you owe.');
+  $('#payInfo').innerHTML = t;
+  $('#payInfo').hidden = false;
 }
 
 function recentNotes(type, category) {
@@ -630,16 +963,13 @@ function renderNoteChips() {
   }).join('');
 }
 
-// Category dropdown: adding shows that type's categories; editing shows both, so a wrong type can be fixed.
+// Category grid: one tap. Income or Expense is switched above it.
 function renderCat() {
-  var sh = state.sheet, types = sh.mode === 'edit' ? ['Income', 'Expense'] : [sh.type], cats = view().cats;
-  function disc(type, c) { return '<span class="disc xs" style="background:var(' + discOf(type, c) + ')">' + img(c, 24) + '</span>'; }
-  $('#catBtn').innerHTML = (sh.category ? disc(sh.type, sh.category) + esc(sh.category) : '<span class="ph">Choose a category</span>') + icon('caret-right', 'sm dda');
-  $('#catList').innerHTML = types.map(function (type) {
-    return (types.length > 1 ? '<h4>' + (type === 'Income' ? 'Income' : 'Expenses') + '</h4>' : '') + cats[type].map(function (c) {
-      return '<button type="button" class="opt" data-cat-type="' + type + '" data-cat="' + esc(c) + '" aria-pressed="' + (sh.type === type && sh.category === c) + '">' + disc(type, c) + esc(c) + '</button>';
-    }).join('');
+  var sh = state.sheet, cats = view().cats[sh.type] || [];
+  $('#catGrid').innerHTML = cats.map(function (c) {
+    return '<button type="button" class="cg" data-cat="' + esc(c) + '" aria-pressed="' + (sh.category === c) + '"><span class="disc" style="background:var(' + discOf(sh.type, c) + ')">' + img(c, 28) + '</span>' + esc(c) + '</button>';
   }).join('');
+  document.querySelectorAll('#typeSeg button').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.type === sh.type)); });
 }
 // Dropdowns: a button with aria-controls opens its list; picking, tapping outside or Esc closes it.
 function toggleDD(btn, open) {
@@ -649,11 +979,10 @@ function toggleDD(btn, open) {
 function closeDDs(target) {
   document.querySelectorAll('[aria-controls][aria-expanded="true"]').forEach(function (b) { if (!target || !b.parentNode.contains(target)) toggleDD(b, false); });
 }
-function toggleCat(open) { toggleDD($('#catBtn'), open); }
 
 // Header of the sheet: picture, title and the coloured pill under it.
-function sheetHeader(picture, disc, title, pillCls, pillHtml) {
-  $('#sheetDisc').style.background = 'var(' + disc + ')';
+function sheetHeader(picture, bg, title, pillCls, pillHtml) {
+  $('#sheetDisc').style.background = 'var(' + bg + ')';
   $('#sheetImg').src = 'assets/3d/' + picture + '.png';
   $('#sheetTitle').textContent = title;
   $('#sheetKind').className = 'pill ' + pillCls;
@@ -662,6 +991,7 @@ function sheetHeader(picture, disc, title, pillCls, pillHtml) {
 
 function entryHeader() {
   var sh = state.sheet, isIn = sh.type === 'Income', c = sh.category;
+  if (sh.mode === 'bill') return sheetHeader(c ? pic(c) : 'cal', c ? discOf('Expense', c) : '--butter', sh.id ? 'Edit bill' : 'New bill', 'warn', img3d('cal', 14) + 'Reminder in Due soon');
   sheetHeader(c ? pic(c) : isIn ? 'up' : 'wings', c ? discOf(sh.type, c) : isIn ? '--mint' : '--blush', c || (isIn ? 'New income' : 'New expense'), isIn ? 'ok' : 'bad',
     icon(isIn ? 'arrow-down-left' : 'arrow-up-right', 'sm') + (isIn ? 'Income' : 'Expense'));
 }
@@ -670,67 +1000,113 @@ function localInputValue(d) {
   return new Date(d - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
 }
 
+// Today (default), Yesterday, or a picked date and time. Editing shows the saved one, ready to change.
 function setWhen(dateTime) {
-  if (dateTime) { // editing: show the saved date and time, ready to change
-    $('#when').value = localInputValue(new Date(dateTime));
-    $('#whenBox').hidden = false;
-    $('.when').hidden = true;
-  } else {
-    $('#whenBox').hidden = true;
-    $('.when').hidden = false;
-    $('#whenText').textContent = 'Now, ' + clock.format(new Date());
+  var sh = state.sheet;
+  sh.day = 0;
+  $('#when').value = localInputValue(dateTime ? new Date(dateTime) : new Date());
+  $('#whenBox').hidden = !dateTime;
+  renderDay();
+}
+function renderDay() {
+  var picked = !$('#whenBox').hidden;
+  document.querySelectorAll('#dateChips [data-day]').forEach(function (b) { b.setAttribute('aria-pressed', String(!picked && Number(b.dataset.day) === state.sheet.day)); });
+  $('#changeWhen').setAttribute('aria-pressed', String(picked));
+}
+function renderQuick() {
+  var sh = state.sheet, chips = QUICK.map(function (q) { return '<button type="button" class="chip" data-add="' + q + '">+' + money.format(q) + '</button>'; });
+  if (sh.mode === 'repay') {
+    var l = sh.loan, x = view().settings.loans[l.id] || {};
+    if (sh.pay === 'back' && sh.dir !== 'invested') chips.unshift('<button type="button" class="chip dark" data-set="' + l.owed + '">Full ' + esc(money.format(l.owed)) + '</button>');
+    if (sh.pay === 'int' && l.monthly) chips.unshift('<button type="button" class="chip dark" data-set="' + Math.round(l.monthly) + '">This month ' + esc(money.format(Math.round(l.monthly))) + '</button>');
+    if (sh.pay === 'emi' && x.emi) chips = ['<button type="button" class="chip dark" data-set="' + x.emi + '">EMI ' + esc(money.format(x.emi)) + '</button>'];
+    if (sh.pay === 'add' && x.sip) chips.unshift('<button type="button" class="chip dark" data-set="' + x.sip + '">This month ' + esc(money.format(x.sip)) + '</button>');
   }
+  $('#quick').innerHTML = chips.join('');
+}
+function renderPaySeg() {
+  var sh = state.sheet, l = sh.loan, x = view().settings.loans[l.id] || {}, kinds;
+  if (sh.dir === 'borrowed') kinds = x.emi ? ['emi', 'back'] : ['back'].concat(l.interest > 0 ? ['int'] : []); // an EMI carries the interest
+  else if (sh.dir === 'given') kinds = ['back'].concat(l.interest > 0 ? ['int'] : []);
+  else kinds = ['add', 'back'];
+  if (kinds.indexOf(sh.pay) < 0) sh.pay = kinds[0];
+  $('#paySeg').hidden = kinds.length < 2;
+  $('#paySeg').innerHTML = kinds.map(function (k) { return '<button type="button" data-paykind="' + k + '" aria-pressed="' + (k === sh.pay) + '">' + (k === 'emi' ? 'EMI' : payLabel(sh.dir, k)) + '</button>'; }).join('');
+  var T = LOAN_TEXT[sh.dir];
+  sheetHeader(sh.dir === 'invested' ? 'up' : T.pic, T.color, l.reason, T.pill, (sh.dir === 'invested' ? 'Worth about ' + money.format(Math.round(l.owed)) : esc(money.format(l.owed)) + T.left2));
 }
 
 function openSheet(sh, values) {
   values = values || {};
   state.sheet = sh;
-  state.amt = values.amount ? String(values.amount) : '';
-  var isEntry = sh.mode === 'add' || sh.mode === 'edit', isLoan = sh.mode === 'loan-add' || sh.mode === 'loan-edit', T = LOAN_TEXT[sh.dir || 'borrowed'];
-  if (isEntry) entryHeader();
-  else if (isLoan) sheetHeader(T.pic, T.color, sh.mode === 'loan-add' ? T.newTitle : T.editTitle, T.pill, icon(T.kindIcon, 'sm') + T.kind);
-  else sheetHeader(T.pic, '--mint', sh.loan.reason, 'ok', icon(T.actionIcon, 'sm') + T.action + ', ' + esc(money.format(sh.owed)) + T.left2);
-
-  $('#catBox').hidden = !isEntry;
-  if (isEntry) renderCat();
-  toggleCat(isEntry && !sh.category); // a new entry opens with the list showing
-  $('#noteBox').hidden = sh.mode === 'repay';
-  $('#noteLabel').textContent = isLoan ? T.label : 'Reason';
-  $('#note').placeholder = isLoan ? T.ph : 'What was it for?';
+  state.amt = values.amount ? String(Math.abs(values.amount)) : '';
+  var mode = sh.mode, isEntry = mode === 'add' || mode === 'edit', isLoan = mode === 'loan-add' || mode === 'loan-edit', isPay = mode === 'repay', isBill = mode === 'bill', T = LOAN_TEXT[sh.dir || 'borrowed'];
+  if (isEntry || isBill) entryHeader();
+  else if (isLoan) sheetHeader(T.pic, T.color, mode === 'loan-add' ? T.newTitle : T.editTitle, T.pill, icon(T.kindIcon, 'sm') + T.kind);
+  $('#typeSeg').hidden = !isEntry;
+  $('#paySeg').hidden = true;
+  $('#payInfo').hidden = true;
+  if (isPay) renderPaySeg();
+  $('#catGrid').hidden = !(isEntry || isBill);
+  if (isEntry || isBill) renderCat();
+  $('#noteBox').hidden = isPay;
+  $('#noteLabel').textContent = isLoan ? T.label : isBill ? 'Bill name' : 'Reason (optional)';
+  $('#note').placeholder = isLoan ? T.ph : isBill ? 'e.g. Rent, Electricity, LIC' : 'What was it for?';
   $('#note').value = values.note || '';
-  $('#quick').innerHTML = (sh.mode === 'repay' ? '<button type="button" class="chip dark" data-set="' + sh.owed + '">Full ' + esc(money.format(sh.owed)) + '</button>' : '') +
-    QUICK.map(function (q) { return '<button type="button" class="chip" data-add="' + q + '">+' + money.format(q) + '</button>'; }).join('');
-  $('#deleteBtn').hidden = sh.mode !== 'edit' && sh.mode !== 'loan-edit';
-  $('#deleteText').textContent = sh.mode === 'loan-edit' ? 'Delete' : 'Delete entry';
+  $('#deleteBtn').hidden = !(mode === 'edit' || mode === 'loan-edit' || (isBill && sh.id));
+  $('#deleteText').textContent = mode === 'edit' ? 'Delete entry' : isBill ? 'Delete bill' : 'Delete';
   $('#err').textContent = '';
-  setWhen(values.dateTime);
+  $('#dateChips').hidden = isBill || mode === 'edit' || mode === 'loan-edit';
+  setWhen(mode === 'edit' || mode === 'loan-edit' ? values.dateTime : null);
+  $('#repeatBox').hidden = !(mode === 'add' && !sh.bill && sh.type === 'Expense');
+  $('#repeat').checked = false;
+  $('#billBox').hidden = !isBill;
+  if (isBill) { $('#billDay').value = values.day || ''; sh.every = values.every || 1; renderEvery(); }
+  $('#loanOpts').hidden = !isLoan;
+  if (isLoan) loanOpts(values);
+  renderQuick();
   renderAmount();
   if (isEntry) renderNoteChips(); else $('#noteChips').hidden = true;
-  $('#loanOpts').hidden = !isLoan;
-  if (isLoan) {
-    $('#rate').value = values.interest || '';
-    sh.per = values.per || T.per;
-    sh.priority = values.priority || 'medium';
-    sh.compound = values.compound !== false;
-    $('#prioBox').hidden = sh.dir === 'invested'; // an investment has no priority, but compound or simple growth
-    $('#compBox').hidden = sh.dir !== 'invested';
-    $('#rateLabel').textContent = T.rate;
-    renderRate();
-  }
+  var by = values.by || (mode === 'add' ? me() : '');
+  $('#byLine').textContent = isEntry ? (by ? 'Added by ' + by : mode === 'add' ? 'Put your name in Settings to show who added it' : '') : '';
   $('#sheet').showModal();
   // Open the number pad straight away for new things; editing keeps the keyboard down so the form stays visible.
-  if (sh.mode === 'edit' || sh.mode === 'loan-edit') $('#saveBtn').focus();
-  else if (isEntry && !sh.category) $('#catBtn').focus();
+  if (mode === 'edit' || mode === 'loan-edit' || (isBill && sh.id)) $('#saveBtn').focus();
+  else if ((isEntry || isBill) && !sh.category) $('#catGrid').focus();
   else $('#amount').focus();
+}
+function renderEvery() { document.querySelectorAll('#everySeg button').forEach(function (b) { b.setAttribute('aria-pressed', String(Number(b.dataset.every) === state.sheet.every)); }); }
+
+// A loan's own options: interest for all three; EMI and "Pay this first" for a loan; type, SIP and goal for an investment.
+function loanOpts(values) {
+  var sh = state.sheet, T = LOAN_TEXT[sh.dir], x = values.x || {};
+  $('#rate').value = values.interest || '';
+  sh.per = values.per || T.per;
+  sh.priority = values.priority || 'medium';
+  sh.compound = values.compound !== false;
+  sh.type = x.type || '';
+  $('#typeBox').hidden = $('#compBox').hidden = $('#sipBox').hidden = $('#goalBox').hidden = sh.dir !== 'invested';
+  $('#emiBox').hidden = $('#starBox').hidden = sh.dir !== 'borrowed';
+  $('#emi').value = x.emi || '';
+  $('#emiDay').value = sh.dir === 'borrowed' ? x.day || '' : '';
+  $('#sip').value = x.sip || '';
+  $('#sipDay').value = sh.dir === 'invested' ? x.day || '' : '';
+  $('#goal').value = x.goal || '';
+  $('#goalBy').value = x.goalBy || '';
+  $('#star').checked = !!x.star || sh.priority === 'high';
+  $('#rateLabel').textContent = T.rate;
+  renderRate();
 }
 
 function renderRate() {
-  var r = Number($('#rate').value.replace(',', '.')) || 0;
-  document.querySelectorAll('[data-per]').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.per === state.sheet.per)); });
-  document.querySelectorAll('[data-prio]').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.prio === state.sheet.priority)); });
-  document.querySelectorAll('[data-comp]').forEach(function (b) { b.setAttribute('aria-pressed', String((b.dataset.comp === 'compound') === state.sheet.compound)); });
-  $('#rateChips').innerHTML = LOAN_TEXT[state.sheet.dir || 'borrowed'].rates.map(function (x) {
+  var r = Number($('#rate').value.replace(',', '.')) || 0, sh = state.sheet;
+  document.querySelectorAll('[data-per]').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.per === sh.per)); });
+  document.querySelectorAll('[data-comp]').forEach(function (b) { b.setAttribute('aria-pressed', String((b.dataset.comp === 'compound') === sh.compound)); });
+  $('#rateChips').innerHTML = LOAN_TEXT[sh.dir || 'borrowed'].rates.map(function (x) {
     return '<button type="button" class="chip" data-rate="' + x + '" aria-pressed="' + (x === r) + '">' + (x ? x + '%' : 'No interest') + '</button>';
+  }).join('');
+  $('#invTypes').innerHTML = Object.keys(INVEST).map(function (k) {
+    return '<button type="button" class="chip" data-itype="' + k + '" aria-pressed="' + (k === sh.type) + '">' + esc(INVEST[k].name) + '</button>';
   }).join('');
 }
 
@@ -742,45 +1118,102 @@ function openEdit(id) {
 }
 
 function openLoanEdit(id) {
-  var l = findById(view().loans, id);
-  if (l) openSheet({ mode: 'loan-edit', id: l.id, dir: loanDir(l) }, { amount: l.amount, note: l.reason, dateTime: l.dateTime, interest: l.interest, per: l.per, priority: l.priority, compound: l.compound });
+  var v = view(), l = findById(v.loans, id);
+  if (l) openSheet({ mode: 'loan-edit', id: l.id, dir: loanDir(l) }, { amount: l.amount, note: l.reason, dateTime: l.dateTime, interest: l.interest, per: l.per, priority: l.priority, compound: l.compound, x: v.settings.loans[l.id] });
 }
 
-function openRepay(id) {
-  var v = view(), l = findById(summarizeLoans(v.loans, v.repays).loans, id);
-  if (l) openSheet({ mode: 'repay', loan: l, owed: l.owed, dir: loanDir(findById(v.loans, id)) });
+function openRepay(id, kind) {
+  var v = view(), l = findById(summarizeLoans(v.loans, v.repays, null, null, new Date()).loans, id), x;
+  if (!l) return;
+  x = v.settings.loans[id] || {};
+  kind = kind || (l.dir === 'borrowed' && x.emi ? 'emi' : l.dir === 'invested' ? 'add' : 'back');
+  var amount = kind === 'emi' ? x.emi : kind === 'int' ? Math.round(l.monthly) : kind === 'add' ? x.sip : 0;
+  openSheet({ mode: 'repay', loan: l, dir: l.dir, pay: kind }, { amount: amount });
+}
+function openBill(id) {
+  var b = id && view().settings.bills[id];
+  openSheet({ mode: 'bill', type: 'Expense', category: b ? b.category : '', id: id || '' }, b ? { amount: b.amount, note: b.name, day: b.day, every: b.every } : {});
 }
 
 function saveSheet(ev) {
   ev.preventDefault();
-  var sh = state.sheet, amount = Math.round(amountValue() * 100) / 100, reason = $('#note').value.trim();
-  if ((sh.mode === 'add' || sh.mode === 'edit') && !sh.category) { $('#err').textContent = 'Choose a category'; toggleCat(true); return; }
-  if (!(amount > 0)) { $('#err').textContent = 'Type the amount'; return; }
-  var T = LOAN_TEXT[sh.dir || 'borrowed'];
-  if (sh.mode !== 'repay' && !reason) { $('#err').textContent = sh.mode.indexOf('loan') === 0 ? T.need : 'Write what it was for'; $('#note').focus(); return; }
-  // (a withdrawal can be more than the estimated worth)
-  if (sh.mode === 'repay' && sh.dir !== 'invested' && amount > sh.owed) { $('#err').textContent = 'That is more than the ' + money.format(sh.owed) + T.over; return; }
-  var dt = $('#whenBox').hidden ? new Date() : new Date($('#when').value);
-  if (isNaN(dt)) { $('#err').textContent = 'Pick a valid date and time'; return; }
-  var when = dt.toISOString(), now = new Date().toISOString(), id = sh.id || crypto.randomUUID(), err, msg;
+  var sh = state.sheet, amount = Math.round(amountValue() * 100) / 100, reason = $('#note').value.trim(), T = LOAN_TEXT[sh.dir || 'borrowed'];
+  var err = function (t, el) { $('#err').textContent = t; if (el) el.focus(); };
+  if ((sh.mode === 'add' || sh.mode === 'edit' || sh.mode === 'bill') && !sh.category) return err('Choose a category');
+  if (!(amount > 0)) return err('Type the amount');
+  if ((sh.mode === 'loan-add' || sh.mode === 'loan-edit') && !reason) return err(T.need, $('#note'));
+  if (sh.mode === 'bill' && !reason) return err('Give the bill a name', $('#note'));
+  var dt = !$('#whenBox').hidden ? new Date($('#when').value) : new Date(Date.now() - (sh.day || 0) * 864e5);
+  if (isNaN(dt)) return err('Pick a valid date and time');
+  var when = dt.toISOString(), now = new Date().toISOString(), id = sh.id || crypto.randomUUID(), bad = '', msg, v = view();
 
   if (sh.mode === 'add' || sh.mode === 'edit') {
+    var old = sh.mode === 'edit' ? findById(v.rows, id) : null, by = old ? old.by : me();
     var e = { id: id, dateTime: when, type: sh.type, category: sh.category, amount: amount, note: reason, createdAt: now };
-    err = validateEntry(e) || queue('entry', sh.mode === 'add' ? 'add' : 'update', id, e);
+    if (by) e.by = by;
+    bad = validateEntry(e) || queue('entry', sh.mode === 'add' ? 'add' : 'update', id, e);
+    if (!bad && sh.bill && v.settings.bills[sh.bill]) { var bl = v.settings.bills[sh.bill]; setOp('bill', Object.assign({}, bl, { next: addMonths(bl.next, bl.every) }), sh.bill); }
+    if (!bad && $('#repeat').checked) setOp('bill', { name: (reason || sh.category).slice(0, 40), category: sh.category, amount: amount, day: dt.getDate(), every: 1, next: addMonths(monthKey(dt), 1) }, crypto.randomUUID());
     msg = sh.mode === 'add' ? 'Saved ' + money.format(amount) : 'Changes saved';
+  } else if (sh.mode === 'bill') {
+    var billDay = dayOf($('#billDay').value), today = new Date();
+    if (!billDay) return err('Type the day of the month it is due (1–31)', $('#billDay'));
+    var prevBill = sh.id ? v.settings.bills[sh.id] : null;
+    var next = prevBill ? prevBill.next : billDay >= today.getDate() ? monthKey(today) : addMonths(monthKey(today), 1);
+    bad = setOp('bill', { name: reason.slice(0, 40), category: sh.category, amount: amount, day: billDay, every: sh.every || 1, next: next }, id);
+    msg = sh.id ? 'Bill saved' : 'Bill added';
   } else if (sh.mode === 'repay') {
-    var r = { id: id, loanId: sh.loan.id, dateTime: when, amount: amount, createdAt: now };
-    err = validateRepay(r) || queue('repay', 'add', id, r);
-    msg = T.paidToast + money.format(amount);
+    var l = sh.loan, x = v.settings.loans[l.id] || {};
+    if (sh.pay === 'back' && sh.dir !== 'invested' && amount > l.owed) return err('That is more than the ' + money.format(l.owed) + T.over);
+    if (sh.pay === 'int') {
+      var type = sh.dir === 'given' ? 'Income' : 'Expense', cat = ensureCat(type, sh.dir === 'given' ? INTEREST : LOAN_INTEREST), ie = { id: crypto.randomUUID(), dateTime: when, type: type, category: cat, amount: amount, note: l.reason, createdAt: now };
+      if (me()) ie.by = me();
+      bad = validateEntry(ie) || queue('entry', 'add', ie.id, ie);
+      if (!bad && (!x.paid || x.paid < monthKey(dt))) setOp('loan', Object.assign({}, x, { paid: monthKey(dt) }), l.id);
+      msg = (sh.dir === 'given' ? 'Interest received ' : 'Interest paid ') + money.format(amount);
+    } else if (sh.pay === 'emi') {
+      var split = emiSplit(l, amount);
+      if (split.principal <= 0) return err('The EMI is less than this month\'s interest (' + money.format(split.interest) + ')');
+      if (split.interest > 0) {
+        var c2 = ensureCat('Expense', LOAN_INTEREST), ee = { id: crypto.randomUUID(), dateTime: when, type: 'Expense', category: c2, amount: split.interest, note: l.reason + ' (EMI interest)', createdAt: now };
+        if (me()) ee.by = me();
+        bad = validateEntry(ee) || queue('entry', 'add', ee.id, ee);
+      }
+      var rp = { id: id, loanId: l.id, dateTime: when, amount: split.principal, createdAt: now };
+      bad = bad || validateRepay(rp) || queue('repay', 'add', id, rp);
+      msg = 'EMI paid ' + money.format(amount);
+    } else {
+      var r = { id: id, loanId: l.id, dateTime: when, amount: sh.pay === 'add' ? -amount : amount, createdAt: now };
+      bad = validateRepay(r) || queue('repay', 'add', id, r);
+      msg = (sh.pay === 'add' ? 'Added ' : T.paid) + money.format(amount);
+    }
   } else {
     var rateIn = $('#rate').value.trim().replace(',', '.').replace('%', ''), rate = rateIn === '' ? 0 : Number(rateIn);
-    if (!(rate >= 0 && rate <= 100)) { $('#err').textContent = 'Interest must be a number from 0 to 100'; $('#rate').focus(); return; }
-    var l = { id: id, dateTime: when, reason: reason, amount: amount, interest: round2(rate), per: state.sheet.per, priority: state.sheet.priority, dir: sh.dir, createdAt: now };
-    if (sh.dir === 'invested') l.compound = sh.compound;
-    err = validateLoan(l) || queue('loan', sh.mode === 'loan-add' ? 'add' : 'update', id, l);
+    if (!(rate >= 0 && rate <= 100)) return err('Interest must be a number from 0 to 100', $('#rate'));
+    var extras = {}, prev = v.settings.loans[id] || {};
+    if (sh.dir === 'borrowed') {
+      if ($('#emi').value.trim() && !numberOf($('#emi').value)) return err('Type the EMI as an amount', $('#emi'));
+      if ($('#emiDay').value.trim() && !dayOf($('#emiDay').value)) return err('The day is 1 to 31', $('#emiDay'));
+      if (numberOf($('#emi').value)) extras.emi = numberOf($('#emi').value);
+      if (dayOf($('#emiDay').value)) extras.day = dayOf($('#emiDay').value);
+      if ($('#star').checked) extras.star = true;
+      sh.priority = $('#star').checked ? 'high' : sh.priority === 'high' ? 'medium' : sh.priority;
+    } else if (sh.dir === 'invested') {
+      if ($('#sipDay').value.trim() && !dayOf($('#sipDay').value)) return err('The day is 1 to 31', $('#sipDay'));
+      if (sh.type) extras.type = sh.type;
+      if (numberOf($('#sip').value)) extras.sip = numberOf($('#sip').value);
+      if (dayOf($('#sipDay').value)) extras.day = dayOf($('#sipDay').value);
+      if (numberOf($('#goal').value)) extras.goal = numberOf($('#goal').value);
+      if (/^\d{4}-\d{2}$/.test($('#goalBy').value)) extras.goalBy = $('#goalBy').value;
+    } else if (prev.day) extras.day = prev.day;
+    if (prev.paid) extras.paid = prev.paid;
+    var loan = { id: id, dateTime: when, reason: reason, amount: amount, interest: round2(rate), per: sh.per, priority: sh.priority, dir: sh.dir, createdAt: now };
+    if (sh.dir === 'invested') loan.compound = sh.compound;
+    bad = validateLoan(loan) || queue('loan', sh.mode === 'loan-add' ? 'add' : 'update', id, loan);
+    if (!bad && JSON.stringify(extras) !== JSON.stringify(prev)) setOp('loan', Object.keys(extras).length ? extras : null, id);
     msg = sh.mode === 'loan-add' ? T.saved : 'Changes saved';
   }
-  if (err) { $('#err').textContent = err; return; }
+  if (bad) return err(bad);
   $('#sheet').close();
   toast(msg);
   render();
@@ -790,26 +1223,29 @@ function saveSheet(ev) {
 function deleteFromSheet() {
   var sh = state.sheet, isLoan = sh.mode === 'loan-edit', T = LOAN_TEXT[sh.dir || 'borrowed'];
   var count = isLoan ? view().repays.filter(function (r) { return r.loanId === sh.id; }).length : 0;
-  var ask = isLoan ? 'Delete ' + T.what + (count ? ' and its ' + count + ' ' + T.payments[count === 1 ? 0 : 1] : '') + '?' : 'Delete this entry?';
-  if (!confirm(ask)) return;
-  var err = queue(isLoan ? 'loan' : 'entry', 'delete', sh.id);
-  if (err) { $('#err').textContent = err; return; }
-  $('#sheet').close();
-  toast(isLoan ? T.deleted : 'Entry deleted');
-  render();
-  trySync();
+  var q = sh.mode === 'bill' ? 'Delete this bill?' : isLoan ? 'Delete ' + T.what + (count ? ' and its ' + count + ' ' + T.payments[count === 1 ? 0 : 1] : '') + '?' : 'Delete this entry?';
+  ask({ title: q, ok: 'Delete', danger: true }).then(function (yes) {
+    if (!yes) return;
+    var err = sh.mode === 'bill' ? setOp('bill', null, sh.id) : queue(isLoan ? 'loan' : 'entry', 'delete', sh.id);
+    if (err) { $('#err').textContent = err; return; }
+    $('#sheet').close();
+    toast(sh.mode === 'bill' ? 'Bill deleted' : isLoan ? T.deleted : 'Entry deleted');
+    render();
+    trySync();
+  });
 }
 
 function showTab(tab) {
+  if (tab === 'money') { var v = view(); tab = state.out || (focusOf(v.loans, v.repays, v.settings, new Date()) === 'grow' && !loansOf(v, 'borrowed').length ? 'invested' : 'loans'); }
   state.tab = tab;
-  if (tab === 'given' || tab === 'invested') state.out = tab; // Lent and Invested share the Given tab
+  if (MONEY_TABS[tab]) state.out = tab;
   document.querySelectorAll('.nav button').forEach(function (b) {
-    // Categories lives under Home; History too on a phone, where it has no tab of its own
-    var on = b.dataset.tab === tab || (b.dataset.tab === 'given' && tab === 'invested') || (b.dataset.tab === 'home' && (tab === 'cats' || (tab === 'history' && !wide.matches)));
+    // Settings and Categories open from Home
+    var on = b.dataset.tab === tab || (b.dataset.tab === 'money' && !!MONEY_TABS[tab]) || (b.dataset.tab === 'home' && (tab === 'cats' || tab === 'settings'));
     if (on) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
     b.querySelector('use').setAttribute('href', '#i-' + TABS[b.dataset.tab][0] + (on ? '-fill' : ''));
   });
-  ['home', 'history', 'cats', 'loans', 'insights'].forEach(function (id) { $('#' + id).hidden = id !== (tab === 'given' || tab === 'invested' ? 'loans' : tab); });
+  ['home', 'history', 'cats', 'settings', 'loans', 'insights'].forEach(function (id) { $('#' + id).hidden = id !== (MONEY_TABS[tab] ? 'loans' : tab); });
   window.scrollTo(0, 0);
   render();
 }
@@ -822,7 +1258,7 @@ $('#amount').addEventListener('input', function () {
   $('#err').textContent = '';
   renderAmount();
 });
-// "Next" on the number pad goes on to the reason (pay-back has no reason, so Enter saves there).
+// "Next" on the number pad goes on to the reason (paying has no reason, so Enter saves there).
 $('#amount').addEventListener('keydown', function (ev) {
   if (ev.key === 'Enter' && !$('#noteBox').hidden) { ev.preventDefault(); $('#note').focus(); }
 });
@@ -833,9 +1269,8 @@ $('#sheet').addEventListener('focusin', function (ev) {
 
 document.addEventListener('click', function (ev) {
   closeDDs(ev.target); // a tap outside an open dropdown closes it
-  if (pickForecast(ev)) return;
   // On Home the sheet's name works like its picture: both open the list of sheets
-  var t = !$('#avatar').hidden && ev.target.closest('#headText') ? $('#avatar') : ev.target.closest('button, circle');
+  var t = !$('#avatar').hidden && ev.target.closest('#headText') ? $('#avatar') : ev.target.closest('button');
   if (!t) return;
   var d = t.dataset;
   if (d.new) openSheet({ mode: 'add', type: d.new, category: '' });
@@ -845,57 +1280,82 @@ document.addEventListener('click', function (ev) {
     t.parentNode.appendChild(document.getElementById(t.getAttribute('aria-controls'))); // the sheets list has two buttons (header, sidebar): open it under this one
     toggleDD(t, open);
   }
-  else if (d.f) { state.f[d.f] = d.v; closeDDs(); renderHistory(view()); }
-  else if (t.id === 'seeAll') {
+  else if (d.f) {
+    if (d.f === 'when') { state.f.year = d.v.split('-')[0]; state.f.month = d.v.split('-')[1]; } else state.f[d.f] = d.v;
+    closeDDs(); renderHistory(view());
+  }
+  else if (d.catf) {
     var start = periodRange(state.view, state.date).start;
-    state.f = { q: '', year: String(start.getFullYear()), month: state.view === 'year' ? '' : String(start.getMonth()), cat: '' };
+    state.f = { q: '', year: String(start.getFullYear()), month: state.view === 'month' ? String(start.getMonth()) : '', cat: d.catf, who: '' };
     $('#q').value = '';
     showTab('history');
   }
-  else if (t.id === 'hClear') { state.f = { q: '', year: '', month: '', cat: '' }; $('#q').value = ''; renderHistory(view()); }
+  else if (t.id === 'hClear') { state.f = { q: '', year: '', month: '', cat: '', who: '' }; $('#q').value = ''; renderHistory(view()); }
   else if (t.id === 'qClear') { state.f.q = ''; $('#q').value = ''; renderHistory(view()); $('#q').focus(); }
+  else if (t.id === 'hShare') shareHistory();
+  else if (t.id === 'insShare' || t.id === 'shareMonth') shareSummary();
   else if (d.add) { state.amt = String(Math.round((amountValue() + Number(d.add)) * 100) / 100); renderAmount(); }
   else if (d.set) { state.amt = d.set; renderAmount(); }
   else if (t.hasAttribute('data-note')) { $('#note').value = d.note; renderNoteChips(); }
-  else if (d.catType) { state.sheet.type = d.catType; state.sheet.category = d.cat; $('#err').textContent = ''; entryHeader(); renderCat(); toggleCat(false); renderNoteChips(); (state.sheet.mode === 'add' && !state.amt ? $('#amount') : $('#catBtn')).focus(); }
+  else if (d.type && t.closest('#typeSeg')) { if (state.sheet.type !== d.type) { state.sheet.type = d.type; state.sheet.category = ''; $('#repeatBox').hidden = !(state.sheet.mode === 'add' && d.type === 'Expense' && !state.sheet.bill); } entryHeader(); renderCat(); renderNoteChips(); }
+  else if (d.cat && t.closest('#catGrid')) { state.sheet.category = d.cat; $('#err').textContent = ''; entryHeader(); renderCat(); if (state.sheet.mode !== 'bill') renderNoteChips(); if (!state.amt) $('#amount').focus(); }
+  else if (d.paykind) { state.sheet.pay = d.paykind; var lx = view().settings.loans[state.sheet.loan.id] || {}, l2 = state.sheet.loan; state.amt = String(d.paykind === 'emi' ? lx.emi || '' : d.paykind === 'int' ? Math.round(l2.monthly) || '' : d.paykind === 'add' ? lx.sip || '' : ''); renderPaySeg(); renderQuick(); renderAmount(); }
+  else if (t.hasAttribute('data-day')) { state.sheet.day = Number(d.day); $('#whenBox').hidden = true; renderDay(); }
+  else if (t.id === 'changeWhen') { $('#whenBox').hidden = false; renderDay(); $('#when').focus(); }
+  else if (d.every) { state.sheet.every = Number(d.every); renderEvery(); }
+  else if (d.itype) { var it = INVEST[d.itype]; state.sheet.type = d.itype; $('#rate').value = it.rate; state.sheet.per = 'year'; state.sheet.compound = it.compound; renderRate(); }
   else if (d.edit) openEdit(d.edit);
   else if (d.loanEdit) openLoanEdit(d.loanEdit);
-  else if (d.pay) openRepay(d.pay);
-  else if (d.delRepay) { if (confirm('Delete this repayment?')) { queue('repay', 'delete', d.delRepay); toast('Repayment deleted'); render(); trySync(); } }
+  else if (d.pay) openRepay(d.pay, d.kind);
+  else if (d.due) {
+    var it2 = state.due[Number(d.due)];
+    if (it2.kind === 'bill') openSheet({ mode: 'add', type: 'Expense', category: it2.category, bill: it2.id }, { amount: it2.amount, note: it2.name });
+    else openRepay(it2.id, { emi: 'emi', sip: 'add', int: 'int' }[it2.kind]);
+  }
+  else if (d.again) { var g = state.again2[Number(d.again)]; openSheet({ mode: 'add', type: g.type, category: g.category }, { amount: g.amount, note: g.note }); }
+  else if (d.plan) { var v0 = view(); state.pick[focusOf(v0.loans, v0.repays, v0.settings, new Date())] = Number(d.plan); render(); }
+  else if (d.delRepay) { ask({ title: 'Delete this payment?', ok: 'Delete', danger: true }).then(function (yes) { if (yes) { queue('repay', 'delete', d.delRepay); toast('Payment deleted'); render(); trySync(); } }); }
   else if (d.sheet) { if (d.sheet !== P) useSheet(d.sheet); else closeDDs(); }
   else if (d.sren) renameSheet(d.sren);
   else if (d.sdel) removeSheet(d.sdel);
-  else if (t.id === 'addSheet') { var name = prompt('Name for the new sheet', 'Sheet ' + (sheets().length + 1)); if (name && name.trim()) useSheet(addSheet(name.trim().slice(0, 40))); }
+  else if (t.id === 'addSheet') { ask({ title: 'Name for the new sheet', input: 'Sheet ' + (sheets().length + 1), ok: 'Add' }).then(function (name) { if (name) useSheet(addSheet(name.slice(0, 40))); }); }
   else if (t.id === 'editCats') { closeDDs(); showTab('cats'); }
   else if (d.cadd) editCat('add', d.cadd);
   else if (d.cren) editCat('rename', d.ctype, d.cren);
   else if (d.cdel) editCat('delete', d.ctype, d.cdel);
-  else if (d.tab) showTab(d.tab === 'given' && t.closest('.nav') ? state.out : d.tab); // the Given tab reopens on the side last used
+  else if (d.focus) { if (!setOp('focus', d.focus)) { render(); trySync(); } }
+  else if (d.year) { if (!setOp('year', d.year)) { state.date = new Date(); render(); trySync(); } }
+  else if (d.theme) { save('fm.theme', d.theme); if (d.theme === 'auto') delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = d.theme; render(); }
+  else if (t.id === 'addBill') openBill('');
+  else if (d.bill) openBill(d.bill);
+  else if (d.tab) { closeDDs(); showTab(d.tab); }
   else if (d.per) { state.sheet.per = d.per; renderRate(); }
-  else if (d.prio) { state.sheet.priority = d.prio; renderRate(); }
   else if (d.comp) { state.sheet.compound = d.comp === 'compound'; renderRate(); }
   else if (t.hasAttribute('data-rate')) { $('#rate').value = d.rate === '0' ? '' : d.rate; renderRate(); }
-  else if (d.view) { state.view = d.view; state.date = new Date(); state.bar = -1; state.slice = ''; render(); }
-  else if (t.id === 'prev' || t.id === 'next') { state.date = shiftPeriod(state.view, state.date, t.id === 'prev' ? -1 : 1); state.bar = -1; state.slice = ''; render(); }
-  else if (d.fc) { state.fcN = Number(d.fc); state.fcPick = -1; renderForecast(view()); }
-  else if (d.slice) { state.slice = state.slice === d.slice ? '' : d.slice; render(); }
-  else if (t.classList.contains('col')) { var i = Number(d.i); state.bar = state.bar === i ? -1 : i; render(); }
-  else if (t.id === 'changeWhen') setWhen(new Date().toISOString());
+  else if (d.view) { state.view = d.view === 'month' ? 'month' : view().settings.year === 'apr' ? 'fy' : 'year'; state.date = new Date(); render(); }
+  else if (t.id === 'prev' || t.id === 'next') { state.date = shiftPeriod(state.view, state.date, t.id === 'prev' ? -1 : 1); render(); }
   else if (t.id === 'addLoan') openSheet({ mode: 'loan-add', dir: tabDir() });
-  else if (t.id === 'openHistory') showTab('history');
-  else if (t.id === 'backHome') showTab('home');
+  else if (t.id === 'backHome') showTab(state.tab === 'cats' ? 'settings' : 'home');
   else if (t.id === 'deleteBtn') deleteFromSheet();
   else if (t.id === 'cancel') $('#sheet').close();
+  else if (t.id === 'askCancel') answer(null);
   else if (t.id === 'syncBtn') trySync();
 });
 
+// Settings: typed values are saved when the field is left (or Enter on a phone keyboard).
+document.addEventListener('change', function (ev) {
+  var t = ev.target;
+  if (t.id === 'meName') { save('fm.me', t.value.trim().slice(0, 30)); toast('Saved'); render(); }
+  else if (t.id === 'goalIn') { if (!setOp('goal', numberOf(t.value))) { toast('Goal saved'); render(); trySync(); } }
+  else if (t.hasAttribute('data-daily')) { if (!setOp('daily', numberOf(t.value))) { toast('Budget saved'); trySync(); } }
+  else if (t.hasAttribute('data-budget')) { if (!setOp('budget', numberOf(t.value), t.dataset.budget)) { toast('Budget saved'); trySync(); } }
+});
+$('#askForm').addEventListener('submit', function (ev) { ev.preventDefault(); answer(true); });
+$('#ask').addEventListener('cancel', function (ev) { ev.preventDefault(); answer(null); });
 $('#rate').addEventListener('input', renderRate);
-document.addEventListener('mousemove', function (ev) { if (ev.target.closest && ev.target.closest('#fcChart')) pickForecast(ev); });
 $('#q').addEventListener('input', function () { state.f.q = this.value; renderHistory(view()); });
-document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape' && !$('#sheet').open) closeDDs(); });
-// Esc closes an open dropdown first, not the whole sheet.
-$('#sheet').addEventListener('cancel', function (ev) { if (!$('#catList').hidden) { ev.preventDefault(); toggleCat(false); $('#catBtn').focus(); } });
-$('#note').addEventListener('input', function () { $('#err').textContent = ''; if (state.sheet && state.sheet.type) renderNoteChips(); });
+document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape' && !$('#sheet').open && !$('#ask').open) closeDDs(); });
+$('#note').addEventListener('input', function () { $('#err').textContent = ''; if (state.sheet && state.sheet.type && state.sheet.mode !== 'bill') renderNoteChips(); });
 $('#entryForm').addEventListener('submit', saveSheet);
 $('#setupForm').addEventListener('submit', function (ev) {
   ev.preventDefault();

@@ -465,29 +465,25 @@ function render() {
   ({ home: renderHome, history: renderHistory, loans: renderLoans, given: renderLoans, insights: renderInsights })[state.tab](v);
 }
 
-// ---- One bottom sheet for every form: keypad amount, reason, date and time
+// ---- One bottom sheet for every form: amount (the phone's own number pad), reason, date and time
 function amountValue() { return Number(state.amt) || 0; }
 function amountText(a) {
   var parts = a.split('.');
   return '₹' + (Number(parts[0]) || 0).toLocaleString('en-IN') + (parts.length > 1 ? '.' + parts[1] : '');
 }
 
+// Digits and one dot, at most 9 digits before it and 2 after. Commas typed as thousands separators are dropped.
+function cleanAmount(v) {
+  var parts = String(v).replace(/[^\d.]/g, '').split('.');
+  return parts[0].replace(/^0+(?=\d)/, '').slice(0, 9) + (parts.length > 1 ? '.' + parts.slice(1).join('').slice(0, 2) : '');
+}
+
 function renderAmount() {
   var txt = state.amt ? amountText(state.amt) : '';
-  $('#amountText').innerHTML = txt ? esc(txt) : '<span class="ph">₹0</span>';
+  if ($('#amount').value !== state.amt) $('#amount').value = state.amt;
   var T = LOAN_TEXT[state.sheet.dir || 'borrowed'];
   var label = { add: 'Save', edit: 'Save changes', 'loan-add': T.save, 'loan-edit': 'Save changes', repay: T.action }[state.sheet.mode];
   $('#saveText').textContent = amountValue() > 0 && state.sheet.mode !== 'edit' && state.sheet.mode !== 'loan-edit' ? label + ' ' + txt : label;
-}
-
-function pressKey(k) {
-  var a = state.amt;
-  if (k === 'del') a = a.slice(0, -1);
-  else if (k === '.') { if (a.indexOf('.') < 0) a = (a || '0') + '.'; }
-  else if (!/\.\d\d$/.test(a) && a.replace('.', '').length < 9) a = a === '0' ? k : a + k;
-  state.amt = a;
-  $('#err').textContent = '';
-  renderAmount();
 }
 
 function recentNotes(type, category) {
@@ -586,7 +582,10 @@ function openSheet(sh, values) {
   $('#loanOpts').hidden = !isLoan;
   if (isLoan) { $('#rate').value = values.interest || ''; sh.per = values.per || 'month'; sh.priority = values.priority || 'medium'; renderRate(); }
   $('#sheet').showModal();
-  $('#saveBtn').focus();
+  // Open the number pad straight away for new things; editing keeps the keyboard down so the form stays visible.
+  if (sh.mode === 'edit' || sh.mode === 'loan-edit') $('#saveBtn').focus();
+  else if (isEntry && !sh.category) $('#catBtn').focus();
+  else $('#amount').focus();
 }
 
 var RATES = [1, 1.5, 2, 3];
@@ -620,7 +619,7 @@ function saveSheet(ev) {
   ev.preventDefault();
   var sh = state.sheet, amount = Math.round(amountValue() * 100) / 100, reason = $('#note').value.trim();
   if ((sh.mode === 'add' || sh.mode === 'edit') && !sh.category) { $('#err').textContent = 'Choose a category'; toggleCat(true); return; }
-  if (!(amount > 0)) { $('#err').textContent = 'Type the amount on the keypad'; return; }
+  if (!(amount > 0)) { $('#err').textContent = 'Type the amount'; return; }
   var T = LOAN_TEXT[sh.dir || 'borrowed'];
   if (sh.mode !== 'repay' && !reason) { $('#err').textContent = sh.mode.indexOf('loan') === 0 ? T.need : 'Write what it was for'; $('#note').focus(); return; }
   if (sh.mode === 'repay' && amount > sh.owed) { $('#err').textContent = 'That is more than the ' + money.format(sh.owed) + T.over; return; }
@@ -676,9 +675,21 @@ function showTab(tab) {
 }
 
 // ---- Wiring
-$('#keys').innerHTML = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', 'del'].map(function (k) {
-  return '<button type="button" class="key" data-key="' + k + '" aria-label="' + (k === 'del' ? 'Delete' : k) + '">' + (k === 'del' ? icon('backspace') : k) + '</button>';
-}).join('');
+$('#amount').addEventListener('input', function () {
+  var v = cleanAmount(this.value);
+  if (v !== this.value) this.value = v;
+  state.amt = v;
+  $('#err').textContent = '';
+  renderAmount();
+});
+// "Next" on the number pad goes on to the reason (pay-back has no reason, so Enter saves there).
+$('#amount').addEventListener('keydown', function (ev) {
+  if (ev.key === 'Enter' && !$('#noteBox').hidden) { ev.preventDefault(); $('#note').focus(); }
+});
+// Keep the field being typed in above the phone keyboard.
+$('#sheet').addEventListener('focusin', function (ev) {
+  if (ev.target.tagName === 'INPUT') setTimeout(function () { ev.target.scrollIntoView({ block: 'center', behavior: 'smooth' }); }, 300);
+});
 
 document.addEventListener('click', function (ev) {
   closeDDs(ev.target); // a tap outside an open dropdown closes it
@@ -697,11 +708,10 @@ document.addEventListener('click', function (ev) {
   }
   else if (t.id === 'hClear') { state.f = { q: '', year: '', month: '', cat: '' }; $('#q').value = ''; renderHistory(view()); }
   else if (t.id === 'qClear') { state.f.q = ''; $('#q').value = ''; renderHistory(view()); $('#q').focus(); }
-  else if (d.key) pressKey(d.key);
   else if (d.add) { state.amt = String(Math.round((amountValue() + Number(d.add)) * 100) / 100); renderAmount(); }
   else if (d.set) { state.amt = d.set; renderAmount(); }
   else if (t.hasAttribute('data-note')) { $('#note').value = d.note; renderNoteChips(); }
-  else if (d.catType) { state.sheet.type = d.catType; state.sheet.category = d.cat; $('#err').textContent = ''; entryHeader(); renderCat(); toggleCat(false); renderNoteChips(); $('#catBtn').focus(); }
+  else if (d.catType) { state.sheet.type = d.catType; state.sheet.category = d.cat; $('#err').textContent = ''; entryHeader(); renderCat(); toggleCat(false); renderNoteChips(); (state.sheet.mode === 'add' && !state.amt ? $('#amount') : $('#catBtn')).focus(); }
   else if (d.edit) openEdit(d.edit);
   else if (d.loanEdit) openLoanEdit(d.loanEdit);
   else if (d.pay) openRepay(d.pay);
@@ -731,12 +741,6 @@ document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape' && 
 // Esc closes an open dropdown first, not the whole sheet.
 $('#sheet').addEventListener('cancel', function (ev) { if (!$('#catList').hidden) { ev.preventDefault(); toggleCat(false); $('#catBtn').focus(); } });
 $('#note').addEventListener('input', function () { $('#err').textContent = ''; if (state.sheet && state.sheet.type) renderNoteChips(); });
-// Typing on a computer keyboard works too, unless the reason or date field has focus.
-$('#sheet').addEventListener('keydown', function (ev) {
-  if (ev.target.id === 'note' || ev.target.id === 'when' || ev.target.id === 'rate') return;
-  if (/^[0-9.]$/.test(ev.key)) { pressKey(ev.key); ev.preventDefault(); }
-  else if (ev.key === 'Backspace') { pressKey('del'); ev.preventDefault(); }
-});
 $('#entryForm').addEventListener('submit', saveSheet);
 $('#setupForm').addEventListener('submit', function (ev) {
   ev.preventDefault();

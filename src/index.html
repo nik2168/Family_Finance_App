@@ -214,18 +214,18 @@ dialog::backdrop{background:rgba(8,10,12,.42)}
 .grab{width:42px;height:5px;border-radius:9px;background:var(--line);margin:0 auto 4px}
 .sh{display:flex;align-items:center;gap:12px}
 .sh h3{font-size:22px;font-weight:600;line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.amount{background:var(--field);border-radius:22px;padding:10px 16px;font-size:40px;font-weight:600;letter-spacing:-.03em;text-align:center;line-height:1.2}
-.amount .ph{color:var(--muted)}
-.caret{display:inline-block;width:2px;height:.85em;background:currentColor;margin-left:3px;vertical-align:-.06em}
-@media (prefers-reduced-motion:no-preference){.caret{animation:blink 1s steps(1) infinite}}
-@keyframes blink{50%{opacity:0}}
+/* Amount: a real field, so the phone's own number pad opens (no on-screen keypad) */
+.amount{position:relative;display:block;background:var(--field);border-radius:22px;padding:8px 44px;font-size:40px;font-weight:600;letter-spacing:-.03em;line-height:1.2}
+.amount span{position:absolute;left:18px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:28px}
+.amount input{width:100%;border:0;background:none;outline:none;font:inherit;letter-spacing:inherit;color:var(--ink);text-align:center;padding:0}
+.amount input::placeholder{color:var(--muted)}
+.amount:focus-within{box-shadow:inset 0 0 0 2px var(--ink)}
+.sheet{scroll-padding-bottom:120px}
 .chips{display:flex;gap:8px;overflow-x:auto;padding:1px}
 .chip{flex:none;padding:8px 14px;border-radius:999px;background:var(--field);font-size:13.5px;font-weight:500;display:inline-flex;gap:6px;align-items:center}
 .chip[aria-pressed="true"]{background:var(--primary);color:var(--on-primary)}
 .when{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--ink-2)}
 .link{margin-left:auto;font-weight:600;color:var(--ink);text-decoration:underline;text-underline-offset:3px;padding:6px 0}
-.keys{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
-.key{height:50px;border-radius:18px;background:var(--field);font-size:22px;font-weight:500;display:grid;place-items:center;color:var(--ink)}
 
 .lrow.tap{width:100%;text-align:left;color:var(--ink)}
 .lrow .edit{color:var(--muted)}
@@ -253,7 +253,6 @@ dialog::backdrop{background:rgba(8,10,12,.42)}
   <symbol id="i-arrow-down-left" viewBox="0 0 256 256"><path d="M200.49,72.48,93,180h75a12,12,0,0,1,0,24H64a12,12,0,0,1-12-12V88a12,12,0,0,1,24,0v75L183.51,55.51a12,12,0,0,1,17,17Z"/></symbol>
   <symbol id="i-arrow-up-right" viewBox="0 0 256 256"><path d="M204,64V168a12,12,0,0,1-24,0V93L72.49,200.49a12,12,0,0,1-17-17L163,76H88a12,12,0,0,1,0-24H192A12,12,0,0,1,204,64Z"/></symbol>
   <symbol id="i-arrows-clockwise" viewBox="0 0 256 256"><path d="M228,48V96a12,12,0,0,1-12,12H168a12,12,0,0,1,0-24h19l-7.8-7.8a75.55,75.55,0,0,0-53.32-22.26h-.43A75.49,75.49,0,0,0,72.39,75.57,12,12,0,1,1,55.61,58.41a99.38,99.38,0,0,1,69.87-28.47H126A99.42,99.42,0,0,1,196.2,59.23L204,67V48a12,12,0,0,1,24,0ZM183.61,180.43a75.49,75.49,0,0,1-53.09,21.63h-.43A75.55,75.55,0,0,1,76.77,179.8L69,172H88a12,12,0,0,0,0-24H40a12,12,0,0,0-12,12v48a12,12,0,0,0,24,0V189l7.8,7.8A99.42,99.42,0,0,0,130,226.06h.56a99.38,99.38,0,0,0,69.87-28.47,12,12,0,0,0-16.78-17.16Z"/></symbol>
-  <symbol id="i-backspace" viewBox="0 0 256 256"><path d="M216,36H68.53a20.09,20.09,0,0,0-17.15,9.71L5.71,121.83a12,12,0,0,0,0,12.34l45.67,76.12A20.09,20.09,0,0,0,68.53,220H216a20,20,0,0,0,20-20V56A20,20,0,0,0,216,36Zm-4,160H70.8L30,128,70.8,60H212ZM103.51,143.51,119,128l-15.52-15.51a12,12,0,0,1,17-17L136,111l15.51-15.52a12,12,0,0,1,17,17L153,128l15.52,15.51a12,12,0,0,1-17,17L136,145l-15.51,15.52a12,12,0,0,1-17-17Z"/></symbol>
   <symbol id="i-caret-left" viewBox="0 0 256 256"><path d="M168.49,199.51a12,12,0,0,1-17,17l-80-80a12,12,0,0,1,0-17l80-80a12,12,0,0,1,17,17L97,128Z"/></symbol>
   <symbol id="i-caret-right" viewBox="0 0 256 256"><path d="M184.49,136.49l-80,80a12,12,0,0,1-17-17L159,128,87.51,56.49a12,12,0,1,1,17-17l80,80A12,12,0,0,1,184.49,136.49Z"/></symbol>
   <symbol id="i-chart-bar-fill" viewBox="0 0 256 256"><path d="M232,208a8,8,0,0,1-8,8H32a8,8,0,0,1,0-16h8V136a8,8,0,0,1,8-8H72a8,8,0,0,1,8,8v64H96V88a8,8,0,0,1,8-8h32a8,8,0,0,1,8,8V200h16V40a8,8,0,0,1,8-8h40a8,8,0,0,1,8,8V200h8A8,8,0,0,1,232,208Z"/></symbol>
@@ -408,7 +407,7 @@ dialog::backdrop{background:rgba(8,10,12,.42)}
       <button type="button" class="field ddbtn" id="catBtn" aria-expanded="false" aria-controls="catList" aria-label="Category"></button>
       <div class="ddlist" id="catList" hidden></div>
     </div>
-    <div class="amount" aria-live="polite"><span id="amountText"></span><span class="caret"></span></div>
+    <label class="amount"><span>₹</span><input id="amount" inputmode="decimal" enterkeyhint="next" autocomplete="off" placeholder="0" aria-label="Amount"></label>
     <div class="chips" id="quick"></div>
     <label id="noteBox"><span class="lbl" id="noteLabel">Reason</span><input class="field" id="note" maxlength="200" autocomplete="off" placeholder="What was it for?"></label>
     <div class="chips" id="noteChips"></div>
@@ -424,7 +423,6 @@ dialog::backdrop{background:rgba(8,10,12,.42)}
     </div>
     <div class="when"><svg class="i sm"><use href="#i-clock"/></svg><span id="whenText">Now</span><button type="button" class="link" id="changeWhen">Change</button></div>
     <label id="whenBox" hidden><span class="lbl">Date and time</span><input class="field" type="datetime-local" id="when"></label>
-    <div class="keys" id="keys"></div>
     <p class="err" id="err" role="alert"></p>
     <button type="submit" class="btn" id="saveBtn"><svg class="i sm"><use href="#i-check"/></svg><span id="saveText">Save</span></button>
     <button type="button" class="btn danger" id="deleteBtn" hidden><svg class="i sm"><use href="#i-trash"/></svg><span id="deleteText">Delete</span></button>

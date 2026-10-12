@@ -198,9 +198,9 @@ async function connect(ctx) {
     const renderMs = await page.evaluate(() => { const t = performance.now(); for (let i = 0; i < 5; i++) render(); return Math.round((performance.now() - t) / 5); });
     check('screen redraw with 2 years of data stays quick', renderMs < 150, renderMs + ' ms per redraw');
 
-    // Home: this month's tiles, the latest 5 by day, and the plan for a family with loans
+    // Home: this month's tiles, the latest 3 by day, and the plan for a family with loans
     const month = s.summarize(st.rows, 'month', new Date(), 3000);
-    check('Home: latest 5 entries, by day', await page.locator('#recent .lrow').count() === 5 && await page.locator('#recent .dayh').count() > 0);
+    check('Home: latest 3 entries, by day', await page.locator('#recent .lrow').count() === 3 && await page.locator('#recent .dayh').count() > 0);
     check('Home: Expenses / Income buttons show this month', eqv([await page.textContent('#heroIn'), await page.textContent('#heroOut')], [money.format(month.income), money.format(month.expense)]),
       `${await page.textContent('#heroIn')} / ${await page.textContent('#heroOut')}`);
     const hero = await page.textContent('#hero'), heroDate = await page.textContent('#heroDate');

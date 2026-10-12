@@ -119,7 +119,7 @@ const ym = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'
     await page.click('#cancel');
     assert.match(await page.textContent('#syncPill'), /5 waiting to sync/);
     assert.deepStrictEqual([await page.textContent('#heroIn'), await page.textContent('#heroOut')], ['₹13,500', '₹7,150.5']);
-    assert.strictEqual(await page.locator('#recent .lrow').count(), 5, 'Home shows the latest 5, by day');
+    assert.strictEqual(await page.locator('#recent .lrow').count(), 3, 'a phone shows the latest 3, by day');
     assert.match(await page.textContent('#recent .dayh'), /Today/);
     await shot(page, '02-home-offline', true);
 

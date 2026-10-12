@@ -370,7 +370,8 @@ function forecast(loans, repays, perMonth, now) {
 // ---- Settings, kept by the script (property SET) like the categories, changed by {kind: 'set', data: {key, id, value}} ops.
 // daily: the monthly budget for everyday spending (every expense category without a bill); budgets: per category (Others is the
 // sheet's Others limit, cell B1); bills: {id: {name, category, amount, day, every (months), next ('2026-10', the month next due)}};
-// loans: per loan / investment {emi, sip, day, star, type, goal, goalBy, paid ('2026-10': monthly interest paid up to)};
+// loans: per loan / investment {emi, sip, day, star, type, goal, goalBy, paid ('2026-10': monthly interest paid up to),
+//   old (true: the family already had it before; its starting amount is not this month's money)};
 // focus: 'auto', 'debt' (clear loans) or 'grow' (grow savings); year: 'jan' or 'apr' (the Indian financial year); goal: savings goal.
 // ponytail: one property holds all of it (Apps Script allows 9 KB): plenty for a family's bills and loans; split it if that is ever hit.
 var FOCUS = ['auto', 'debt', 'grow'], EVERY = [1, 3, 6, 12];
@@ -410,7 +411,7 @@ function validateSet(d) {
     return okName(v.name, 40) && checkCatName(v.category) && checkAmount(v.amount) && isDay(v.day) && EVERY.indexOf(v.every) >= 0 && MONTH_KEY.test(v.next) ? '' : 'bad setting';
   }
   var ok = ['emi', 'sip', 'goal'].every(function (k) { return v[k] == null || checkAmount(v[k]); }) && (v.day == null || isDay(v.day)) &&
-    (v.star == null || typeof v.star === 'boolean') && (v.type == null || INVEST.hasOwnProperty(v.type)) &&
+    (v.star == null || typeof v.star === 'boolean') && (v.old == null || typeof v.old === 'boolean') && (v.type == null || INVEST.hasOwnProperty(v.type)) &&
     ['goalBy', 'paid'].every(function (k) { return v[k] == null || MONTH_KEY.test(v[k]); });
   return ok ? '' : 'bad setting';
 }
@@ -478,12 +479,13 @@ function lastMonths(rows, now, n, cats) {
 
 // Where the money went besides expenses within [start, end): principal paid on loans (loansPaid), money borrowed, put into
 // investments (net of withdrawals; money added is a negative withdrawal) and lent out (net of what came back).
-function cashFlow(loans, repays, start, end) {
+// x: the loans' extras (settings.loans); the starting amount of one the family already had (old) is left out.
+function cashFlow(loans, repays, start, end, x) {
   var dir = {}, out = { loansPaid: 0, borrowed: 0, invested: 0, lent: 0 };
   function inside(s) { var d = new Date(s); return d >= start && d < end; }
   loans.forEach(function (l) {
     dir[l.id] = loanDir(l);
-    if (inside(l.dateTime)) out[{ borrowed: 'borrowed', invested: 'invested', given: 'lent' }[dir[l.id]]] += l.amount;
+    if (inside(l.dateTime) && !(x && x[l.id] && x[l.id].old)) out[{ borrowed: 'borrowed', invested: 'invested', given: 'lent' }[dir[l.id]]] += l.amount;
   });
   repays.forEach(function (r) {
     if (!dir[r.loanId] || !inside(r.dateTime)) return;
@@ -522,9 +524,11 @@ function dueItems(loans, repays, s, now) {
   DIRS.forEach(function (dir) {
     summarizeLoans(loans.filter(function (l) { return loanDir(l) === dir; }), repays, null, null, now).loans.forEach(function (l) {
       if (l.done) return;
-      var x = s.loans[l.id] || {}, day = x.day || new Date(l.dateTime).getDate();
+      var x = s.loans[l.id] || {}, day = x.day || new Date(l.dateTime).getDate(), from = new Date(l.dateTime);
       function paid(added) { return l.repays.some(function (r) { return monthKey(new Date(r.dateTime)) === ym && (added ? r.amount < 0 : r.amount > 0); }); }
-      function add(kind, amount, done) { out.push({ kind: kind, id: l.id, dir: dir, name: l.reason, amount: amount, date: dayIn(done ? next : ym, day) }); }
+      // the first one falls after the day it started (an FD opened on the 11th with a SIP on the 1st: first due next month)
+      var first = dayIn(ym, day) <= new Date(from.getFullYear(), from.getMonth(), from.getDate());
+      function add(kind, amount, done) { out.push({ kind: kind, id: l.id, dir: dir, name: l.reason, amount: amount, date: dayIn(done || first ? next : ym, day) }); }
       if (dir === 'borrowed' && x.emi) add('emi', x.emi, paid(false));
       else if (dir === 'invested' && x.sip) add('sip', x.sip, paid(true));
       else if (dir !== 'invested' && l.monthly > 0) add('int', Math.round(l.monthly), x.paid >= ym);
@@ -558,9 +562,11 @@ function focusOf(loans, repays, s, now) {
   var owed = worthNow(loans, repays, 'borrowed', now);
   return owed > 0 && owed > worthNow(loans, repays, 'invested', now) ? 'debt' : 'grow';
 }
-// Net worth: investments and what others owe us, minus what we owe. Records dated before `at` only, valued at `at`.
-function netWorth(loans, repays, at) {
-  var before = function (x) { return Date.parse(x.dateTime) < at; }, l = loans.filter(before), r = repays.filter(before);
+// Net worth: investments and what others owe us, minus what we owe. Records dated before `at` only, valued at `at`;
+// x (settings.loans): one the family already had (old) counts from the start.
+function netWorth(loans, repays, at, x) {
+  var before = function (y) { return Date.parse(y.dateTime) < at; };
+  var l = loans.filter(function (y) { return before(y) || (x && x[y.id] && x[y.id].old); }), r = repays.filter(before);
   return round2(worthNow(l, r, 'invested', at) + worthNow(l, r, 'given', at) - worthNow(l, r, 'borrowed', at));
 }
 
@@ -575,12 +581,10 @@ function neededToClear(loans, repays, n, now) {
   while (hi - lo > 50) { var mid = (lo + hi) / 2; if (done(mid)) hi = mid; else lo = mid; }
   return Math.ceil(hi / 100) * 100;
 }
-// Grow savings: long-term savings are the investments without a goal of their own (a Diwali RD is kept apart).
-// rate: their average monthly growth (7% a year when nothing is invested yet); monthly: their SIPs, which grow at addRate
-// (the return of the funds they go into).
+// Grow savings: the investments' worth, their average monthly growth `rate` (7% a year when there are none yet), and
+// `monthly`: their SIPs, which grow at addRate (the return of the funds they go into). loans: the investments to count.
 function longTerm(loans, repays, s, now) {
-  var mine = loans.filter(function (l) { return loanDir(l) === 'invested' && !(s.loans[l.id] && s.loans[l.id].goal); });
-  var L = summarizeLoans(mine, repays, null, null, now), worth = 0, grows = 0, monthly = 0, adds = 0;
+  var L = summarizeLoans(loans.filter(function (l) { return loanDir(l) === 'invested'; }), repays, null, null, now), worth = 0, grows = 0, monthly = 0, adds = 0;
   L.loans.forEach(function (l) {
     if (l.done) return;
     var sip = (s.loans[l.id] || {}).sip || 0;
@@ -600,15 +604,29 @@ function neededForGoal(worth, rate, target, n, addRate) {
   var a = addRate == null ? rate : addRate, g = Math.pow(1 + a, n), left = target - worth * Math.pow(1 + rate, n);
   return Math.max(0, Math.ceil((a > 0 ? left * a / (g - 1) : left / n) / 100) * 100);
 }
-// The goal: the family's own, else the next round figure comfortably above what is saved.
-function goalOf(s, worth) {
-  if (s.goal) return s.goal;
-  var steps = [1e5, 2e5, 5e5, 1e6, 2.5e6, 5e6, 1e7, 2.5e7, 5e7, 1e8];
-  for (var i = 0; i < steps.length; i++) if (steps[i] > worth * 1.2) return steps[i];
-  return worth * 2;
+// The goal: the family's own (Settings: all investments count toward it), else the investment goal due soonest (that
+// investment counts). open: the open investments ({id, reason}). null when no goal is set: none is made up.
+function goalOf(s, open) {
+  if (s.goal) return { target: s.goal, by: null, id: '', name: '' };
+  var best = null;
+  open.forEach(function (l) {
+    var x = s.loans[l.id] || {};
+    if (x.goal && (!best || (x.goalBy || '9999-99') < (best.by || '9999-99'))) best = { target: x.goal, by: x.goalBy || null, id: l.id, name: l.reason };
+  });
+  return best;
 }
+// Whole months from now's month to a '2028-01' month.
+function monthsUntil(now, key) { return (Number(key.slice(0, 4)) - now.getFullYear()) * 12 + Number(key.slice(5)) - 1 - now.getMonth(); }
 // Targets for the plan chips, in months: about 60% and 80% of the time at today's pace (each sooner than it), and the pace itself.
-function targets(pace) {
+// due: the goal's own date (months away), always one of them, with the pace and one between when they differ.
+function targets(pace, due) {
+  if (due >= 1) {
+    if (!pace) return [due, due + 12, due + 24];
+    if (pace === due) return targets(pace);
+    var mid = Math.round((due + pace) / 2), out2 = [due, pace];
+    if (mid !== due && mid !== pace) out2.push(mid);
+    return out2.sort(function (a, b) { return a - b; });
+  }
   if (!pace) return [12, 24, 36];
   var out = [];
   [0.6, 0.8].forEach(function (f) { var n = Math.round(pace * f); if (n >= 1 && n < pace && out.indexOf(n) < 0) out.push(n); });
@@ -652,5 +670,5 @@ if (typeof module !== 'undefined') {
     validateSet: validateSet, applySet: applySet, catInSettings: catInSettings, monthKey: monthKey, addMonths: addMonths, dayIn: dayIn, totals: totals,
     previousSpan: previousSpan, lastMonths: lastMonths, cashFlow: cashFlow, budgetStatus: budgetStatus, dueItems: dueItems, frequent: frequent,
     worthNow: worthNow, focusOf: focusOf, netWorth: netWorth, payoffIn: payoffIn, neededToClear: neededToClear, longTerm: longTerm,
-    monthsToGoal: monthsToGoal, neededForGoal: neededForGoal, goalOf: goalOf, targets: targets, notesFor: notesFor, biggestRise: biggestRise };
+    monthsToGoal: monthsToGoal, neededForGoal: neededForGoal, goalOf: goalOf, monthsUntil: monthsUntil, targets: targets, notesFor: notesFor, biggestRise: biggestRise };
 }

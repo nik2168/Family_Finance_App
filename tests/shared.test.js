@@ -286,6 +286,11 @@ const cf = s.cashFlow([loan, { ...loan, id: 'loan-0009', dateTime: iso(2026, 9, 
   [rep, { id: 'gv-000001', loanId: 'loan-given', dateTime: iso(2026, 9, 6), amount: 1000 }, { id: 'tu-000001', loanId: 'inv-00001', dateTime: iso(2026, 9, 7), amount: -2000 }, { id: 'xx-000001', loanId: 'nobody-1', dateTime: iso(2026, 9, 7), amount: 9 }],
   new Date(2026, 9, 1), new Date(2026, 10, 1));
 assert.deepStrictEqual(cf, { loansPaid: 5000, borrowed: 3000, invested: 7000, lent: 9000 });
+assert.deepStrictEqual(s.cashFlow([ivs({ dateTime: iso(2026, 9, 2), amount: 216433 }), { ...given, dateTime: iso(2026, 9, 1) }], [{ id: 'tu-000001', loanId: 'inv-00001', dateTime: iso(2026, 9, 7), amount: -2000 }],
+  new Date(2026, 9, 1), new Date(2026, 10, 1), { 'inv-00001': { old: true }, 'loan-given': { old: true } }), { loansPaid: 0, borrowed: 0, invested: 2000, lent: 0 },
+  'money the family already had is not this month\'s; what was added later is');
+assert.strictEqual(s.validateSet({ key: 'loan', id: 'inv-00001', value: { old: true } }), '');
+assert.strictEqual(s.validateSet({ key: 'loan', id: 'inv-00001', value: { old: 'yes' } }), 'bad setting');
 const IVT = s.summarizeLoans([ivs({ dateTime: iso(2026, 9, 11) })], [{ id: 'tu-000002', loanId: 'inv-00001', dateTime: iso(2026, 9, 11), amount: -20000 }], null, null, NOW).loans[0];
 assert.deepStrictEqual([IVT.owed, IVT.principal], [120000, 120000], 'money added grows the investment');
 
@@ -301,8 +306,10 @@ const sipInv = ivs({ id: 'inv-sip01', reason: 'SIP' });
 const dset = { ...s.newSettings(), bills: { 'bill-0001': bill }, loans: { 'loan-emi01': { emi: 5600, day: 5 }, 'inv-sip01': { sip: 5000, day: 5 }, 'loan-gold1': { paid: '2026-10' } } };
 let due = s.dueItems([emiLoan, gold, sipInv, { ...loan, id: 'loan-free1' }], [{ id: 'emi-pay01', loanId: 'loan-emi01', dateTime: iso(2026, 9, 5), amount: 4150 }], dset, NOW);
 assert.deepStrictEqual(due.map(d => [d.kind, d.name, d.amount, d.date.getDate(), d.date.getMonth()]),
-  [['sip', 'SIP', 5000, 5, 9], ['bill', 'Rent', 12000, 1, 10], ['emi', 'From Ramesh, tractor repair', 5600, 5, 10], ['int', 'Gold loan', 417, 10, 10]],
-  'SIP not yet added: 5 Oct (overdue, first); EMI paid in Oct: 5 Nov; interest paid for Oct: 10 Nov; a loan without interest is not due');
+  [['bill', 'Rent', 12000, 1, 10], ['emi', 'From Ramesh, tractor repair', 5600, 5, 10], ['sip', 'SIP', 5000, 5, 10], ['int', 'Gold loan', 417, 10, 10]],
+  'SIP started 11 Oct, so first due 5 Nov; EMI paid in Oct: 5 Nov; interest paid for Oct: 10 Nov; a loan without interest is not due');
+due = s.dueItems([{ ...sipInv, dateTime: iso(2026, 8, 1) }], [], dset, NOW);
+assert.deepStrictEqual(due.map(d => [d.kind, d.date.getDate(), d.date.getMonth()]), [['sip', 5, 9], ['bill', 1, 10]], 'started in September and not added in October: 5 Oct, overdue');
 
 // ---- Add again: the same thing entered at least twice in 60 days; its amount only when it is usually the same
 const fr = s.frequent([...[1, 2, 3, 4].map(i => ({ ...e(10 + i, iso(2026, 9, i), 'Expense', 'Dairy', 66), note: 'Milk' })), { ...e(20, iso(2026, 9, 5), 'Expense', 'Dairy', 66), note: ' milk ' },
@@ -315,14 +322,17 @@ const B0 = s.newSettings(), inv1 = ivs({ dateTime: iso(2026, 9, 11) });
 assert.deepStrictEqual([s.focusOf([emiLoan], [], B0, NOW), s.focusOf([emiLoan, { ...inv1, amount: 150000 }], [], B0, NOW), s.focusOf([], [], B0, NOW), s.focusOf([], [], { ...B0, focus: 'debt' }, NOW)], ['debt', 'grow', 'grow', 'debt']);
 assert.strictEqual(s.netWorth([emiLoan, inv1, given], [], NOW.getTime() + 1), 100000 + 10000 - 120000);
 assert.strictEqual(s.netWorth([emiLoan, inv1, given], [], new Date(2026, 9, 1).getTime()), -120000, 'only what existed before 1 Oct: the September loan');
+assert.strictEqual(s.netWorth([emiLoan, inv1, given], [], new Date(2026, 9, 1).getTime(), { 'inv-00001': { old: true } }), 100000 - 120000, 'an investment the family already had counts from the start');
 const yadav = [{ ...emiLoan, dateTime: NOW.toISOString(), interest: 14 }, { ...gold, dateTime: NOW.toISOString(), amount: 50000 }, { ...loan, id: 'loan-chacha', dateTime: NOW.toISOString(), amount: 30000 }];
 assert.deepStrictEqual([s.payoffIn(yadav, [], 7300, NOW), s.neededToClear(yadav, [], 24, NOW), s.neededToClear(yadav, [], 18, NOW)], [31, 9200, 12000], 'the mockup numbers');
 assert.strictEqual(s.payoffIn(yadav, [], 1000, NOW), null, 'too little to ever pay them off');
 assert.strictEqual(s.neededToClear([], [], 12, NOW), null, 'nothing owed');
 const verma = [ivs({ id: 'inv-sip001', amount: 142300, interest: 12, dateTime: NOW.toISOString() }), ivs({ id: 'inv-ppf001', amount: 62000, interest: 7.1, dateTime: NOW.toISOString() }),
   ivs({ id: 'inv-fd0001', amount: 100000, interest: 7, dateTime: NOW.toISOString() }), ivs({ id: 'inv-rd0001', amount: 22000, interest: 6.5, dateTime: NOW.toISOString() })];
-const lt = s.longTerm(verma, [], { ...B0, loans: { 'inv-sip001': { sip: 5000 }, 'inv-rd0001': { sip: 2000, goal: 30000 } } }, NOW);
-assert.deepStrictEqual([lt.worth, lt.monthly, Math.round(lt.rate * 1e5)], [304300, 5000, 746], 'the Diwali RD (a goal) is kept apart');
+const vset = { ...B0, loans: { 'inv-sip001': { sip: 5000 }, 'inv-rd0001': { sip: 2000, goal: 30000, goalBy: '2026-11' } } };
+assert.deepStrictEqual([s.longTerm(verma, [], vset, NOW).worth, s.longTerm(verma, [], vset, NOW).monthly], [326300, 7000], 'every investment counts, goal or not');
+const lt = s.longTerm(verma.filter(l => l.id !== 'inv-rd0001'), [], vset, NOW);
+assert.deepStrictEqual([lt.worth, lt.monthly, Math.round(lt.rate * 1e5)], [304300, 5000, 746]);
 assert.ok(Math.abs(lt.addRate - (Math.pow(1.12, 1 / 12) - 1)) < 1e-9, 'the SIP grows at its fund\'s 12%');
 const n10 = s.monthsToGoal(lt.worth, lt.rate, 5000, 1e6, lt.addRate);
 assert.strictEqual(n10, 70, '₹10 lakh in 70 months, as in the mockup');
@@ -330,8 +340,14 @@ assert.strictEqual(s.monthsToGoal(lt.worth, lt.rate, 5000, 1e5), 0);
 const need = s.neededForGoal(lt.worth, lt.rate, 1e6, 60, lt.addRate);
 assert.ok(s.monthsToGoal(lt.worth, lt.rate, need, 1e6, lt.addRate) <= 60 && s.monthsToGoal(lt.worth, lt.rate, need - 100, 1e6, lt.addRate) > 60, 'the smallest amount that gets there in 60 months (' + need + ')');
 assert.strictEqual(s.neededForGoal(1e6, 0.01, 1e5, 12), 0, 'already there');
-assert.deepStrictEqual([s.goalOf(B0, 304300), s.goalOf(B0, 0), s.goalOf({ ...B0, goal: 777777 }, 1)], [5e5, 1e5, 777777]);
+const open = verma.map(l => ({ id: l.id, reason: l.id }));
+assert.strictEqual(s.goalOf(B0, open), null, 'no goal is made up');
+assert.deepStrictEqual(s.goalOf({ ...B0, goal: 777777, loans: vset.loans }, open), { target: 777777, by: null, id: '', name: '' }, 'the family goal first');
+assert.deepStrictEqual(s.goalOf({ ...vset, loans: { ...vset.loans, 'inv-ppf001': { goal: 1e6, goalBy: '2028-01' }, 'inv-fd0001': { goal: 5e5 } } }, open),
+  { target: 30000, by: '2026-11', id: 'inv-rd0001', name: 'inv-rd0001' }, 'else the investment goal due soonest');
+assert.deepStrictEqual([s.monthsUntil(NOW, '2028-01'), s.monthsUntil(NOW, '2026-10')], [15, 0]);
 assert.deepStrictEqual([s.targets(31), s.targets(4), s.targets(3), s.targets(1), s.targets(null)], [[19, 25, 31], [2, 3, 4], [2, 3], [1], [12, 24, 36]], 'every other chip is sooner than the pace');
+assert.deepStrictEqual([s.targets(40, 15), s.targets(10, 15), s.targets(null, 15), s.targets(15, 15)], [[15, 28, 40], [10, 13, 15], [15, 27, 39], [9, 12, 15]], 'the goal\'s own date is always a chip');
 
 // ---- 3 things to notice
 const nc = { focus: 'debt', avgExpense: 31500, safety: 0.19, liquid: 6000, inHand: 1300, costly: { name: 'Personal loan', rate: 14 }, earn: 6.5, sooner: { more: 1900, months: 7, saved: 5600 }, emiLoad: 0.16,

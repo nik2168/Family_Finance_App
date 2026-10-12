@@ -226,10 +226,14 @@ section{display:flex;flex-direction:column;gap:14px}
 .trend .avg{position:absolute;left:0;right:0;border-top:2px dashed var(--ink);opacity:.4}
 .ticks{display:flex;gap:10px;margin-top:5px}
 .ticks span{flex:1;text-align:center;font-size:12px;color:var(--muted)}
-.chart{margin:10px 0 4px}
-.chart svg{display:block;width:100%;height:auto;overflow:visible}
-.chart text{font:500 10px var(--font);fill:var(--muted)}
-.chart .lbl{font-weight:600;fill:var(--ink)}
+.chart{margin:12px 0 4px}
+/* the lines stretch to the card; labels are HTML so they keep their size on any screen */
+.chart .plot{position:relative;height:130px;border-bottom:1px solid var(--line)}
+.chart svg{display:block;width:100%;height:100%}
+.chart .gline{position:absolute;left:0;right:0;border-top:1.5px dashed var(--muted)}
+.chart .gline b{position:absolute;right:0;bottom:3px;font-size:12px;font-weight:600;background:var(--surface);padding:0 0 0 6px}
+.cticks{display:flex;justify-content:space-between;margin-top:5px;font-size:12px;color:var(--muted)}
+.link{color:var(--ink-2);font-weight:500;text-decoration:underline;text-underline-offset:2px;font-size:inherit}
 .tl{display:grid;gap:9px;margin:10px 0 4px}
 .tlr{display:grid;grid-template-columns:112px 1fr 64px;gap:8px;align-items:center;font-size:13px}
 .tlr span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -264,7 +268,8 @@ section{display:flex;flex-direction:column;gap:14px}
 .nav button[aria-current="page"]{background:var(--primary);color:var(--on-primary);flex:1.3}
 
 /* Bottom sheets: add / edit / pay, and the in-app question (instead of the browser's prompt and confirm) */
-dialog{border:0;padding:0;width:100%;max-width:560px;margin:auto auto 0;border-radius:36px 36px 0 0;background:var(--surface);color:var(--ink);max-height:96dvh;overflow:auto}
+dialog{border:0;padding:0;width:100%;max-width:560px;margin:auto auto 0;border-radius:36px 36px 0 0;background:var(--surface);color:var(--ink);max-height:96dvh;overflow:auto;overscroll-behavior:contain}
+html:has(dialog[open]){overflow:hidden} /* the page behind a sheet stays put */
 dialog::backdrop{background:rgba(8,10,12,.42)}
 @media (prefers-reduced-motion:no-preference){dialog[open]{animation:up .28s cubic-bezier(.2,.8,.2,1)}}
 @keyframes up{from{transform:translateY(40px);opacity:.4}}
@@ -308,6 +313,18 @@ dialog::backdrop{background:rgba(8,10,12,.42)}
 .set .row input.field{width:120px;padding:10px 12px;text-align:right;font-weight:600}
 #toast{position:fixed;left:50%;width:max-content;bottom:calc(env(safe-area-inset-bottom) + 96px);transform:translateX(-50%);z-index:10;background:var(--primary);color:var(--on-primary);padding:12px 18px;border-radius:999px;font-weight:600;display:flex;gap:8px;align-items:center;max-width:calc(100% - 32px);box-shadow:0 12px 28px -12px rgba(0,0,0,.45)}
 
+/* Phones: Expenses and Income sit just above the tabs on Home, always in reach; Money's tabs stay at the top while scrolling */
+@media (max-width:767px){
+  #home .picks{position:fixed;z-index:6;left:0;right:0;bottom:calc(env(safe-area-inset-bottom) + 76px);max-width:484px;margin:0 auto;gap:8px;padding:14px 12px 8px;background:linear-gradient(to bottom,transparent,var(--bg) 14px)}
+  #home .pick{display:grid;grid-template-columns:1fr auto;align-items:center;column-gap:8px;padding:8px 8px 8px 18px;border-radius:999px;box-shadow:0 0 0 1px var(--line),0 12px 28px -14px rgba(0,0,0,.4)}
+  #home .pick .ptop2{grid-column:2;grid-row:1/3;margin:0;width:auto}
+  #home .pick .ptop2 img{display:none}
+  #home .pick small{grid-column:1;grid-row:1;font-size:12.5px;line-height:1.2}
+  #home .pick b{grid-column:1;grid-row:2;font-size:16px}
+  #home{padding-bottom:70px}
+  #moneySeg{position:sticky;top:8px;z-index:3;box-shadow:0 0 0 4px var(--bg)}
+}
+#setList{display:flex;flex-direction:column;gap:14px}
 /* Tablets and laptops: a desktop app. A full-height sidebar (sheet switcher, tabs), a sticky toolbar, content to the right edge. */
 @media (min-width:768px){
   /* the sidebar's colour and edge are drawn on the frame, so they run the full height however far the page scrolls */
@@ -330,7 +347,11 @@ dialog::backdrop{background:rgba(8,10,12,.42)}
   main{grid-area:main;padding:16px 32px 40px}
   .list{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));align-items:start}
   #home .list,#history .list{grid-template-columns:1fr}
-  .catcards,#setList{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px;align-items:start}
+  .catcards{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px;align-items:start}
+  /* Settings: two columns of cards, each column as tall as its cards (no gaps); the buttons go across both */
+  #setList{display:block;columns:2 340px;column-gap:16px}
+  #setList>*{break-inside:avoid;margin-bottom:16px}
+  #setList>.btn{column-span:all}
   #addLoan{width:auto;align-self:flex-start;padding:14px 28px}
   dialog{margin:auto;border-radius:32px;max-height:90dvh}
   .grab{display:none}
@@ -344,16 +365,22 @@ dialog::backdrop{background:rgba(8,10,12,.42)}
 /* Wide enough for two columns (iPad landscape, laptops): Home and Money side by side, Insights cards in pairs */
 @media (min-width:1000px){
   #home{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:20px;align-items:start}
-  #loans{display:grid;grid-template-columns:minmax(300px,400px) minmax(0,1fr);gap:20px;align-items:start}
   .colA,.colB{display:flex;flex-direction:column;gap:14px}
-  #loans .colA{position:sticky;top:90px}
+  /* Money: the summary as a band across the top (stats side by side), the cards in a grid below */
+  #loans .colA{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:14px;align-items:center}
+  #loans #moneySeg{max-width:460px}
+  #loans #addLoan{grid-column:2;grid-row:1}
+  #loans #loanSummary{grid-column:1/-1;display:grid;grid-template-columns:minmax(220px,auto) minmax(0,1fr);gap:8px 24px;align-items:center}
+  #loans #loanSummary .inlist{margin:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:0 18px}
+  #loans #loanSummary .inlist .row{border:0}
+  #loans .list{grid-template-columns:repeat(auto-fill,minmax(320px,1fr))}
   #history{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr);align-items:center}
   #history>*{grid-column:1/-1}
   #history>.search{grid-column:1}
   #history>.filters{grid-column:2}
-  #insights{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);align-items:start}
+  #insights{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:20px;align-items:start}
   #insights>.seg,#insights>.period,#insights>#insShare{grid-column:1/-1}
-  #insights>:empty{display:none}
+  #insights>:empty,.colA>:empty,.colB>:empty{display:none}
 }
 </style>
 </head>
@@ -441,7 +468,7 @@ dialog::backdrop{background:rgba(8,10,12,.42)}
       <p class="foot">Deleting a category moves its entries to Others. Others is always kept, with its monthly budget. Changes reach the Google Sheet with the next sync, and its summary follows.</p>
     </section>
 
-    <section id="settings" hidden><div id="setList" style="display:flex;flex-direction:column;gap:14px"></div></section>
+    <section id="settings" hidden><div id="setList"></div></section>
 
     <section id="history" hidden>
       <label class="search"><svg class="i sm"><use href="#i-magnifying-glass"/></svg><input id="q" type="search" placeholder="Search reason or amount" autocomplete="off" aria-label="Search entries"><button type="button" class="rbtn xs" id="qClear" aria-label="Clear search" hidden><svg class="i sm"><use href="#i-x"/></svg></button></label>
@@ -479,14 +506,18 @@ dialog::backdrop{background:rgba(8,10,12,.42)}
         <span class="ctr"><span id="periodLabel"></span><small id="periodSub"></small></span>
         <button class="rbtn sm" type="button" id="next" aria-label="Next"><svg class="i sm"><use href="#i-caret-right"/></svg></button>
       </div>
-      <div id="insSummary"></div>
-      <div id="insSplit"></div>
-      <div id="insNotes"></div>
-      <div id="insCats"></div>
-      <div id="insTrend"></div>
-      <div id="insPlan"></div>
-      <div id="insHealth"></div>
-      <div id="insBiz"></div>
+      <div class="colA">
+        <div id="insSummary"></div>
+        <div id="insSplit"></div>
+        <div id="insNotes"></div>
+        <div id="insCats"></div>
+      </div>
+      <div class="colB">
+        <div id="insTrend"></div>
+        <div id="insPlan"></div>
+        <div id="insHealth"></div>
+        <div id="insBiz"></div>
+      </div>
       <button type="button" class="btn soft" id="insShare"><svg class="i sm"><use href="#i-share"/></svg>Share this summary on WhatsApp</button>
     </section>
   </main>
@@ -538,9 +569,10 @@ dialog::backdrop{background:rgba(8,10,12,.42)}
         <label><span class="lbl">Due on day</span><input class="field" id="emiDay" inputmode="numeric" autocomplete="off" placeholder="1–31"></label></div>
       <div id="sipBox" class="two"><label><span class="lbl">Every month (SIP, RD)</span><input class="field" id="sip" inputmode="decimal" autocomplete="off" placeholder="₹, optional"></label>
         <label><span class="lbl">On day</span><input class="field" id="sipDay" inputmode="numeric" autocomplete="off" placeholder="1–31"></label></div>
-      <div id="goalBox" class="two"><label><span class="lbl">Goal (optional)</span><input class="field" id="goal" inputmode="decimal" autocomplete="off" placeholder="₹, e.g. Diwali"></label>
+      <div id="goalBox" class="two"><label><span class="lbl">Goal for this one (optional)</span><input class="field" id="goal" inputmode="decimal" autocomplete="off" placeholder="₹, e.g. Diwali"></label>
         <label><span class="lbl">By</span><input class="field" id="goalBy" type="month"></label></div>
       <label class="swrow" id="starBox"><div class="grow"><b>★ Pay this first</b><small>Otherwise the costliest loan goes first</small></div><input type="checkbox" class="sw" id="star"></label>
+      <label class="swrow" id="oldBox"><div class="grow"><b id="oldTitle">I already had this before</b><small id="oldText">Not counted as this month's money</small></div><input type="checkbox" class="sw" id="old"></label>
     </div>
     <div id="billBox" hidden style="display:flex;flex-direction:column;gap:10px">
       <label><span class="lbl">Due on day of the month</span><input class="field" id="billDay" inputmode="numeric" autocomplete="off" placeholder="1–31"></label>

@@ -243,17 +243,10 @@ assert.strictEqual(s.validateLoan({ ...ivs(), compound: false }), '');
 assert.strictEqual(s.validateLoan({ ...ivs(), compound: 'no' }), 'bad interest');
 assert.strictEqual(s.validateLoan({ ...ivs(), dir: 'stocks' }), 'bad dir');
 
-// ---- Indian financial year (April to March)
-assert.deepStrictEqual(Object.values(s.periodRange('fy', new Date(2027, 1, 10))), [new Date(2026, 3, 1), new Date(2027, 3, 1)], 'Feb 2027 is in FY 2026-27');
-assert.deepStrictEqual(s.periodRange('fy', new Date(2026, 3, 1)).start, new Date(2026, 3, 1));
 // All: every entry, one bucket, nothing before it to compare with
 const allS = s.summarize([{ id: 'a1', dateTime: '2019-05-02T10:00:00Z', type: 'Income', category: 'Others', amount: 500 }, { id: 'a2', dateTime: '2026-10-02T10:00:00Z', type: 'Income', category: 'Others', amount: 700 }], 'all', new Date(2026, 9, 12));
 assert.deepStrictEqual([allS.income, allS.label, allS.incomeSeries], [1200, 'All time', [1200]]);
 assert.strictEqual(+s.previousSpan('all', new Date(2026, 9, 12), new Date(2026, 9, 12)).end, +s.periodRange('all', new Date()).start, 'an empty comparison');
-assert.strictEqual(s.periodLabel('fy', new Date(2026, 9, 11)), 'FY 2026-27');
-assert.deepStrictEqual(s.shiftPeriod('fy', new Date(2027, 1, 10), -1), new Date(2025, 3, 1));
-const fy = s.summarize([e(1, iso(2026, 3, 2), 'Income', 'Job', 100), e(2, iso(2027, 2, 30), 'Expense', 'House', 40), e(3, iso(2026, 2, 31), 'Income', 'Job', 7)], 'fy', new Date(2026, 9, 1), 0);
-assert.deepStrictEqual([fy.labels[0], fy.labels[11], fy.income, fy.expense, fy.incomeSeries[0], fy.expenseSeries[11]], ['Apr', 'Mar', 100, 40, 100, 40]);
 
 // ---- Settings ops: validated, applied by the phone the same way as by the script, and categories carry budgets and bills along
 const set = (key, value, id) => ({ opId: 'set-' + key, kind: 'set', action: 'update', data: { key, id, value } });
@@ -270,8 +263,8 @@ assert.strictEqual(s.validateSet(set('budget', 600, 'constructor').data), 'bad s
 assert.strictEqual(s.validateSet({ key: 'nope', value: 1 }), 'bad setting');
 v = s.applyOps({ rows: [], settings: { budgets: { Dairy: 900 } } }, [set('daily', 20000), set('budget', 600, 'Others'), set('bill', bill, 'bill-0001'), set('bill', { ...bill, category: 'Dairy' }, 'bill-0002'),
   set('loan', { emi: 5600 }, 'loan-0001'), set('year', 'apr'), set('focus', 'nope'), cat('rename', { name: 'dairy', to: 'Animals' }), set('budget', 0, 'Others'), set('bill', null, 'bill-0001')]);
-assert.deepStrictEqual([v.settings.daily, v.settings.budgets, Object.keys(v.settings.bills), v.settings.bills['bill-0002'].category, v.settings.loans['loan-0001'].emi, v.settings.year, v.settings.focus],
-  [20000, { Animals: 900 }, ['bill-0002'], 'Animals', 5600, 'apr', 'auto'], 'a rename carries the budget and bills along; a bad op changes nothing');
+assert.deepStrictEqual([v.settings.daily, v.settings.budgets, Object.keys(v.settings.bills), v.settings.bills['bill-0002'].category, v.settings.loans['loan-0001'].emi, 'year' in v.settings, v.settings.focus],
+  [20000, { Animals: 900 }, ['bill-0002'], 'Animals', 5600, false, 'auto'], 'a rename carries the budget and bills along; a bad op (or the old year one) changes nothing');
 v = s.applyOps({ settings: v.settings, loans: [loan] }, [cat('delete', { name: 'Animals' }), { opId: 'd', kind: 'loan', action: 'delete', id: 'loan-0001' }]);
 assert.deepStrictEqual([v.settings.budgets, v.settings.bills['bill-0002'].category, v.settings.loans], [{}, 'Others', {}], 'deleting: budget dropped, bills to Others, loan extras gone');
 assert.deepStrictEqual(s.settingsOf(null), s.newSettings());
@@ -350,6 +343,7 @@ assert.deepStrictEqual(s.goalOf({ ...B0, goal: 777777, loans: vset.loans }, open
 assert.deepStrictEqual(s.goalOf({ ...vset, loans: { ...vset.loans, 'inv-ppf001': { goal: 1e6, goalBy: '2028-01' }, 'inv-fd0001': { goal: 5e5 } } }, open),
   { target: 30000, by: '2026-11', id: 'inv-rd0001', name: 'inv-rd0001' }, 'else the investment goal due soonest');
 assert.deepStrictEqual([s.monthsUntil(NOW, '2028-01'), s.monthsUntil(NOW, '2026-10')], [15, 0]);
+assert.deepStrictEqual([s.goalShort(40000, { goal: 100000, sip: 2000, goalBy: '2028-01' }, NOW), s.goalShort(40000, { goal: 100000, sip: 2000, goalBy: '2020-01' }, NOW), s.goalShort(90000, { goal: 50000 }, NOW)], [30000, 60000, 0], 'SIPs till the goal date count; a past date or no date: none');
 assert.deepStrictEqual([s.targets(31), s.targets(4), s.targets(3), s.targets(1), s.targets(null)], [[19, 25, 31], [2, 3, 4], [2, 3], [1], [12, 24, 36]], 'every other chip is sooner than the pace');
 assert.deepStrictEqual([s.targets(40, 15), s.targets(10, 15), s.targets(null, 15), s.targets(15, 15)], [[15, 28, 40], [10, 13, 15], [15, 27, 39], [9, 12, 15]], 'the goal\'s own date is always a chip');
 

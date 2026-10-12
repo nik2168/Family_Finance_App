@@ -546,9 +546,11 @@ function renderHistory(v) {
 
 // Share: the entries History shows, as a spreadsheet (CSV) file; where the phone can't share a file, it is downloaded.
 function shareHistory() {
-  var all = filterEntries(view().rows, state.f), q = function (x) { return '"' + String(x == null ? '' : x).replace(/"/g, '""') + '"'; };
+  // A reason starting with = + - @ would run as a formula in Excel or Sheets: a ' keeps it text (as safeText in Code.gs).
+  var all = filterEntries(view().rows, state.f), q = function (x) { var t = String(x == null ? '' : x); return '"' + (typeof x === 'string' && /^[=+\-@]/.test(t) ? "'" : '') + t.replace(/"/g, '""') + '"'; };
   var csv = ['Date,Type,Category,Amount,Reason,Added by'].concat(all.map(function (e) {
-    return [new Date(e.dateTime).toISOString().slice(0, 10), e.type, e.category, e.amount, e.note, e.by].map(q).join(',');
+    var d = new Date(e.dateTime);
+    return [monthKey(d) + '-' + pad2(d.getDate()), e.type, e.category, e.amount, e.note, e.by].map(q).join(',');
   })).join('\n');
   var name = sheetOf(P).name.replace(/[^\w ]+/g, '').trim() + ' entries.csv', file = new File([csv], name, { type: 'text/csv' });
   if (navigator.canShare && navigator.canShare({ files: [file] })) return navigator.share({ files: [file], title: name }).catch(function () {});
@@ -581,8 +583,7 @@ function loanCard(l, w, T, x, now) {
   var amount = dir === 'invested' ? money.format(Math.round(l.owed)) : esc(money.format(l.owed)) + T.left2;
   var bar = '', lines = [], box = '';
   if (dir === 'invested' && x.goal) {
-    var share = Math.min(1, l.owed / x.goal), left = x.goalBy ? Math.max(0, (Number(x.goalBy.slice(0, 4)) - now.getFullYear()) * 12 + Number(x.goalBy.slice(5)) - 1 - now.getMonth()) : 0;
-    var short = Math.max(0, Math.round(x.goal - l.owed - (x.sip || 0) * left));
+    var share = Math.min(1, l.owed / x.goal), short = goalShort(l.owed, x, now);
     bar = '<span class="bar"><i style="width:' + (share * 100).toFixed(1) + '%;background:var(--butter-d)"></i></span>';
     lines.push(Math.round(share * 100) + '% of the ' + money.format(x.goal) + ' goal' + (x.goalBy ? ' by ' + monthYear(dayIn(x.goalBy, 1)) : '') + ' · ' + (short ? money.format(short) + ' short at this pace' : 'on track'));
   } else if (dir !== 'invested') {
@@ -684,7 +685,7 @@ function noteHtml(n, prevLabel) {
   else if (n.kind === 'ontrack') t = ['diya', n.name + ' is on track', n.by ? 'For ' + monthYear(dayIn(n.by, 1)) + '.' : ''];
   else if (n.kind === 'under') t = ['bag', money.format(n.left) + ' left of the everyday budget', 'About ' + money.format(n.perDay) + ' a day for the rest of the month.'];
   else if (n.kind === 'drop') t = [pic(n.cat), n.cat + ' is ' + money.format(round2(n.before - n.now)) + ' less than ' + prevLabel, money.format(n.now) + ' against ' + money.format(n.before) + '.'];
-  else if (n.kind === 'worth') t = ['up', 'Net worth went up ' + lakh(n.up) + ' this month', 'Savings and money lent, less what is owed.'];
+  else if (n.kind === 'worth') t = ['up', 'Net worth went up ' + lakh(n.up) + ' this month', 'Cash saved, investments and money lent, less what is owed.'];
   else if (n.kind === 'low') t = ['warn', n.rate < 0 ? 'Spent more than the income in ' + n.month : 'Saved only ' + pct(n.rate) + ' of income in ' + n.month, 'Aim for 20% or more.'];
   else if (n.kind === 'over') t = ['warn', n.cat + ' is ' + money.format(n.over) + ' over its budget', 'Budgets are set in Settings.'];
   else t = [pic(n.cat), n.cat + ' is ' + money.format(round2(n.now - n.before)) + ' more than ' + prevLabel, money.format(n.now) + ' against ' + money.format(n.before) + '.'];
@@ -692,17 +693,14 @@ function noteHtml(n, prevLabel) {
 }
 
 function renderInsights(v) {
-  var now = new Date(), set = v.settings, yv = set.year === 'apr' ? 'fy' : 'year';
-  if (state.view === 'year' || state.view === 'fy') state.view = yv; // Year follows Settings: calendar year or the financial year
+  var now = new Date(), set = v.settings;
   var s = summarize(v.rows, state.view, state.date, 0, v.cats), r = periodRange(state.view, state.date), running = now >= r.start && now < r.end;
-  document.querySelectorAll('[data-view]').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.view === (state.view === 'fy' ? 'year' : state.view))); });
-  $('#yearBtn').textContent = yv === 'fy' ? 'Year (FY)' : 'Year';
+  document.querySelectorAll('[data-view]').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.view === state.view)); });
   $('#periodLabel').textContent = s.label;
   var dim = Math.round((r.end - r.start) / 864e5), gone = Math.min(dim, Math.floor((now - r.start) / 864e5) + 1);
   var last = new Date(r.end.getFullYear(), r.end.getMonth() - 1, 1);
   var first = v.rows.reduce(function (t, e) { var d = new Date(e.dateTime); return d < t ? d : t; }, now);
-  $('#periodSub').innerHTML = state.view === 'all' ? esc('Since ' + monthYear(first)) : state.view === 'month' ? (running ? gone + ' of ' + dim + ' days' : '') : esc(monthYear(r.start) + ' – ' + monthYear(last) + (running ? ' · so far' : '')) +
-    ' · <button type="button" class="link" data-year="' + (yv === 'fy' ? 'jan' : 'apr') + '">' + (yv === 'fy' ? 'Jan–Dec' : 'Apr–Mar') + ' instead</button>';
+  $('#periodSub').innerHTML = state.view === 'all' ? esc('Since ' + monthYear(first)) : state.view === 'month' ? (running ? gone + ' of ' + dim + ' days' : '') : esc(monthYear(r.start) + ' – ' + monthYear(last) + (running ? ' · so far' : ''));
   $('#next').disabled = s.end > now;
   $('#prev').disabled = state.view === 'all';
   var ps = previousSpan(state.view, state.date, now), prev = totals(v.rows, ps.start, ps.end);
@@ -728,21 +726,26 @@ function renderInsights(v) {
   // Things to notice: going well, and worth a look
   var b = budgetStatus(v.rows, set, v.cats, now), inv = p.inv.loans.filter(function (l) { return !l.done; }), liquid = 0, earn = 0;
   inv.forEach(function (l) { var x = set.loans[l.id] || {}; if (x.type && INVEST[x.type].liquid) { earn = Math.max(earn, annual(l)); liquid += l.owed; } });
-  var borrowed = summarizeLoans(loansOf(v, 'borrowed'), v.repays, null, null, now).loans.filter(function (l) { return !l.done; });
+  var borrowed = p.open || summarizeLoans(loansOf(v, 'borrowed'), v.repays, null, null, now).loans.filter(function (l) { return !l.done; }); // planOf has them when clearing loans
   var costly = borrowed.slice().sort(function (a, c) { return annual(c) - annual(a); })[0], emiMonthly = 0;
   borrowed.forEach(function (l) { var x = set.loans[l.id] || {}; emiMonthly += x.emi || l.monthly; });
-  var fy = periodRange(yv, now), streak = 0, streakRate = 0, lastM = p.months[p.months.length - 1];
-  for (var i = p.months.length - 1; i >= 0 && p.months[i].income > 0 && p.months[i].savings / p.months[i].income >= 0.2; i--) { streak++; streakRate += p.months[i].savings / p.months[i].income; }
-  var monthStart = periodRange('month', now).start.getTime(), nw = netWorth(v.loans, v.repays, now.getTime() + 1), nwThen = netWorth(v.loans, v.repays, monthStart, set.loans), thisMonth = running && state.view === 'month';
+  // Notes about the last few months and this one (streak, low, under, over, worth) show only on this month's Insights.
+  var yr = periodRange('year', now), streak = 0, streakRate = 0, lastM = p.months[p.months.length - 1], thisMonth = running && state.view === 'month';
+  for (var i = p.months.length - 1; thisMonth && i >= 0 && p.months[i].income > 0 && p.months[i].savings / p.months[i].income >= 0.2; i--) { streak++; streakRate += p.months[i].savings / p.months[i].income; }
+  // Net worth's change this month. netWorth leaves out cash, so this month's cash in hand is added: putting cash into an FD
+  // or a loan then moves nothing, and what is left is what was saved plus what the investments grew.
+  var mr = periodRange('month', now), mcf = cashFlow(v.loans, v.repays, mr.start, mr.end, set.loans), nw = netWorth(v.loans, v.repays, now.getTime() + 1);
+  var nwUp = Math.round(nw - netWorth(v.loans, v.repays, mr.start.getTime(), set.loans) + totals(v.rows, mr.start, mr.end).savings - mcf.loansPaid - mcf.invested - mcf.lent + mcf.borrowed);
   var ctx = { focus: p.focus, avgExpense: p.avgExpense, liquid: liquid, safety: p.avgExpense ? liquid / p.avgExpense : 0, inHand: running ? inHand : 0,
     costly: costly && annual(costly) ? { name: costly.reason, rate: annual(costly) } : null, earn: earn || 6.5, emiLoad: p.avgIncome ? emiMonthly / p.avgIncome : 0,
-    interestYear: v.rows.filter(function (e) { var d = new Date(e.dateTime); return e.type === 'Expense' && matchName([LOAN_INTEREST], e.category) && d >= fy.start && d < fy.end; }).reduce(function (t, e) { return t + e.amount; }, 0),
+    interestYear: v.rows.filter(function (e) { var d = new Date(e.dateTime); return e.type === 'Expense' && matchName([LOAN_INTEREST], e.category) && d >= yr.start && d < yr.end; }).reduce(function (t, e) { return t + e.amount; }, 0),
     goals: inv.filter(function (l) { return (set.loans[l.id] || {}).goal; }).map(function (l) {
-      var x = set.loans[l.id], left = x.goalBy ? Math.max(0, (Number(x.goalBy.slice(0, 4)) - now.getFullYear()) * 12 + Number(x.goalBy.slice(5)) - 1 - now.getMonth()) : 0;
-      return { name: l.reason, short: Math.max(0, Math.round(x.goal - l.owed - (x.sip || 0) * left)), by: x.goalBy };
+      var x = set.loans[l.id];
+      return { name: l.reason, short: goalShort(l.owed, x, now), by: x.goalBy };
     }), streak: streak, streakRate: streak ? streakRate / streak : 0, over: thisMonth ? b.over : [], rise: biggestRise(s.spent, prev.spent, b.fixed), drop: biggestRise(s.spent, prev.spent, b.fixed, -1),
-    low: lastM && lastM.income > 0 && lastM.savings / lastM.income < 0.1 ? { rate: lastM.savings / lastM.income, month: MONTHS[lastM.start.getMonth()] } : null,
-    under: thisMonth && b.daily && b.daily.left >= 0 ? b.daily : null, worthUp: running ? Math.round(nw - nwThen) : 0 };
+    low: thisMonth && lastM && lastM.income > 0 && lastM.savings / lastM.income < 0.1 ? { rate: lastM.savings / lastM.income, month: MONTHS[lastM.start.getMonth()] } : null,
+    // under: something spent, and slower than the month is going (days gone = today's date; days in month = today + days left - 1)
+    under: thisMonth && b.daily && b.daily.left > 0 && b.daily.spent > 0 && b.daily.spent <= b.daily.limit * now.getDate() / (now.getDate() + b.daily.days - 1) ? b.daily : null, worthUp: thisMonth ? nwUp : 0 };
   if (p.focus === 'debt' && p.pace) {
     var more = Math.max(500, Math.round(p.cash * 0.25 / 500) * 500), f2 = forecast(borrowedOnly(v.loans), v.repays, p.cash + more, now);
     if (f2.payoff) ctx.sooner = { more: more, months: p.pace - f2.payoff.months, saved: p.f.totalInterest - f2.totalInterest };
@@ -822,7 +825,7 @@ function renderInsights(v) {
     tile(p.savingsRate == null ? '--field' : p.savingsRate >= 0.2 ? '--mint' : p.savingsRate >= 0.1 ? '--butter' : '--blush', 'Savings rate', p.savingsRate == null ? '–' : pct(p.savingsRate), 'aim for 20%+' + (p.savingsRate >= 0.2 ? ' ✓' : '')) +
     tile(ctx.safety >= aim ? '--mint' : ctx.safety >= 1 ? '--butter' : '--blush', 'Safety net', spanText(ctx.safety), liquid ? 'FD, RD, savings · aim for ' + (aim === 1 ? '1 month first' : '6') : 'mark FDs and savings in Money') +
     tile(ctx.emiLoad < 0.3 ? '--mint' : ctx.emiLoad < 0.4 ? '--butter' : '--blush', 'EMI load', pct(ctx.emiLoad), 'of income · keep under 30%') +
-    tile('--peri', 'Net worth', lakh(nw), (nw - nwThen >= 0 ? '▲ ' : '▼ ') + lakh(Math.abs(nw - nwThen)) + ' this month') + '</div></div>' : '';
+    tile('--peri', 'Net worth', lakh(nw), (nwUp >= 0 ? '▲ ' : '▼ ') + lakh(Math.abs(nwUp)) + ' this month') + '</div></div>' : '';
 
   // Business profit: only for a category with both income and expenses (Dairy, a shop)
   var biz = v.cats.Income.filter(function (c) { return c !== 'Others' && v.cats.Expense.indexOf(c) >= 0; });
@@ -892,7 +895,6 @@ function renderSettings(v) {
         '<b class="num">' + money.format(bl.amount) + '</b>' + icon('pencil-simple', 'sm muted') + '</button>';
     }).join('') : '<p class="t-sm muted">Rent, school fees, electricity, LIC: add them here, or switch on "Repeat every month" when you add an expense.</p>') +
       '<p class="t-xs muted" style="padding-top:6px">EMIs and SIPs are set on their loan or investment in Money.</p></div>' +
-    '<div class="card"><h2>Year</h2>' + segHtml('year', set.year, [['jan', 'January–December'], ['apr', 'April–March (FY)']]) + '<p class="t-xs muted" style="margin-top:8px">What "Year" means in Insights. April–March is the Indian financial year.</p></div>' +
     '<div class="card"><h2>Theme</h2>' + segHtml('theme', load('fm.theme', 'auto'), [['auto', 'Auto'], ['light', 'Light'], ['dark', 'Dark']]) + '</div>' +
     '<div class="card"><h2>Sheets on this phone</h2><div style="display:grid;gap:2px">' + sheetsHtml() + '</div></div>' +
     '<button type="button" class="btn soft" data-tab="cats">' + icon('pencil-simple', 'sm') + 'Edit categories</button>' +
@@ -1406,7 +1408,6 @@ document.addEventListener('click', function (ev) {
   else if (d.cren) editCat('rename', d.ctype, d.cren);
   else if (d.cdel) editCat('delete', d.ctype, d.cdel);
   else if (d.focus) { if (!setOp('focus', d.focus)) { render(); trySync(); } }
-  else if (d.year) { if (!setOp('year', d.year)) { state.date = new Date(); render(); trySync(); } }
   else if (d.theme) { save('fm.theme', d.theme); if (d.theme === 'auto') delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = d.theme; render(); }
   else if (t.id === 'addBill') openBill('');
   else if (t.id === 'setBudget') ask({ title: 'Monthly budgets', html: budgetsHtml(view()), ok: 'Done', text: 'Everyday spending is one total for every category without a bill: Home shows what is left to spend each day. ' +
@@ -1417,7 +1418,7 @@ document.addEventListener('click', function (ev) {
   else if (d.per) { state.sheet.per = d.per; renderRate(); }
   else if (d.comp) { state.sheet.compound = d.comp === 'compound'; renderRate(); }
   else if (t.hasAttribute('data-rate')) { $('#rate').value = d.rate === '0' ? '' : d.rate; renderRate(); }
-  else if (d.view) { state.view = d.view === 'year' ? (view().settings.year === 'apr' ? 'fy' : 'year') : d.view; state.date = new Date(); render(); }
+  else if (d.view) { state.view = d.view; state.date = new Date(); render(); }
   else if (t.id === 'prev' || t.id === 'next') { state.date = shiftPeriod(state.view, state.date, t.id === 'prev' ? -1 : 1); render(); }
   else if (t.id === 'addLoan') openSheet({ mode: 'loan-add', dir: tabDir() });
   else if (t.id === 'backHome') showTab(state.tab === 'cats' ? 'settings' : 'home');

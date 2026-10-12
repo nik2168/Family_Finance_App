@@ -71,11 +71,10 @@ function validateRepay(r) {
   return '';
 }
 
-// [start, end) in local time. Weeks start Monday. 'fy': the Indian financial year, April to March.
+// [start, end) in local time. Weeks start Monday. A year is January to December.
 function periodRange(view, date) {
   var y = date.getFullYear(), m = date.getMonth(), d = date.getDate();
   if (view === 'all') return { start: new Date(2000, 0, 1), end: new Date(2100, 0, 1) }; // every entry
-  if (view === 'fy') { var fy = m >= 3 ? y : y - 1; return { start: new Date(fy, 3, 1), end: new Date(fy + 1, 3, 1) }; }
   if (view === 'week') {
     var s = d - (date.getDay() + 6) % 7;
     return { start: new Date(y, m, s), end: new Date(y, m, s + 7) };
@@ -88,7 +87,6 @@ function shiftPeriod(view, date, n) {
   if (view === 'all') return date;
   if (view === 'week') return new Date(date.getFullYear(), date.getMonth(), date.getDate() + 7 * n);
   if (view === 'month') return new Date(date.getFullYear(), date.getMonth() + n, 1);
-  if (view === 'fy') return new Date(periodRange('fy', date).start.getFullYear() + n, 3, 1);
   return new Date(date.getFullYear() + n, 0, 1);
 }
 
@@ -96,7 +94,6 @@ function periodLabel(view, date) {
   var r = periodRange(view, date);
   if (view === 'all') return 'All time';
   if (view === 'year') return String(r.start.getFullYear());
-  if (view === 'fy') return 'FY ' + r.start.getFullYear() + '-' + String(r.end.getFullYear()).slice(2);
   if (view === 'month') return MONTHS[r.start.getMonth()] + ' ' + r.start.getFullYear();
   var last = new Date(r.end.getFullYear(), r.end.getMonth(), r.end.getDate() - 1);
   return r.start.getDate() + ' ' + MONTHS[r.start.getMonth()] + ' - ' + last.getDate() + ' ' + MONTHS[last.getMonth()];
@@ -107,7 +104,6 @@ function buckets(view, start) {
   if (view === 'all') return ['All'];
   if (view === 'week') return DAYS.slice();
   if (view === 'year') return MONTHS.slice();
-  if (view === 'fy') return MONTHS.slice(3).concat(MONTHS.slice(0, 3));
   var days = new Date(start.getFullYear(), start.getMonth() + 1, 0).getDate(), out = [];
   for (var a = 1; a <= days; a += 7) out.push(a + '-' + Math.min(a + 6, days));
   return out;
@@ -117,7 +113,6 @@ function bucketIndex(view, d, start) {
   if (view === 'all') return 0;
   if (view === 'week') return Math.round((new Date(d.getFullYear(), d.getMonth(), d.getDate()) - start) / 864e5);
   if (view === 'month') return Math.floor((d.getDate() - 1) / 7);
-  if (view === 'fy') return (d.getMonth() + 9) % 12;
   return d.getMonth();
 }
 
@@ -377,7 +372,7 @@ function forecast(loans, repays, perMonth, now) {
 // sheet's Others limit, cell B1); bills: {id: {name, category, amount, day, every (months), next ('2026-10', the month next due)}};
 // loans: per loan / investment {emi, sip, day, star, type, goal, goalBy, paid ('2026-10': monthly interest paid up to),
 //   old (true: the family already had it before; its starting amount is not this month's money)};
-// focus: 'auto', 'debt' (clear loans) or 'grow' (grow savings); year: 'jan' or 'apr' (the Indian financial year); goal: savings goal.
+// focus: 'auto', 'debt' (clear loans) or 'grow' (grow savings); goal: savings goal.
 // ponytail: one property holds all of it (Apps Script allows 9 KB): plenty for a family's bills and loans; split it if that is ever hit.
 var FOCUS = ['auto', 'debt', 'grow'], EVERY = [1, 3, 6, 12];
 // Investment types: the expected return a new one starts with (it can be changed), and whether it counts as the safety net.
@@ -392,7 +387,7 @@ var INVEST = {
   chit: { name: 'Chit fund', rate: 8, compound: false },
   other: { name: 'Other', rate: 7, compound: true }
 };
-function newSettings() { return { daily: 0, budgets: {}, bills: {}, loans: {}, focus: 'auto', year: 'jan', goal: 0 }; }
+function newSettings() { return { daily: 0, budgets: {}, bills: {}, loans: {}, focus: 'auto', goal: 0 }; }
 function settingsOf(s) {
   var out = newSettings();
   if (s) Object.keys(out).forEach(function (k) { if (s[k] != null) out[k] = JSON.parse(JSON.stringify(s[k])); });
@@ -405,7 +400,6 @@ function validateSet(d) {
   if (!d || typeof d !== 'object') return 'bad setting';
   var v = d.value;
   if (d.key === 'focus') return FOCUS.indexOf(v) >= 0 ? '' : 'bad setting';
-  if (d.key === 'year') return v === 'jan' || v === 'apr' ? '' : 'bad setting';
   if (d.key === 'goal' || d.key === 'daily') return v === 0 || checkAmount(v) ? '' : 'bad setting';
   if (d.key === 'budget') return checkCatName(d.id) && (v === 0 || checkAmount(v)) ? '' : 'bad setting';
   if (d.key !== 'bill' && d.key !== 'loan') return 'bad setting';
@@ -623,6 +617,10 @@ function goalOf(s, open) {
 }
 // Whole months from now's month to a '2028-01' month.
 function monthsUntil(now, key) { return (Number(key.slice(0, 4)) - now.getFullYear()) * 12 + Number(key.slice(5)) - 1 - now.getMonth(); }
+// What an investment worth `owed` will still lack for its goal (x: its settings.loans extras) when its SIP keeps going until goalBy.
+function goalShort(owed, x, now) {
+  return Math.max(0, Math.round(x.goal - owed - (x.sip || 0) * (x.goalBy ? Math.max(0, monthsUntil(now, x.goalBy)) : 0)));
+}
 // Targets for the plan chips, in months: about 60% and 80% of the time at today's pace (each sooner than it), and the pace itself.
 // due: the goal's own date (months away), always one of them, with the pace and one between when they differ.
 function targets(pace, due) {
@@ -681,5 +679,5 @@ if (typeof module !== 'undefined') {
     validateSet: validateSet, applySet: applySet, catInSettings: catInSettings, monthKey: monthKey, addMonths: addMonths, dayIn: dayIn, totals: totals,
     previousSpan: previousSpan, lastMonths: lastMonths, cashFlow: cashFlow, budgetStatus: budgetStatus, dueItems: dueItems, frequent: frequent,
     worthNow: worthNow, focusOf: focusOf, netWorth: netWorth, payoffIn: payoffIn, neededToClear: neededToClear, longTerm: longTerm,
-    monthsToGoal: monthsToGoal, neededForGoal: neededForGoal, goalOf: goalOf, monthsUntil: monthsUntil, targets: targets, notesFor: notesFor, biggestRise: biggestRise };
+    monthsToGoal: monthsToGoal, neededForGoal: neededForGoal, goalOf: goalOf, monthsUntil: monthsUntil, goalShort: goalShort, targets: targets, notesFor: notesFor, biggestRise: biggestRise };
 }

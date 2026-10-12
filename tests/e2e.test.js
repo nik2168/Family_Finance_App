@@ -342,9 +342,8 @@ const ym = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'
     await page.fill('[data-budget="Others"]', '600');
     await page.locator('[data-budget="Others"]').blur();
     await page.click('[data-focus="auto"]');
-    await page.click('[data-year="apr"]');
     await sync();
-    assert.deepStrictEqual([SET().daily, SET().focus, SET().year, backend.tab('Loans & Settings').rows[0][1]], [20000, 'auto', 'apr', 600], 'the Others budget is the sheet\'s B1');
+    assert.deepStrictEqual([SET().daily, SET().focus, backend.tab('Loans & Settings').rows[0][1]], [20000, 'auto', 600], 'the Others budget is the sheet\'s B1');
     await page.click('#addBill');
     await page.click('#catGrid [data-cat="House"]');
     await keypad('12000');
@@ -368,9 +367,8 @@ const ym = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'
     const rentRow = sheet().rows.find(e => e.note === 'Rent');
     assert.deepStrictEqual([rentRow.by, rentRow.amount], ['Sunita', 12000], 'who added it reaches the sheet (the Date cell\'s note)');
     await tab('insights');
-    assert.match(await page.textContent('#yearBtn'), /FY/);
     await page.click('[data-view="year"]');
-    assert.match(await page.textContent('#periodLabel'), /^FY 20\d\d-\d\d$/);
+    assert.match(await page.textContent('#periodLabel'), /^20\d\d$/, 'Year is January to December');
     await page.click('[data-view="month"]');
     await tab('history');
     assert.ok(await page.isVisible('#whoBox'), 'now there is a name, History can filter by it');

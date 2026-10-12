@@ -371,7 +371,8 @@ function forecast(loans, repays, perMonth, now) {
 // daily: the monthly budget for everyday spending (every expense category without a bill); budgets: per category (Others is the
 // sheet's Others limit, cell B1); bills: {id: {name, category, amount, day, every (months), next ('2026-10', the month next due)}};
 // loans: per loan / investment {emi, sip, day, star, type, goal, goalBy, paid ('2026-10': monthly interest paid up to),
-//   old (true: the family already had it before; its starting amount is not this month's money)};
+//   old (true: the family already had it before; its starting amount is not this month's money),
+//   cat (money borrowed only: the expense category it is pending for, e.g. a shop's dues; paying it back is an expense in it. None: a cash loan)};
 // focus: 'auto', 'debt' (clear loans) or 'grow' (grow savings); goal: savings goal.
 // ponytail: one property holds all of it (Apps Script allows 9 KB): plenty for a family's bills and loans; split it if that is ever hit.
 var FOCUS = ['auto', 'debt', 'grow'], EVERY = [1, 3, 6, 12];
@@ -411,6 +412,7 @@ function validateSet(d) {
   }
   var ok = ['emi', 'sip', 'goal'].every(function (k) { return v[k] == null || checkAmount(v[k]); }) && (v.day == null || isDay(v.day)) &&
     (v.star == null || typeof v.star === 'boolean') && (v.old == null || typeof v.old === 'boolean') && (v.type == null || INVEST.hasOwnProperty(v.type)) &&
+    (v.cat == null || checkCatName(v.cat)) &&
     ['goalBy', 'paid'].every(function (k) { return v[k] == null || MONTH_KEY.test(v[k]); });
   return ok ? '' : 'bad setting';
 }
@@ -421,8 +423,8 @@ function applySet(s, d) {
   else s[d.key] = d.value;
   return s;
 }
-// After a category op (applyCat) succeeded: an expense category's budget and bills follow its rename; deleting drops its budget
-// and moves its bills to Others.
+// After a category op (applyCat) succeeded: an expense category's budget, bills and pending follow its rename; deleting drops its
+// budget and moves its bills and pending to Others.
 function catInSettings(s, cats, op) {
   var d = op.data || {}, from = String(d.name || '').toLowerCase();
   if (d.type !== 'Expense' || op.action === 'add') return;
@@ -434,6 +436,7 @@ function catInSettings(s, cats, op) {
     if (to && !s.budgets[to]) s.budgets[to] = v;
   });
   Object.keys(s.bills).forEach(function (k) { if (s.bills[k].category.toLowerCase() === from) s.bills[k].category = to || 'Others'; });
+  Object.keys(s.loans).forEach(function (k) { if (s.loans[k].cat && s.loans[k].cat.toLowerCase() === from) s.loans[k].cat = to || 'Others'; });
 }
 
 // ---- Months as '2026-10'
@@ -479,7 +482,8 @@ function lastMonths(rows, now, n, cats) {
 
 // Where the money went besides expenses within [start, end): principal paid on loans (loansPaid), money borrowed, put into
 // investments (net of withdrawals; money added is a negative withdrawal) and lent out (net of what came back).
-// x: the loans' extras (settings.loans); the starting amount of one the family already had (old) is left out.
+// x: the loans' extras (settings.loans); the starting amount of one the family already had (old) is left out, and so is paying
+// back a pending with a category (cat): that payment is an expense already.
 function cashFlow(loans, repays, start, end, x) {
   var dir = {}, out = { loansPaid: 0, borrowed: 0, invested: 0, lent: 0 };
   function inside(s) { var d = new Date(s); return d >= start && d < end; }
@@ -489,7 +493,7 @@ function cashFlow(loans, repays, start, end, x) {
   });
   repays.forEach(function (r) {
     if (!dir[r.loanId] || !inside(r.dateTime)) return;
-    if (dir[r.loanId] === 'borrowed') out.loansPaid += r.amount;
+    if (dir[r.loanId] === 'borrowed') { if (!(x && x[r.loanId] && x[r.loanId].cat)) out.loansPaid += r.amount; }
     else if (dir[r.loanId] === 'invested') out.invested -= r.amount;
     else out.lent -= r.amount;
   });

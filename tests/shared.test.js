@@ -288,6 +288,16 @@ assert.deepStrictEqual(s.cashFlow([ivs({ dateTime: iso(2026, 9, 2), amount: 2164
   'money the family already had is not this month\'s; what was added later is');
 assert.strictEqual(s.validateSet({ key: 'loan', id: 'inv-00001', value: { old: true } }), '');
 assert.strictEqual(s.validateSet({ key: 'loan', id: 'inv-00001', value: { old: 'yes' } }), 'bad setting');
+
+// ---- Pending with a category: paying it back is an expense already, so it is not also loans paid; it follows category changes
+assert.strictEqual(s.cashFlow([loan], [rep], new Date(2026, 9, 1), new Date(2026, 10, 1), { 'loan-0001': { cat: 'Groceries' } }).loansPaid, 0);
+assert.strictEqual(s.validateSet({ key: 'loan', id: 'loan-0001', value: { cat: 'Groceries', star: true } }), '');
+assert.strictEqual(s.validateSet({ key: 'loan', id: 'loan-0001', value: { cat: 'saved' } }), 'bad setting');
+const pset = { ...s.newSettings(), loans: { 'loan-0001': { cat: 'Kirana' }, 'loan-0002': { star: true } } };
+s.catInSettings(pset, { Income: [], Expense: ['Groceries', 'Others'] }, { action: 'rename', data: { type: 'Expense', name: 'kirana', to: 'Groceries' } });
+assert.deepStrictEqual(pset.loans, { 'loan-0001': { cat: 'Groceries' }, 'loan-0002': { star: true } });
+s.catInSettings(pset, { Income: [], Expense: ['Others'] }, { action: 'delete', data: { type: 'Expense', name: 'Groceries' } });
+assert.strictEqual(pset.loans['loan-0001'].cat, 'Others', 'deleting the category moves the pending to Others');
 const IVT = s.summarizeLoans([ivs({ dateTime: iso(2026, 9, 11) })], [{ id: 'tu-000002', loanId: 'inv-00001', dateTime: iso(2026, 9, 11), amount: -20000 }], null, null, NOW).loans[0];
 assert.deepStrictEqual([IVT.owed, IVT.principal], [120000, 120000], 'money added grows the investment');
 

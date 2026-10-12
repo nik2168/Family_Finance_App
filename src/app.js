@@ -29,11 +29,12 @@ var TABS = { home: ['house', 'Home'], history: ['clock-counter-clockwise', 'Hist
 var MONEY_TABS = { loans: 'borrowed', given: 'given', invested: 'invested' };
 // Words for the three kinds of loan (DIRS): money we borrowed, gave to others or invested. All three live in the Money tab.
 var LOAN_TEXT = {
-  borrowed: { color: '--blush', pic: 'bank', left: 'We owe', add: 'Add a loan', list: 'Loans', none: ['No loans', 'Tap "Add a loan" when you borrow money'],
-    foot: 'Interest you pay counts as an expense. Paying back lowers what you owe. Loans are kept apart from income and expenses.', newTitle: 'New loan', editTitle: 'Edit loan',
-    kind: 'Money borrowed', kindIcon: 'arrow-down-left', label: 'Borrowed from, and why', ph: 'e.g. From Ramesh, tractor repair',
-    need: 'Write who you borrowed from and why', left2: ' owed', over: ' still owed', done: 'Repaid', small: 'Borrowed ', paid: 'Paid back ',
-    save: 'Save loan', saved: 'Loan saved', what: 'this loan', payments: ['payment', 'payments'], deleted: 'Loan deleted', pill: 'bad',
+  // Pending: what the family owes, a shop's dues (with its expense category: paying it back is an expense in it) or a cash loan.
+  borrowed: { color: '--blush', pic: 'bank', left: 'Still to pay', add: 'Add pending', list: 'Pending', none: ['Nothing pending', 'Tap "Add pending" when you owe someone'],
+    foot: 'Paying back a pending with a category (a shop\'s dues) counts as an expense in it; a cash loan\'s doesn\'t. Interest you pay counts as an expense.', newTitle: 'New pending', editTitle: 'Edit pending',
+    kind: 'Pending', kindIcon: 'arrow-down-left', label: 'Owed to, and why', ph: 'e.g. Kirana shop, DAP from Mahesh',
+    need: 'Write who it is owed to and why', left2: ' to pay', over: ' still to pay', done: 'Paid', small: 'Owed ', paid: 'Paid back ',
+    save: 'Save', saved: 'Pending saved', what: 'this pending', payments: ['payment', 'payments'], deleted: 'Pending deleted', pill: 'bad',
     rate: 'Interest (optional)', rates: [0, 1, 1.5, 2, 3], per: 'month' },
   given: { color: '--mint', pic: 'hand', left: 'Still to get back', add: 'Give money', list: 'Money given', none: ['Nothing given', 'Tap "Give money" when you lend to someone'],
     foot: '"Got interest" adds it to Income › Interest. Money given is kept apart from income and expenses.', newTitle: 'Give money', editTitle: 'Edit money given',
@@ -94,6 +95,8 @@ function signed(n) { return (n < 0 ? '−' : n > 0 ? '+' : '') + money.format(Ma
 function plain(n) { return (n < 0 ? '−' : '') + money.format(Math.abs(n)); }
 function monthYear(d) { return MONTHS[d.getMonth()] + ' ' + d.getFullYear(); }
 function inMonths(now, n) { return new Date(now.getFullYear(), now.getMonth() + n, 1); }
+// Short for the three Home buttons: ₹850, ₹13.5K, ₹4.3L (Intl's compact form differs by browser, Chrome writes ₹13.5T).
+function compact(n) { var a = Math.round(n); return a >= 1e5 ? '₹' + Math.round(a / 1e4) / 10 + 'L' : a >= 1e4 ? '₹' + Math.round(a / 100) / 10 + 'K' : money.format(a); }
 function lakh(n) { var a = Math.abs(n); return (n < 0 ? '−' : '') + (a >= 100000 ? '₹' + (Math.round(a / 10000) / 10) + ' lakh' : money.format(Math.round(a))); }
 function pct(x) { return Math.round(x * 100) + '%'; }
 function monthsText(n) { return n === 1 ? '1 month' : n + ' months'; }
@@ -359,8 +362,11 @@ function ring(rate, sub) {
 // ---- The plan behind Home and Insights: the family's focus and its numbers, from the last 6 complete months.
 function planOf(v, now) {
   var set = v.settings, focus = focusOf(v.loans, v.repays, set, now), months = lastMonths(v.rows, now, 6, v.cats);
-  // For the loans: interest paid is added back and interest got left out, as the forecast counts both itself (savingRate)
-  var adj = lastMonths(v.rows.filter(function (e) { return !matchName([e.type === 'Income' ? INTEREST : LOAN_INTEREST], e.category); }), now, 6, v.cats);
+  // For the loans: interest paid and pending paid back (an expense with id '<payment id>-paid') are added back, and interest got is
+  // left out, as the forecast counts them itself (savingRate)
+  var paidBack = {};
+  v.repays.forEach(function (r) { paidBack[r.id + '-paid'] = true; });
+  var adj = lastMonths(v.rows.filter(function (e) { return !paidBack[e.id] && !matchName([e.type === 'Income' ? INTEREST : LOAN_INTEREST], e.category); }), now, 6, v.cats);
   var inc = 0, exp = 0, sav = 0, n = 0;
   months.forEach(function (m, i) { if (!m.income && !m.expense) return; n++; inc += m.income; exp += m.expense; sav += adj[i].savings; });
   var given = summarizeLoans(loansOf(v, 'given'), v.repays, null, null, now), inv = summarizeLoans(loansOf(v, 'invested'), v.repays, null, null, now);
@@ -487,8 +493,11 @@ function renderHome(v) {
   var now = new Date(), s = summarize(v.rows, 'month', now, 0, v.cats), w = waiting(), p = planOf(v, now);
   $('#hero').innerHTML = heroHtml(p, now);
   $('#strip').innerHTML = stripHtml(budgetStatus(v.rows, v.settings, v.cats, now));
-  $('#heroIn').textContent = money.format(s.income);
-  $('#heroOut').textContent = money.format(s.expense);
+  $('#heroIn').textContent = compact(s.income); // three side by side on a phone: ₹13.5K (the labels say it in full)
+  $('#heroOut').textContent = compact(s.expense);
+  var owed = summarizeLoans(loansOf(v, 'borrowed'), v.repays, null, null, now).owed;
+  $('#heroPend').textContent = compact(owed);
+  $('[data-new="Pending"]').setAttribute('aria-label', 'Add pending. ' + money.format(owed) + ' still to pay');
   $('[data-new="Income"]').setAttribute('aria-label', 'Add income. ' + money.format(s.income) + ' this month');
   $('[data-new="Expense"]').setAttribute('aria-label', 'Add expense. ' + money.format(s.expense) + ' this month');
   state.again2 = frequent(v.rows, now, 4);
@@ -573,8 +582,8 @@ function emisLeft(l, emi) {
 function loanCard(l, w, T, x, now) {
   var dir = l.dir, ym = monthKey(now), paidNow = l.repays.some(function (r) { return monthKey(new Date(r.dateTime)) === ym && r.amount > 0; });
   var addedNow = l.repays.some(function (r) { return monthKey(new Date(r.dateTime)) === ym && r.amount < 0; });
-  var type = x.type && INVEST[x.type], picture = dir === 'invested' ? (x.goal ? 'diya' : { fd: 'bank', rd: 'bank', liquid: 'bag', sip: 'up', ppf: 'lock', gold: 'gem', lic: 'shield', chit: 'hand' }[x.type] || 'up') : T.pic;
-  var info = [];
+  var type = x.type && INVEST[x.type], picture = dir === 'invested' ? (x.goal ? 'diya' : { fd: 'bank', rd: 'bank', liquid: 'bag', sip: 'up', ppf: 'lock', gold: 'gem', lic: 'shield', chit: 'hand' }[x.type] || 'up') : dir === 'borrowed' && x.cat ? pic(x.cat) : T.pic;
+  var info = dir === 'borrowed' && x.cat ? [x.cat] : [];
   if (dir === 'invested') info.push((type ? type.name + ' · ' : '') + rateText(l));
   else if (l.interest) info.push(rateText(l) + (l.monthly ? ', about ' + money.format(Math.round(l.monthly)) + ' a month' : ''));
   else info.push('No interest');
@@ -1027,8 +1036,8 @@ function renderNoteChips() {
 
 // Category grid: one tap. Income or Expense is switched above it.
 function renderCat() {
-  var sh = state.sheet, cats = view().cats[sh.type] || [];
-  $('#catGrid').innerHTML = cats.map(function (c) {
+  var sh = state.sheet, cats = view().cats[sh.type] || [], pend = sh.mode === 'loan-add' || sh.mode === 'loan-edit';
+  $('#catGrid').innerHTML = (pend ? '<button type="button" class="cg" data-cat="" aria-pressed="' + !sh.category + '"><span class="disc" style="background:var(--blush)">' + img3d('bank', 28) + '</span>Cash loan</button>' : '') + cats.map(function (c) {
     return '<button type="button" class="cg" data-cat="' + esc(c) + '" aria-pressed="' + (sh.category === c) + '"><span class="disc" style="background:var(' + discOf(sh.type, c) + ')">' + img(c, 28) + '</span>' + esc(c) + '</button>';
   }).join('');
   document.querySelectorAll('#typeSeg button').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.type === sh.type)); });
@@ -1109,8 +1118,10 @@ function openSheet(sh, values) {
   $('#paySeg').hidden = true;
   $('#payInfo').hidden = true;
   if (isPay) renderPaySeg();
-  $('#catGrid').hidden = !(isEntry || isBill);
-  if (isEntry || isBill) renderCat();
+  var pend = isLoan && (sh.dir || 'borrowed') === 'borrowed'; // a pending picks its expense category, or Cash loan
+  if (pend) { sh.type = 'Expense'; sh.category = sh.category || ''; }
+  $('#catGrid').hidden = !(isEntry || isBill || pend);
+  if (isEntry || isBill || pend) renderCat();
   $('#noteBox').hidden = isPay;
   $('#noteLabel').textContent = isLoan ? T.label : isBill ? 'Bill name' : 'Reason (optional)';
   $('#note').placeholder = isLoan ? T.ph : isBill ? 'e.g. Rent, Electricity, LIC' : 'What was it for?';
@@ -1158,7 +1169,7 @@ function loanOpts(values) {
   $('#goalBy').value = x.goalBy || '';
   $('#star').checked = !!x.star || sh.priority === 'high';
   $('#old').checked = !!x.old;
-  $('#oldTitle').textContent = { borrowed: 'Borrowed before this month', given: 'Given before this month', invested: 'I already had this before' }[sh.dir];
+  $('#oldTitle').textContent = { borrowed: 'Owed before this month', given: 'Given before this month', invested: 'I already had this before' }[sh.dir];
   $('#oldText').textContent = sh.dir === 'invested' ? 'Not counted as money put in this month: its value today' : 'Not counted as this month\'s money';
   $('#rateLabel').textContent = T.rate;
   renderRate();
@@ -1185,7 +1196,7 @@ function openEdit(id) {
 
 function openLoanEdit(id) {
   var v = view(), l = findById(v.loans, id);
-  if (l) openSheet({ mode: 'loan-edit', id: l.id, dir: loanDir(l) }, { amount: l.amount, note: l.reason, dateTime: l.dateTime, interest: l.interest, per: l.per, priority: l.priority, compound: l.compound, x: v.settings.loans[l.id] });
+  if (l) openSheet({ mode: 'loan-edit', id: l.id, dir: loanDir(l), category: (v.settings.loans[l.id] || {}).cat || '' }, { amount: l.amount, note: l.reason, dateTime: l.dateTime, interest: l.interest, per: l.per, priority: l.priority, compound: l.compound, x: v.settings.loans[l.id] });
 }
 
 function openRepay(id, kind) {
@@ -1250,7 +1261,14 @@ function saveSheet(ev) {
       msg = 'EMI paid ' + money.format(amount);
     } else {
       var r = { id: id, loanId: l.id, dateTime: when, amount: sh.pay === 'add' ? -amount : amount, createdAt: now };
-      bad = validateRepay(r) || queue('repay', 'add', id, r);
+      // Paying back a pending with a category is also an expense in it, id '<payment id>-paid' (ids are unique across the sheet);
+      // deleting the payment deletes it too.
+      if (sh.dir === 'borrowed' && sh.pay === 'back' && x.cat) {
+        var pe = { id: id + '-paid', dateTime: when, type: 'Expense', category: ensureCat('Expense', x.cat), amount: amount, note: l.reason + ' (pending paid)', createdAt: now };
+        if (me()) pe.by = me();
+        bad = validateEntry(pe) || queue('entry', 'add', pe.id, pe);
+      }
+      bad = bad || validateRepay(r) || queue('repay', 'add', id, r);
       msg = (sh.pay === 'add' ? 'Added ' : T.paid) + money.format(amount);
     }
   } else {
@@ -1263,6 +1281,7 @@ function saveSheet(ev) {
       if (numberOf($('#emi').value)) extras.emi = numberOf($('#emi').value);
       if (dayOf($('#emiDay').value)) extras.day = dayOf($('#emiDay').value);
       if ($('#star').checked) extras.star = true;
+      if (sh.category) extras.cat = sh.category;
       sh.priority = $('#star').checked ? 'high' : sh.priority === 'high' ? 'medium' : sh.priority;
     } else if (sh.dir === 'invested') {
       if ($('#sipDay').value.trim() && !dayOf($('#sipDay').value)) return err('The day is 1 to 31', $('#sipDay'));
@@ -1357,7 +1376,7 @@ document.addEventListener('click', function (ev) {
   var t = !$('#avatar').hidden && ev.target.closest('#headText') ? $('#avatar') : ev.target.closest('button');
   if (!t) return;
   var d = t.dataset;
-  if (d.new) openSheet({ mode: 'add', type: d.new, category: '' });
+  if (d.new) openSheet(d.new === 'Pending' ? { mode: 'loan-add', dir: 'borrowed' } : { mode: 'add', type: d.new, category: '' });
   else if (t.hasAttribute('aria-controls')) {
     var open = t.getAttribute('aria-expanded') !== 'true';
     closeDDs();
@@ -1382,7 +1401,12 @@ document.addEventListener('click', function (ev) {
   else if (d.set) { state.amt = d.set; renderAmount(); }
   else if (t.hasAttribute('data-note')) { $('#note').value = d.note; renderNoteChips(); }
   else if (d.type && t.closest('#typeSeg')) { if (state.sheet.type !== d.type) { state.sheet.type = d.type; state.sheet.category = ''; $('#repeatBox').hidden = !(state.sheet.mode === 'add' && d.type === 'Expense' && !state.sheet.bill); } entryHeader(); renderCat(); renderNoteChips(); }
-  else if (d.cat && t.closest('#catGrid')) { state.sheet.category = d.cat; $('#err').textContent = ''; entryHeader(); renderCat(); if (state.sheet.mode !== 'bill') renderNoteChips(); if (!state.amt) $('#amount').focus(); }
+  else if (t.hasAttribute('data-cat') && t.closest('#catGrid')) {
+    var m0 = state.sheet.mode;
+    state.sheet.category = d.cat; $('#err').textContent = ''; renderCat();
+    if (m0 !== 'loan-add' && m0 !== 'loan-edit') { entryHeader(); if (m0 !== 'bill') renderNoteChips(); }
+    if (!state.amt) $('#amount').focus();
+  }
   else if (d.paykind) { state.sheet.pay = d.paykind; var lx = view().settings.loans[state.sheet.loan.id] || {}, l2 = state.sheet.loan; state.amt = String(d.paykind === 'emi' ? lx.emi || '' : d.paykind === 'int' ? Math.round(l2.monthly) || '' : d.paykind === 'add' ? lx.sip || '' : ''); renderPaySeg(); renderQuick(); renderAmount(); }
   else if (t.hasAttribute('data-day')) { state.sheet.day = Number(d.day); $('#whenBox').hidden = true; renderDay(); }
   else if (t.id === 'changeWhen') { $('#whenBox').hidden = false; renderDay(); $('#when').focus(); }
@@ -1398,7 +1422,7 @@ document.addEventListener('click', function (ev) {
   }
   else if (d.again) { var g = state.again2[Number(d.again)]; openSheet({ mode: 'add', type: g.type, category: g.category }, { amount: g.amount, note: g.note }); }
   else if (d.plan) { var v0 = view(); state.pick[focusOf(v0.loans, v0.repays, v0.settings, new Date())] = Number(d.plan); render(); }
-  else if (d.delRepay) { ask({ title: 'Delete this payment?', ok: 'Delete', danger: true }).then(function (yes) { if (yes) { queue('repay', 'delete', d.delRepay); toast('Payment deleted'); render(); trySync(); } }); }
+  else if (d.delRepay) { ask({ title: 'Delete this payment?', ok: 'Delete', danger: true }).then(function (yes) { if (yes) { queue('repay', 'delete', d.delRepay); if (findById(view().rows, d.delRepay + '-paid')) queue('entry', 'delete', d.delRepay + '-paid'); toast('Payment deleted'); render(); trySync(); } }); }
   else if (d.sheet) { if (d.sheet !== P) useSheet(d.sheet); else closeDDs(); }
   else if (d.sren) renameSheet(d.sren);
   else if (d.sdel) removeSheet(d.sdel);

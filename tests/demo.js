@@ -14,6 +14,7 @@ const APP = path.join(__dirname, '..', 'src'), PORT = 8765, BASE = `http://local
 const SCRIPT = 'https://script.google.com/macros/s/DEMO/exec', KEY = 'demo-key';
 const SHOTS = process.env.SHOTS;
 const money = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0, maximumFractionDigits: 2 });
+const compact = n => { const a = Math.round(n); return a >= 1e5 ? '₹' + Math.round(a / 1e4) / 10 + 'L' : a >= 1e4 ? '₹' + Math.round(a / 100) / 10 + 'K' : money.format(a); };
 const backend = createBackend();
 backend.props.CATS = JSON.stringify(backend.ctx.CATEGORIES); // a family sheet with the starting categories
 backend.ctx.setup();
@@ -201,7 +202,7 @@ async function connect(ctx) {
     // Home: this month's tiles, the latest 3 by day, and the plan for a family with loans
     const month = s.summarize(st.rows, 'month', new Date(), 3000);
     check('Home: latest 3 entries, by day', await page.locator('#recent .lrow').count() === 3 && await page.locator('#recent .dayh').count() > 0);
-    check('Home: Expenses / Income buttons show this month', eqv([await page.textContent('#heroIn'), await page.textContent('#heroOut')], [money.format(month.income), money.format(month.expense)]),
+    check('Home: Income / Expenses buttons show this month', eqv([await page.textContent('#heroIn'), await page.textContent('#heroOut')], [compact(month.income), compact(month.expense)]),
       `${await page.textContent('#heroIn')} / ${await page.textContent('#heroOut')}`);
     const hero = await page.textContent('#hero'), heroDate = await page.textContent('#heroDate');
     check('Home: more owed than saved, so the focus is clearing the loans', /Focus: clear loans.*Debt-free by/.test(hero), heroDate);

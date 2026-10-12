@@ -117,7 +117,7 @@ section{display:flex;flex-direction:column;gap:14px}
 .tchip[aria-pressed="true"] small{color:rgba(255,255,255,.75)}
 .tout{margin-top:8px;min-height:2.6em}
 .spark{display:block;width:100%;height:34px;margin-top:8px}
-.picks{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.picks{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
 .pick{display:flex;flex-direction:column;gap:1px;text-align:left;border-radius:22px;padding:12px 12px 14px 14px;color:var(--on-pastel);box-shadow:var(--shadow);min-width:0}
 .pick .ptop2{display:flex;width:100%;justify-content:space-between;align-items:center;margin-bottom:6px}
 .pick .plus{width:32px;height:32px;border-radius:999px;background:#0B0B0C;color:#fff;display:grid;place-items:center}
@@ -318,14 +318,15 @@ dialog::backdrop{background:rgba(8,10,12,.42)}
 .set .row input.field,#askBody .row input.field{width:120px;padding:10px 12px;text-align:right;font-weight:600}
 #toast{position:fixed;left:50%;width:max-content;bottom:calc(var(--navb) + var(--navh) + 22px);transform:translateX(-50%);z-index:10;background:var(--primary);color:var(--on-primary);padding:12px 18px;border-radius:999px;font-weight:600;display:flex;gap:8px;align-items:center;max-width:calc(100% - 32px);box-shadow:0 12px 28px -12px rgba(0,0,0,.45)}
 
-/* Phones: Expenses and Income sit just above the tabs on Home, always in reach; Money's tabs stay at the top while scrolling */
+/* Phones: Income, Pending and Expenses sit just above the tabs on Home, always in reach; Money's tabs stay at the top while scrolling */
 @media (max-width:767px){
   #home .picks{position:fixed;z-index:6;left:0;right:0;bottom:calc(var(--navb) + var(--navh) + 2px);max-width:484px;margin:0 auto;gap:8px;padding:14px 12px 8px;background:linear-gradient(to bottom,transparent,var(--bg) 14px)}
-  #home .pick{display:grid;grid-template-columns:1fr auto;align-items:center;column-gap:8px;padding:8px 8px 8px 18px;border-radius:999px;box-shadow:0 0 0 1px var(--line),0 12px 28px -14px rgba(0,0,0,.4)}
+  #home .pick{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;column-gap:6px;padding:8px 8px 8px 14px;border-radius:999px;box-shadow:0 0 0 1px var(--line),0 12px 28px -14px rgba(0,0,0,.4)}
   #home .pick .ptop2{grid-column:2;grid-row:1/3;margin:0;width:auto}
   #home .pick .ptop2 img{display:none}
   #home .pick small{grid-column:1;grid-row:1;font-size:12.5px;line-height:1.2}
-  #home .pick b{grid-column:1;grid-row:2;font-size:16px}
+  #home .pick b{grid-column:1;grid-row:2;font-size:15px}
+  #home .pick .plus{width:28px;height:28px}
   #home{padding-bottom:70px}
   #moneySeg{position:sticky;top:8px;z-index:3;box-shadow:0 0 0 4px var(--bg)}
 }
@@ -459,8 +460,9 @@ dialog::backdrop{background:rgba(8,10,12,.42)}
         <div id="hero"></div>
         <div id="strip"></div>
         <div class="picks">
-          <button type="button" class="pick" data-new="Expense" style="background:var(--blush)"><span class="ptop2"><img class="e" src="assets/3d/wings.png" width="30" height="30" alt=""><span class="plus"><svg class="i sm"><use href="#i-plus"/></svg></span></span><small>Expenses</small><b class="num" id="heroOut">₹0</b></button>
           <button type="button" class="pick" data-new="Income" style="background:var(--mint)"><span class="ptop2"><img class="e" src="assets/3d/up.png" width="30" height="30" alt=""><span class="plus"><svg class="i sm"><use href="#i-plus"/></svg></span></span><small>Income</small><b class="num" id="heroIn">₹0</b></button>
+          <button type="button" class="pick" data-new="Pending" style="background:var(--butter)"><span class="ptop2"><img class="e" src="assets/3d/bank.png" width="30" height="30" alt=""><span class="plus"><svg class="i sm"><use href="#i-plus"/></svg></span></span><small>Pending</small><b class="num" id="heroPend">₹0</b></button>
+          <button type="button" class="pick" data-new="Expense" style="background:var(--blush)"><span class="ptop2"><img class="e" src="assets/3d/wings.png" width="30" height="30" alt=""><span class="plus"><svg class="i sm"><use href="#i-plus"/></svg></span></span><small>Expenses</small><b class="num" id="heroOut">₹0</b></button>
         </div>
         <div id="again"></div>
       </div>
@@ -491,14 +493,14 @@ dialog::backdrop{background:rgba(8,10,12,.42)}
     </section>
 
     <section id="loans" hidden>
-      <!-- The Money tab: Loans (money borrowed), Given (money lent to others) and Investments; app.js fills in the words. -->
+      <!-- The Money tab: Pending (money owed: shop dues and loans), Given (money lent to others) and Investments; app.js fills in the words. -->
       <div class="colA">
-        <div class="seg" id="moneySeg" role="group" aria-label="Show"><button type="button" data-tab="loans">Loans</button><button type="button" data-tab="given">Given</button><button type="button" data-tab="invested">Investments</button></div>
+        <div class="seg" id="moneySeg" role="group" aria-label="Show"><button type="button" data-tab="loans">Pending</button><button type="button" data-tab="given">Given</button><button type="button" data-tab="invested">Investments</button></div>
         <div class="pcard" id="loanSummary"></div>
-        <button type="button" class="btn" id="addLoan"><svg class="i sm"><use href="#i-plus"/></svg><span id="addLoanText">Add a loan</span></button>
+        <button type="button" class="btn" id="addLoan"><svg class="i sm"><use href="#i-plus"/></svg><span id="addLoanText">Add pending</span></button>
       </div>
       <div class="colB">
-        <div class="sec"><h2 id="loanListTitle">Loans</h2><span class="see" id="loanCount"></span></div>
+        <div class="sec"><h2 id="loanListTitle">Pending</h2><span class="see" id="loanCount"></span></div>
         <div class="list" id="loanList"></div>
         <p class="foot" id="loanFoot"></p>
       </div>

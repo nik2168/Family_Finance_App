@@ -118,7 +118,8 @@ const ym = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'
     await shot(page, '01-add-sheet');
     await page.click('#cancel');
     assert.match(await page.textContent('#syncPill'), /5 waiting to sync/);
-    assert.deepStrictEqual([await page.textContent('#heroIn'), await page.textContent('#heroOut')], ['₹13,500', '₹7,150.5']);
+    assert.deepStrictEqual([await page.textContent('#heroIn'), await page.textContent('#heroOut')], ['₹13.5K', '₹7,151']);
+    assert.match(await page.getAttribute('[data-new="Expense"]', 'aria-label'), /₹7,150\.5 this month/);
     assert.strictEqual(await page.locator('#recent .lrow').count(), 3, 'a phone shows the latest 3, by day');
     assert.match(await page.textContent('#recent .dayh'), /Today/);
     await shot(page, '02-home-offline', true);
@@ -157,7 +158,7 @@ const ym = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'
     assert.ok(await page.isVisible('#emiBox') && await page.isVisible('#starBox') && await page.isHidden('#typeBox'));
     await keypad('20000');
     await page.click('#saveBtn');
-    assert.match(await page.textContent('#err'), /borrowed from/);
+    assert.match(await page.textContent('#err'), /owed to/);
     await page.fill('#note', 'From Ramesh, tractor repair');
     await page.click('#rateChips [data-rate="2"]');
     assert.strictEqual(await page.inputValue('#rate'), '2');
@@ -174,7 +175,7 @@ const ym = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'
     assert.match(await page.textContent('#quick'), /Full ₹20,000/);
     await keypad('25000');
     await page.click('#saveBtn');
-    assert.match(await page.textContent('#err'), /more than the ₹20,000 still owed/);
+    assert.match(await page.textContent('#err'), /more than the ₹20,000 still to pay/);
     await clearAmount();
     await keypad('5000');
     await shot(page, '05-repay-sheet');
@@ -185,7 +186,7 @@ const ym = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'
     await page.click('#saveBtn');
     await closed();
     assert.strictEqual(await page.textContent('#loanOwed'), '₹14,000');
-    assert.match(await page.textContent('#loanList'), /₹14,000 owed/);
+    assert.match(await page.textContent('#loanList'), /₹14,000 to pay/);
     await page.click('#loanList summary');
     await page.click('[data-del-repay] >> nth=0');
     await reply();
@@ -530,6 +531,34 @@ const ym = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'
     assert.strictEqual(await page.evaluate(() => Object.keys(localStorage).filter(k => /^fm\.\w{8}\./.test(k)).length), 0, 'its copy on the phone is gone');
     assert.strictEqual(await page.locator('#ddSheets [data-sdel]').count(), 0, 'the last sheet cannot be removed');
     await page.keyboard.press('Escape');
+
+    // ---- Pending from Home (Income · Pending · Expenses): a shop's dues with a category; paying it back is an expense in it
+    await tab('home');
+    assert.deepStrictEqual(await page.$$eval('.picks .pick small', b => b.map(x => x.textContent)), ['Income', 'Pending', 'Expenses']);
+    await page.click('[data-new="Pending"]');
+    assert.match(await page.textContent('#catGrid'), /^Cash loan/);
+    await page.click('#catGrid [data-cat="House"]');
+    await keypad('900');
+    await page.fill('#note', 'Kirana shop');
+    await page.click('#saveBtn');
+    await closed();
+    await tab('loans');
+    const kirana = page.locator('.lcard', { hasText: 'Kirana shop' });
+    assert.match(await kirana.textContent(), /House/);
+    await kirana.locator('[data-kind="back"]').click();
+    await keypad('400');
+    await page.click('#saveBtn');
+    await closed();
+    await synced();
+    const paidRow = sheet().rows.find(e => e.note === 'Kirana shop (pending paid)');
+    assert.ok(paidRow && paidRow.category === 'House' && paidRow.amount === 400 && sheet().repays.some(r => r.id + '-paid' === paidRow.id && r.amount === 400),
+      'the payment is an expense in House, linked to the payment by its id');
+    await kirana.locator('summary').click();
+    await kirana.locator('[data-del-repay]').click();
+    await reply();
+    await synced();
+    assert.ok(!sheet().rows.some(e => e.id === paidRow.id) && !sheet().repays.some(r => r.id + '-paid' === paidRow.id), 'deleting the payment deletes its expense');
+    await tab('home');
 
     // ---- Theme: Settings can force dark
     await page.click('#avatar');

@@ -246,6 +246,10 @@ assert.strictEqual(s.validateLoan({ ...ivs(), dir: 'stocks' }), 'bad dir');
 // ---- Indian financial year (April to March)
 assert.deepStrictEqual(Object.values(s.periodRange('fy', new Date(2027, 1, 10))), [new Date(2026, 3, 1), new Date(2027, 3, 1)], 'Feb 2027 is in FY 2026-27');
 assert.deepStrictEqual(s.periodRange('fy', new Date(2026, 3, 1)).start, new Date(2026, 3, 1));
+// All: every entry, one bucket, nothing before it to compare with
+const allS = s.summarize([{ id: 'a1', dateTime: '2019-05-02T10:00:00Z', type: 'Income', category: 'Others', amount: 500 }, { id: 'a2', dateTime: '2026-10-02T10:00:00Z', type: 'Income', category: 'Others', amount: 700 }], 'all', new Date(2026, 9, 12));
+assert.deepStrictEqual([allS.income, allS.label, allS.incomeSeries], [1200, 'All time', [1200]]);
+assert.strictEqual(+s.previousSpan('all', new Date(2026, 9, 12), new Date(2026, 9, 12)).end, +s.periodRange('all', new Date()).start, 'an empty comparison');
 assert.strictEqual(s.periodLabel('fy', new Date(2026, 9, 11)), 'FY 2026-27');
 assert.deepStrictEqual(s.shiftPeriod('fy', new Date(2027, 1, 10), -1), new Date(2025, 3, 1));
 const fy = s.summarize([e(1, iso(2026, 3, 2), 'Income', 'Job', 100), e(2, iso(2027, 2, 30), 'Expense', 'House', 40), e(3, iso(2026, 2, 31), 'Income', 'Job', 7)], 'fy', new Date(2026, 9, 1), 0);
@@ -349,17 +353,22 @@ assert.deepStrictEqual([s.monthsUntil(NOW, '2028-01'), s.monthsUntil(NOW, '2026-
 assert.deepStrictEqual([s.targets(31), s.targets(4), s.targets(3), s.targets(1), s.targets(null)], [[19, 25, 31], [2, 3, 4], [2, 3], [1], [12, 24, 36]], 'every other chip is sooner than the pace');
 assert.deepStrictEqual([s.targets(40, 15), s.targets(10, 15), s.targets(null, 15), s.targets(15, 15)], [[15, 28, 40], [10, 13, 15], [15, 27, 39], [9, 12, 15]], 'the goal\'s own date is always a chip');
 
-// ---- 3 things to notice
+// ---- Things to notice: going well (good) and worth a look (bad), up to 4 each
+const kinds = n => [n.good.map(x => x.kind), n.bad.map(x => x.kind)];
 const nc = { focus: 'debt', avgExpense: 31500, safety: 0.19, liquid: 6000, inHand: 1300, costly: { name: 'Personal loan', rate: 14 }, earn: 6.5, sooner: { more: 1900, months: 7, saved: 5600 }, emiLoad: 0.16,
   interestYear: 20000, over: [{ cat: 'Kirana', over: 400 }], rise: null, goals: [], streak: 0 };
-assert.deepStrictEqual(s.notesFor(nc).map(x => x.kind), ['safety', 'costly', 'sooner']);
-assert.strictEqual(s.notesFor(nc)[0].need, 25500, 'a month of expenses, less what is there');
-assert.deepStrictEqual(s.notesFor({ ...nc, safety: 2, earn: 15, sooner: null }).map(x => x.kind), ['interest', 'over'], 'a month covered and no costly loan');
-const ng = { ...nc, focus: 'grow', safety: 1.9, liquid: 100000, avgExpense: 52000, goals: [{ name: 'Diwali fund', short: 6000, by: '2026-11' }, { name: 'Fees', short: 0 }], over: [], rise: { cat: 'Kirana', now: 6850, before: 5650 }, streak: 4 };
-assert.deepStrictEqual(s.notesFor(ng).map(x => x.kind), ['safety', 'goal', 'streak']);
-assert.deepStrictEqual(s.notesFor({ ...ng, safety: 7, goals: [], streak: 0 }).map(x => x.kind), ['rise']);
+assert.deepStrictEqual(kinds(s.notesFor(nc)), [[], ['safety', 'costly', 'sooner', 'interest']], 'at most 4, the over-budget one left out');
+assert.strictEqual(s.notesFor(nc).bad[0].need, 25500, 'a month of expenses, less what is there');
+assert.deepStrictEqual(kinds(s.notesFor({ ...nc, safety: 2, earn: 15, sooner: null })), [['safe'], ['interest', 'over']], 'a month covered and no costly loan');
+const ng = { ...nc, focus: 'grow', safety: 1.9, liquid: 100000, avgExpense: 52000, goals: [{ name: 'Diwali fund', short: 6000, by: '2026-11' }, { name: 'Fees', short: 0 }], over: [], rise: { cat: 'Kirana', now: 6850, before: 5650 }, streak: 4, streakRate: 0.8 };
+assert.deepStrictEqual(kinds(s.notesFor(ng)), [['streak', 'ontrack'], ['safety', 'goal', 'rise']]);
+assert.strictEqual(s.notesFor(ng).good[0].rate, 0.8, 'the streak says how much is saved, not just 20% or more');
+assert.deepStrictEqual(kinds(s.notesFor({ ...ng, safety: 32, goals: [], streak: 0, low: { rate: 0.05, month: 'Sep' }, drop: { cat: 'Food', now: 2000, before: 4000 }, worthUp: 30000, under: { left: 5000, perDay: 260 } })),
+  [['safe', 'under', 'drop', 'worth'], ['low', 'rise']]);
 assert.deepStrictEqual(s.biggestRise({ Dairy: 6850, House: 20000, Others: 900, New: 5000 }, { Dairy: 5650, House: 9000, Others: 500 }, { House: true }), { cat: 'Dairy', now: 6850, before: 5650 },
   'bills, new categories and small rises are left out');
+assert.deepStrictEqual(s.biggestRise({ Food: 2000, Kirana: 5000, Fuel: 100, House: 0 }, { Food: 4000, Kirana: 5200, Fuel: 900, House: 9000 }, { House: true }, -1), { cat: 'Food', now: 2000, before: 4000 },
+  'the biggest fall wins over Fuel (₹800); Kirana fell only ₹200; House is a bill');
 // Loan interest paid is added back for the forecast (it charges interest itself); interest got is left out
 assert.strictEqual(s.savingRate([sav(2026, 8, 3000), { ...sav(2026, 8, -600), id: 'li-0001', category: 'loan interest' }], NOW, 3).perMonth, 1000);
 

@@ -349,10 +349,10 @@ const ym = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'
     await page.click('#catGrid [data-cat="House"]');
     await keypad('12000');
     await page.fill('#note', 'Rent');
-    await page.fill('#billDay', '1');
+    await page.fill('#billDay', String(new Date().getDate())); // due today: Due soon shows only the next 7 days
     await page.click('#saveBtn');
     await closed();
-    assert.match(await page.textContent('#setList'), /Rent.*1st of every month.*₹12,000/);
+    assert.match(await page.textContent('#setList'), /Rent.*of every month.*₹12,000/);
     await shot(page, '12-settings', true);
     await page.click('#backHome');
     assert.match(await page.textContent('#headSub'), /Namaste Sunita/);
@@ -363,8 +363,8 @@ const ym = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'
     await page.click('#saveBtn');
     await closed();
     await synced();
-    const rentBill = Object.values(SET().bills)[0], first = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1);
-    assert.strictEqual(rentBill.next, ym(new Date(first.getFullYear(), first.getMonth() + (new Date().getDate() > 1 ? 1 : 0), 1)), 'paid: the bill moves on a month');
+    const rentBill = Object.values(SET().bills)[0];
+    assert.strictEqual(rentBill.next, ym(new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1)), 'paid: the bill moves on a month');
     const rentRow = sheet().rows.find(e => e.note === 'Rent');
     assert.deepStrictEqual([rentRow.by, rentRow.amount], ['Sunita', 12000], 'who added it reaches the sheet (the Date cell\'s note)');
     await tab('insights');

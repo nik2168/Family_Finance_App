@@ -74,6 +74,7 @@ function validateRepay(r) {
 // [start, end) in local time. Weeks start Monday. 'fy': the Indian financial year, April to March.
 function periodRange(view, date) {
   var y = date.getFullYear(), m = date.getMonth(), d = date.getDate();
+  if (view === 'all') return { start: new Date(2000, 0, 1), end: new Date(2100, 0, 1) }; // every entry
   if (view === 'fy') { var fy = m >= 3 ? y : y - 1; return { start: new Date(fy, 3, 1), end: new Date(fy + 1, 3, 1) }; }
   if (view === 'week') {
     var s = d - (date.getDay() + 6) % 7;
@@ -84,6 +85,7 @@ function periodRange(view, date) {
 }
 
 function shiftPeriod(view, date, n) {
+  if (view === 'all') return date;
   if (view === 'week') return new Date(date.getFullYear(), date.getMonth(), date.getDate() + 7 * n);
   if (view === 'month') return new Date(date.getFullYear(), date.getMonth() + n, 1);
   if (view === 'fy') return new Date(periodRange('fy', date).start.getFullYear() + n, 3, 1);
@@ -92,6 +94,7 @@ function shiftPeriod(view, date, n) {
 
 function periodLabel(view, date) {
   var r = periodRange(view, date);
+  if (view === 'all') return 'All time';
   if (view === 'year') return String(r.start.getFullYear());
   if (view === 'fy') return 'FY ' + r.start.getFullYear() + '-' + String(r.end.getFullYear()).slice(2);
   if (view === 'month') return MONTHS[r.start.getMonth()] + ' ' + r.start.getFullYear();
@@ -101,6 +104,7 @@ function periodLabel(view, date) {
 
 // Chart buckets: days of the week, 7-day chunks of the month (1-7, 8-14, …), or months of the year.
 function buckets(view, start) {
+  if (view === 'all') return ['All'];
   if (view === 'week') return DAYS.slice();
   if (view === 'year') return MONTHS.slice();
   if (view === 'fy') return MONTHS.slice(3).concat(MONTHS.slice(0, 3));
@@ -110,6 +114,7 @@ function buckets(view, start) {
 }
 
 function bucketIndex(view, d, start) {
+  if (view === 'all') return 0;
   if (view === 'week') return Math.round((new Date(d.getFullYear(), d.getMonth(), d.getDate()) - start) / 864e5);
   if (view === 'month') return Math.floor((d.getDate() - 1) / 7);
   if (view === 'fy') return (d.getMonth() + 9) % 12;
@@ -467,6 +472,7 @@ function totals(rows, start, end) {
 // What to compare a period with: the same stretch of the one before ("1-11 Sep" while October runs), or all of it once it is over.
 function previousSpan(view, date, now) {
   var r = periodRange(view, date), start = periodRange(view, shiftPeriod(view, date, -1)).start;
+  if (view === 'all') return { start: r.start, end: r.start, partial: false }; // nothing before all time
   var running = now >= r.start && now < r.end;
   return { start: start, end: running ? new Date(start.getTime() + (now - r.start)) : r.start, partial: running };
 }
@@ -633,30 +639,35 @@ function targets(pace, due) {
   return out.concat(pace);
 }
 
-// ---- "3 things to notice": rules, no AI. c: the numbers (see app.js renderInsights). Returns up to 3 {kind, ...}, most useful first.
+// ---- "Things to notice": rules, no AI. c: the numbers (see app.js renderInsights). Returns {good, bad}: up to 4 {kind, ...} each, most useful first.
 // Clear loans: a small safety net (1 month) first, then the costliest loan. Grow savings: a 6-month safety net, then goals.
 function notesFor(c) {
-  var out = [], aim = c.focus === 'debt' ? 1 : 6;
-  if (c.avgExpense > 0 && c.safety < aim) out.push({ kind: 'safety', months: c.safety, aim: aim, need: Math.round(c.avgExpense * aim - c.liquid), inHand: c.inHand });
+  var good = [], bad = [], aim = c.focus === 'debt' ? 1 : 6;
+  if (c.streak >= 3) good.push({ kind: 'streak', months: c.streak, rate: c.streakRate });
+  if (c.avgExpense > 0 && c.safety < aim) bad.push({ kind: 'safety', months: c.safety, aim: aim, need: Math.round(c.avgExpense * aim - c.liquid), inHand: c.inHand });
+  else if (c.avgExpense > 0 && c.liquid > 0) good.push({ kind: 'safe', months: c.safety, aim: aim });
   if (c.focus === 'debt') {
-    if (c.costly && c.costly.rate > c.earn) out.push({ kind: 'costly', name: c.costly.name, rate: c.costly.rate, earn: c.earn });
-    if (c.sooner && c.sooner.months > 0) out.push({ kind: 'sooner', more: c.sooner.more, months: c.sooner.months, saved: c.sooner.saved });
-    if (c.emiLoad > 0.3) out.push({ kind: 'emi', load: c.emiLoad });
-    if (c.interestYear > 0) out.push({ kind: 'interest', amount: c.interestYear });
-  } else {
-    (c.goals || []).forEach(function (g) { if (g.short > 0) out.push({ kind: 'goal', name: g.name, short: g.short, by: g.by }); });
-    if (c.streak >= 3) out.push({ kind: 'streak', months: c.streak });
+    if (c.costly && c.costly.rate > c.earn) bad.push({ kind: 'costly', name: c.costly.name, rate: c.costly.rate, earn: c.earn });
+    if (c.sooner && c.sooner.months > 0) bad.push({ kind: 'sooner', more: c.sooner.more, months: c.sooner.months, saved: c.sooner.saved });
+    if (c.emiLoad > 0.3) bad.push({ kind: 'emi', load: c.emiLoad });
+    if (c.interestYear > 0) bad.push({ kind: 'interest', amount: c.interestYear });
   }
-  (c.over || []).forEach(function (o) { out.push({ kind: 'over', cat: o.cat, over: o.over }); });
-  if (c.rise) out.push({ kind: 'rise', cat: c.rise.cat, now: c.rise.now, before: c.rise.before });
-  return out.slice(0, 3);
+  (c.goals || []).forEach(function (g) { if (g.short > 0) bad.push({ kind: 'goal', name: g.name, short: g.short, by: g.by }); else good.push({ kind: 'ontrack', name: g.name, by: g.by }); });
+  if (c.low) bad.push({ kind: 'low', rate: c.low.rate, month: c.low.month });
+  (c.over || []).forEach(function (o) { bad.push({ kind: 'over', cat: o.cat, over: o.over }); });
+  if (c.rise) bad.push({ kind: 'rise', cat: c.rise.cat, now: c.rise.now, before: c.rise.before });
+  if (c.under) good.push({ kind: 'under', left: c.under.left, perDay: c.under.perDay });
+  if (c.drop) good.push({ kind: 'drop', cat: c.drop.cat, now: c.drop.now, before: c.drop.before });
+  if (c.worthUp > 0) good.push({ kind: 'worth', up: c.worthUp });
+  return { good: good.slice(0, 4), bad: bad.slice(0, 4) };
 }
 // The category that went up most against the comparison span: at least ₹500 and 20% more. Bills (fixed) are left out.
-function biggestRise(now, before, fixed) {
-  var best = null;
+// sign -1: the one that went down most, by the same rule.
+function biggestRise(now, before, fixed, sign) {
+  var best = null, k = sign || 1;
   Object.keys(now).forEach(function (c) {
-    var b = before[c] || 0, d = now[c] - b;
-    if (fixed[c] || !b || d < 500 || d < b * 0.2 || (best && d <= best.now - best.before)) return;
+    var b = before[c] || 0, d = (now[c] - b) * k;
+    if (fixed[c] || !b || d < 500 || d < b * 0.2 || (best && d <= (best.now - best.before) * k)) return;
     best = { cat: c, now: now[c], before: b };
   });
   return best;

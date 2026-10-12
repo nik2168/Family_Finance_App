@@ -17,9 +17,10 @@ test: check ## Fast tests: money maths, periods, validation, Apps Script sync (n
 check: ## Syntax-check the JavaScript (the sync test compiles Code.gs)
 	@for f in src/*.js tests/*.js; do node --check "$$f" || exit 1; done
 
-e2e: $(TOOLS)/node_modules/playwright ## Browser tests: offline, sync, keypad, insights, updates (installs Playwright once)
+e2e: $(TOOLS)/node_modules/playwright ## Browser tests: offline, sync, keypad, insights, updates, assistant (installs Playwright once)
 	$(E2E_ENV) node tests/e2e.test.js
 	$(E2E_ENV) node tests/update.test.js
+	$(E2E_ENV) node tests/ai.test.js
 
 demo: $(TOOLS)/node_modules/playwright ## Simulate ~2 years of use on a fake sheet, check it, then open a window to look around (NO_WINDOW=1: checks only)
 	$(E2E_ENV) node tests/demo.js

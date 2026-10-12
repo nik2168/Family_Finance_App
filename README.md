@@ -26,18 +26,19 @@ A simple phone app for family income and expenses. It works offline and saves ev
 src/          The app. This folder is all Vercel publishes (see vercel.json).
   index.html  Screens and styles (Pastel theme)
   app.js      Offline queue, sync, keypad, rendering
+  ai.js       The assistant (optional): Gemini Live voice and chat, the orb
   shared.js   Categories, validation and all the money maths (also used by Apps Script)
   sw.js       Keeps the app working offline
   assets/     App icons, bundled font (Lexend), 3D images (Fluent Emoji)
 apps-script/  Code.gs: the Google Sheet sync script
-tests/        shared.test.js, sync.test.js (fast), e2e.test.js, update.test.js (browser)
+tests/        shared.test.js, sync.test.js (fast), e2e.test.js, update.test.js, ai.test.js (browser)
 Makefile      Run `make` to see every command
 ```
 
 ## Commands
 ```
 make test         fast tests, no installs (run before every push)
-make e2e          browser tests: offline, sync, keypad, insights, updates (installs Playwright into .tools/ once)
+make e2e          browser tests: offline, sync, keypad, insights, updates, assistant (installs Playwright into .tools/ once)
 make run          run the app at http://localhost:8000, connected to your sheet via .env
 make push        push Code.gs + shared.gs to both sheets and update their web apps (same URLs)
 make apps-script  copy Code.gs + shared.gs into build/apps-script/, ready to paste by hand
@@ -105,6 +106,7 @@ It starts with the household list: change it under **Edit categories**. Each she
 - **Loans / Given / Investments:** in **Money**, tap **Add a loan**, **Give money** or **Add an investment**, then the buttons on its card for each payment. Tap a loan to change it (EMI, ★, type, SIP, goal) or delete it; open its payments list to delete a mistake.
 - **Add rows by hand:** fill in DateTime, Type (`Income` or `Expense`), Category, Amount and Note. Leave Id empty; the next sync fills it in.
 - **Tap the round sync button** (top right) to sync immediately. A yellow dot means entries are waiting.
+- **The assistant (optional):** get a free Gemini key at aistudio.google.com and paste it in **Settings → Assistant** on each phone that wants it (it stays on that phone). Then tap **Ask** (the glowing orb in the tab bar) and talk or type: "got my salary 30k today", "kal petrol 450 dala", "how much on kirana last month?", "am I over budget?". It never saves by itself: it shows a card to check, change and **Save**. Its numbers come from the app, not the AI. It needs the internet, and what you ask goes to Google (on the free tier Google may use it to improve its products). Use headphones, or it may hear itself.
 
 ## Changing the app
 - **App files** (anything in `src/`): edit, run `make test`, then `git commit -am "…"` and `git push`. Vercel deploys in about 30 seconds. Phones download the new version in the background and show it **on their next open**.
@@ -143,3 +145,4 @@ Moving from the older layout (`Entries`, `Loans`, `Repayments`, `Settings` tabs)
 - `tests/e2e.test.js`: the real app in a headless browser against the real `Code.gs`: offline adds, History edits and deletes, loans, part payments and interest, then sync; insights, every entry editable, settings (budgets, a bill paid from Due soon, the financial year), money given and investments, an old script, dark mode, wrong key, editing categories, a second sheet, the wide-screen layout. `SHOTS=/some/dir make e2e` also saves screenshots.
 - `tests/demo.js` (`make demo`): about two years of family entries, loans and hand-typed rows on a fake sheet, run through the real `Code.gs`. It checks that the sheet's summary and loan formulas match the app's numbers for every month, and checks the app's screens, then opens a browser window with the app and a viewer for the simulated sheet. Your real Google Sheet is never touched.
 - `tests/update.test.js`: a new deploy reaches an installed app on its next open, and it still opens offline.
+- `tests/ai.test.js`: the assistant against a scripted fake Gemini Live: turned on and off in Settings, a confirm card saved through the app's queue, an answer card with the app's own totals, a cancelled card saves nothing, Esc.

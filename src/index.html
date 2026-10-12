@@ -389,6 +389,120 @@ dialog::backdrop{background:rgba(8,10,12,.42)}
   #insights>.seg,#insights>.period,#insights>#insShare{grid-column:1/-1}
   #insights>:empty,.colA>:empty,.colB>:empty{display:none}
 }
+
+/* The assistant (ai.js): a glowing orb in the tab bar (the sidebar on wide screens), then a full-screen dark dialog with the orb, a frosted pill and a glass card */
+.ai-orb span{width:26px;height:26px;flex:none;border-radius:50%;position:relative;background:radial-gradient(circle at 34% 28%,#bfdbfe 0,#3b82f6 26%,#1e3a8a 55%,#020617 80%);box-shadow:0 0 14px 1px rgba(59,130,246,.6),inset 0 0 5px rgba(191,219,254,.9)}
+.ai-orb span::after{content:"";position:absolute;inset:-1px;border-radius:50%;background:conic-gradient(from 0deg,transparent 0 62%,rgba(255,255,255,.95) 74%,transparent 86%);-webkit-mask:radial-gradient(circle,transparent 60%,#000 63%);mask:radial-gradient(circle,transparent 60%,#000 63%)}
+@media (prefers-reduced-motion:no-preference){.ai-orb span::after{animation:spin 3.2s linear infinite}}
+@media (min-width:768px){.ai-orb span{width:22px;height:22px}}
+#ai{--ai-ease:cubic-bezier(.2,.9,.2,1);--ai-glass:rgba(255,255,255,.08);--ai-edge:rgba(255,255,255,.16);--ai-t2:rgba(255,255,255,.62);--ai-good:#86efac;--ai-bad:#fca5a5;
+  position:fixed;inset:0;width:100%;height:100%;max-width:none;max-height:none;margin:0;border-radius:0;overflow:hidden;color:#fff;animation:none;
+  background:radial-gradient(125% 52% at 50% 112%,#cfe0ff 0%,#5a95ff 12%,#2259e6 24%,#0c2c8f 37%,#05144a 52%,#010515 69%,#000 84%);
+  opacity:0;transform:scale(.94);transform-origin:var(--ox,85%) var(--oy,6%);transition:opacity .3s,transform .5s var(--ai-ease)}
+#ai.ai-on{opacity:1;transform:none}
+#ai::backdrop{background:transparent}
+.ai-x{position:absolute;z-index:4;top:calc(env(safe-area-inset-top) + 16px);right:16px;width:40px;height:40px;border-radius:50%;display:grid;place-items:center;background:var(--ai-glass);border:1px solid var(--ai-edge);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px)}
+.ai-x svg{width:15px;height:15px}
+#aiOrb{position:absolute;left:50%;top:calc(env(safe-area-inset-top) + 4%);width:86%;max-width:360px;aspect-ratio:1;pointer-events:none;mix-blend-mode:screen;transform:translateX(-50%) scale(var(--s,1))}
+.ai-cssorb::before{content:"";position:absolute;inset:21%;border-radius:50%;background:radial-gradient(circle at 34% 28%,#bfdbfe 0,#3b82f6 26%,#1e3a8a 55%,#020617 80%);box-shadow:0 0 60px 6px rgba(59,130,246,.55),inset 0 0 24px rgba(191,219,254,.8)}
+.ai-say{position:absolute;left:50%;top:53%;width:min(calc(100% - 48px),520px);transform:translateX(-50%);text-align:center}
+#aiHi{min-height:1.5em;margin:0 0 10px;font-size:17px;color:var(--ai-t2)}
+.ai-big{font-size:32px;line-height:1.14;font-weight:600;letter-spacing:-.025em;-webkit-mask-image:linear-gradient(180deg,#000 30%,rgba(0,0,0,.5) 100%);mask-image:linear-gradient(180deg,#000 30%,rgba(0,0,0,.5) 100%)}
+.ai-big.ai-long{font-size:23px;line-height:1.25}
+.ai-big.ai-longer{font-size:17px;line-height:1.45;font-weight:500;letter-spacing:0}
+.ai-w{display:inline-block;animation:aiIn .55s var(--ai-ease) both;animation-delay:calc(var(--i,0) * 38ms)}
+@keyframes aiIn{from{opacity:0;filter:blur(10px);transform:translateY(6px)}}
+.ai-fading .ai-w{animation:aiOut .26s ease forwards}
+@keyframes aiOut{to{opacity:0;filter:blur(10px)}}
+.ai-sugg{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin-top:26px;transition:opacity .35s,filter .35s}
+.ai-sugg.ai-gone{opacity:0;filter:blur(8px);pointer-events:none}
+.ai-chip{padding:9px 14px;border-radius:999px;font-size:13px;background:var(--ai-glass);border:1px solid var(--ai-edge);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px)}
+#aiNote{position:absolute;z-index:4;top:calc(env(safe-area-inset-top) + 20px);left:50%;max-width:70%;transform:translate(-50%,-8px);padding:8px 14px;border-radius:999px;font-size:13px;text-align:center;opacity:0;pointer-events:none;transition:opacity .3s,transform .3s;background:rgba(0,0,0,.5);border:1px solid var(--ai-edge);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px)}
+#aiNote.ai-on{opacity:1;transform:translate(-50%,0)}
+.ai-pill{position:absolute;z-index:2;left:max(16px,calc(50% - 260px));right:max(16px,calc(50% - 260px));bottom:calc(env(safe-area-inset-bottom) + 22px);height:64px;border-radius:999px;display:flex;align-items:center;gap:6px;padding:0 8px 0 24px;
+  background:linear-gradient(180deg,rgba(255,255,255,.17),rgba(255,255,255,.06));border:1px solid rgba(255,255,255,.24);-webkit-backdrop-filter:blur(20px) saturate(140%);backdrop-filter:blur(20px) saturate(140%);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.25),0 14px 30px -12px rgba(0,0,0,.45);transition:left .5s var(--ai-ease),right .5s var(--ai-ease),opacity .3s}
+.ai-pill input{flex:1;min-width:0;background:none;border:0;outline:0;font-size:17px}
+.ai-pill input::placeholder{color:rgba(255,255,255,.72)}
+.ai-wave{width:48px;height:48px;border-radius:50%;display:flex;align-items:center;justify-content:center;gap:3px;transition:background .3s}
+.ai-wave i{width:2.5px;border-radius:2px;background:#fff;height:calc(var(--b) * (1 + var(--l,0) * 1.6));transition:height .08s}
+.ai-pill.ai-live .ai-wave{background:rgba(255,255,255,.16);box-shadow:0 0 22px rgba(147,197,253,.45)}
+.ai-busyrow{display:none;align-items:center;gap:10px;font-size:15px;white-space:nowrap}
+.ai-dots{display:flex;gap:4px}
+.ai-dots i{width:5px;height:5px;border-radius:50%;background:#fff;animation:aiDot 1s infinite;animation-delay:calc(var(--i) * .15s)}
+@keyframes aiDot{0%,80%,100%{opacity:.25;transform:none}40%{opacity:1;transform:translateY(-3px)}}
+.ai-pill.ai-busy{left:calc(50% - 112px);right:calc(50% - 112px);padding:0 18px;justify-content:center}
+.ai-pill.ai-busy input,.ai-pill.ai-busy .ai-wave{display:none}
+.ai-pill.ai-busy .ai-busyrow{display:flex}
+.ai-pill.ai-hide{opacity:0;pointer-events:none}
+.ai-card{position:absolute;z-index:3;left:max(12px,calc(50% - 280px));right:max(12px,calc(50% - 280px));bottom:calc(env(safe-area-inset-bottom) + 22px);top:calc(100% - env(safe-area-inset-bottom) - 86px);border-radius:32px;display:flex;flex-direction:column;overflow:hidden;
+  background:linear-gradient(180deg,rgba(28,40,84,.36),rgba(8,12,30,.5));border:1px solid var(--ai-edge);-webkit-backdrop-filter:blur(28px) saturate(150%);backdrop-filter:blur(28px) saturate(150%);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.16),0 30px 80px -20px rgba(0,0,0,.6);opacity:0;pointer-events:none;transition:top .55s var(--ai-ease),border-radius .55s var(--ai-ease),opacity .25s}
+.ai-card.ai-on{top:calc(env(safe-area-inset-top) + 64px);border-radius:30px;opacity:1;pointer-events:auto}
+.ai-grab{flex:none;height:22px;display:grid;place-items:center}
+.ai-grab::before{content:"";width:40px;height:5px;border-radius:5px;background:rgba(255,255,255,.28)}
+.ai-cbody{flex:1;overflow-y:auto;padding:4px 18px 18px;opacity:0;filter:blur(8px);transition:opacity .35s,filter .35s}
+.ai-card.ai-on .ai-cbody{opacity:1;filter:none;transition-delay:.2s}
+.ai-ask{width:fit-content;max-width:82%;margin:6px 0 0 auto;padding:10px 15px;border-radius:18px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.07)}
+.ai-ans{margin:14px 0 4px;color:rgba(255,255,255,.86)}
+.ai-ans:empty{display:none}
+.ai-h{margin:18px 0 8px;font-size:13px;font-weight:600;color:var(--ai-t2)}
+.ai-muted{font-size:12px;color:var(--ai-t2)}
+.ai-cfoot{flex:none;display:grid;gap:8px;padding:10px 16px 16px;opacity:0;transition:opacity .35s}
+.ai-card.ai-on .ai-cfoot{opacity:1;transition-delay:.25s}
+.ai-cfoot:empty{display:none}
+.ai-tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.ai-tile{padding:12px;border-radius:18px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.07)}
+.ai-tile small{display:block;font-size:12px;color:var(--ai-t2)}
+.ai-tile b{font-size:18px;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+.ai-bar{margin:10px 0;display:grid;grid-template-columns:1fr auto;gap:5px 10px;font-size:14px}
+.ai-bar span:last-child{font-variant-numeric:tabular-nums}
+.ai-trk{grid-column:1/-1;height:6px;border-radius:6px;overflow:hidden;background:rgba(255,255,255,.08)}
+.ai-trk i{display:block;height:100%;width:var(--w);border-radius:6px;background:linear-gradient(90deg,#60a5fa,#a5b4fc);animation:aiGrow .9s var(--ai-ease) both .3s}
+.ai-trk.ai-over i{background:linear-gradient(90deg,#fb923c,#f87171)}
+@keyframes aiGrow{from{width:0}}
+.ai-r{display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid rgba(255,255,255,.07)}
+.ai-r:first-child{border-top:0}
+.ai-g{flex:1;min-width:0}
+.ai-g b{display:block;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ai-g small{font-size:12px;color:var(--ai-t2)}
+.ai-a{font-variant-numeric:tabular-nums;font-weight:500}
+.ai-pos{color:var(--ai-good)}
+.ai-disc{flex:none;width:40px;height:40px;border-radius:50%;display:grid;place-items:center;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.08)}
+.ai-disc.ai-l{width:66px;height:66px}
+.ai-pills{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.ai-tag{display:inline-block;padding:3px 9px;border-radius:999px;font-size:12px;font-weight:500;background:rgba(74,222,128,.15);color:var(--ai-good)}
+.ai-tag.ai-bad{background:rgba(248,113,113,.15);color:var(--ai-bad)}
+.ai-tag.ai-warn{background:rgba(250,204,21,.15);color:#fde68a}
+.ai-pv{display:flex;flex-direction:column;align-items:center;text-align:center;margin-top:14px;padding:18px 16px 14px;border-radius:24px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);transition:border-color .4s,box-shadow .4s}
+.ai-pv.ai-ok{border-color:rgba(74,222,128,.55);box-shadow:0 0 44px -8px rgba(74,222,128,.5)}
+.ai-what{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:8px;margin-top:10px;font-size:16px;font-weight:600}
+.ai-when{margin-top:2px;font-size:13px;color:var(--ai-t2)}
+.ai-amt{display:flex;align-items:baseline;justify-content:center;margin-top:8px;font-size:44px;font-weight:600;letter-spacing:-.03em;cursor:text}
+.ai-amt span{margin-right:2px;font-size:28px;opacity:.75}
+.ai-amt input{min-width:1.6ch;padding:0;background:none;border:0;outline:0;text-align:center;font-variant-numeric:tabular-nums;letter-spacing:inherit}
+.ai-f{margin-top:14px}
+.ai-f>label{display:block;margin:0 0 6px 4px;font-size:12px;color:var(--ai-t2)}
+.ai-seg{display:flex;padding:4px;border-radius:999px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.08);margin-top:14px}
+.ai-f .ai-seg,.ai-row2 .ai-seg{margin-top:0}
+.ai-seg button{flex:1;padding:9px 6px;border-radius:999px;font-size:14px;color:rgba(255,255,255,.75);white-space:nowrap;transition:background .2s,color .2s}
+.ai-seg button[aria-pressed=true]{background:#fff;color:#000;font-weight:600}
+.ai-row2{display:flex;gap:8px}
+.ai-row2>*{flex:1;min-width:0}
+.ai-cats{display:flex;gap:8px;overflow-x:auto;margin:0 -18px;padding:2px 18px}
+.ai-cat{flex:none;display:flex;align-items:center;gap:6px;padding:6px 13px 6px 6px;border-radius:999px;font-size:13px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.08);transition:background .2s,color .2s}
+.ai-cat[aria-pressed=true]{background:#fff;color:#000;font-weight:600}
+.ai-in{width:100%;padding:12px 14px;border-radius:16px;background:var(--ai-glass);border:1px solid rgba(255,255,255,.12);color:#fff;outline:0;font-size:15px}
+.ai-in:focus{border-color:rgba(255,255,255,.4)}
+.ai-in[type=date]{color-scheme:dark}
+.ai-err{margin:10px 0 0;min-height:1px;text-align:center;font-size:13px;color:var(--ai-bad)}
+.ai-save{height:56px;border-radius:999px;display:flex;align-items:center;justify-content:center;gap:8px;background:#fff;color:#000;font-size:16px;font-weight:600;transition:background .3s,color .3s}
+.ai-save.ai-done{background:#22c55e;color:#03210e}
+.ai-save svg{width:20px;height:20px}
+.ai-save path{stroke-dasharray:24;stroke-dashoffset:24;animation:aiDraw .4s .1s forwards}
+@keyframes aiDraw{to{stroke-dashoffset:0}}
+.ai-ghost{min-height:48px;padding:0 18px;border-radius:999px;background:var(--ai-glass);border:1px solid rgba(255,255,255,.12)}
+@media (prefers-reduced-motion:reduce){.ai-w,.ai-fading .ai-w,.ai-trk i,.ai-dots i{animation:none}#ai,.ai-card,.ai-pill,.ai-cbody{transition:none}}
 </style>
 </head>
 <body>
@@ -544,6 +658,7 @@ dialog::backdrop{background:rgba(8,10,12,.42)}
     <div class="nav">
       <button type="button" data-tab="home" aria-current="page"><svg class="i"><use href="#i-house-fill"/></svg>Home</button>
       <button type="button" data-tab="history"><svg class="i"><use href="#i-clock-counter-clockwise"/></svg>History</button>
+      <button type="button" class="ai-orb" id="aiBtn" aria-label="Ask the assistant" hidden><span></span>Ask</button>
       <button type="button" data-tab="insights"><svg class="i"><use href="#i-chart-bar"/></svg>Insights</button>
       <button type="button" data-tab="money"><svg class="i"><use href="#i-hand-coins"/></svg>Money</button>
     </div>
@@ -612,9 +727,36 @@ dialog::backdrop{background:rgba(8,10,12,.42)}
   </form>
 </dialog>
 
+<!-- The assistant (ai.js), shown once a Gemini key is saved in Settings -->
+<dialog id="ai" aria-label="Assistant">
+  <canvas id="aiOrb"></canvas>
+  <button class="ai-x" id="aiClose" type="button" aria-label="Close the assistant"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+  <div id="aiNote" role="status"></div>
+  <div class="ai-say">
+    <p id="aiHi"></p>
+    <p id="aiBig" class="ai-big" aria-live="polite"></p>
+    <div class="ai-sugg" id="aiSugg">
+      <button class="ai-chip" type="button">Got my salary 30k today</button>
+      <button class="ai-chip" type="button">Kirana this month?</button>
+      <button class="ai-chip" type="button">Am I over budget?</button>
+    </div>
+  </div>
+  <form class="ai-pill" id="aiPill" autocomplete="off">
+    <input id="aiText" placeholder="Ask anything…" aria-label="Ask anything" enterkeyhint="send">
+    <button class="ai-wave" id="aiWave" type="button" aria-label="Talk"><i style="--b:7px"></i><i style="--b:14px"></i><i style="--b:21px"></i><i style="--b:14px"></i><i style="--b:7px"></i></button>
+    <span class="ai-busyrow"><span class="ai-dots"><i style="--i:0"></i><i style="--i:1"></i><i style="--i:2"></i></span><span id="aiBusy">Thinking…</span></span>
+  </form>
+  <section class="ai-card" id="aiCard">
+    <button class="ai-grab" type="button" aria-label="Close the card"></button>
+    <div class="ai-cbody"><div class="ai-ask" id="aiAsk"></div><p class="ai-ans" id="aiAns" aria-live="polite"></p><div id="aiMain"></div></div>
+    <div class="ai-cfoot" id="aiFoot"></div>
+  </section>
+</dialog>
+
 <div id="toast" role="status" hidden></div>
 
 <script src="shared.js"></script>
 <script src="app.js"></script>
+<script src="ai.js"></script>
 </body>
 </html>

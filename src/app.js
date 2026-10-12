@@ -904,6 +904,10 @@ function renderSettings(v) {
         '<b class="num">' + money.format(bl.amount) + '</b>' + icon('pencil-simple', 'sm muted') + '</button>';
     }).join('') : '<p class="t-sm muted">Rent, school fees, electricity, LIC: add them here, or switch on "Repeat every month" when you add an expense.</p>') +
       '<p class="t-xs muted" style="padding-top:6px">EMIs and SIPs are set on their loan or investment in Money.</p></div>' +
+    // The assistant (ai.js) uses the family's own Gemini key, kept on this phone only.
+    '<div class="card set"><h2>Assistant</h2><div class="row">' + img3d('spark', 26) + '<div class="grow">Gemini key<small>Talk or type to add entries and ask about your money</small></div>' +
+      '<input class="field" type="password" id="aiKey" value="' + esc(load('fm.gemini', '')) + '" placeholder="Paste key" autocomplete="off" style="width:130px;text-align:left" aria-label="Gemini key"></div>' +
+      '<p class="t-xs muted" style="padding-top:6px">Get a free key at aistudio.google.com. It stays on this phone. What you ask, and the numbers needed to answer, go to Google; on the free tier Google may use them to improve its products.</p></div>' +
     '<div class="card"><h2>Theme</h2>' + segHtml('theme', load('fm.theme', 'auto'), [['auto', 'Auto'], ['light', 'Light'], ['dark', 'Dark']]) + '</div>' +
     '<div class="card"><h2>Sheets on this phone</h2><div style="display:grid;gap:2px">' + sheetsHtml() + '</div></div>' +
     '<button type="button" class="btn soft" data-tab="cats">' + icon('pencil-simple', 'sm') + 'Edit categories</button>' +
@@ -916,6 +920,7 @@ function renderHead() {
   $('#avatar').hidden = !phoneHome;
   $('#backHome').hidden = !(state.tab === 'cats' || state.tab === 'settings');
   $('#setBtn').hidden = state.tab === 'settings';
+  $('#aiBtn').hidden = !load('fm.gemini', ''); // the assistant's orb in the tab bar, once a Gemini key is saved in Settings
   $('#headTitle').textContent = phoneHome ? me2.name : TABS[state.tab][1];
   $('#sideName').textContent = me2.name;
   ['#avatar', '#sideAv'].forEach(function (s) { $(s).style.background = 'var(' + (SHEET_PICS[me2.pic] || '--sky') + ')'; $(s + ' img').src = 'assets/3d/' + me2.pic + '.png'; });
@@ -1325,7 +1330,7 @@ function showTab(tab) {
   if (tab === 'money') { var v = view(); tab = state.out || (focusOf(v.loans, v.repays, v.settings, new Date()) === 'grow' && !loansOf(v, 'borrowed').length ? 'invested' : 'loans'); }
   state.tab = tab;
   if (MONEY_TABS[tab]) state.out = tab;
-  document.querySelectorAll('.nav button').forEach(function (b) {
+  document.querySelectorAll('.nav button[data-tab]').forEach(function (b) {
     // Settings and Categories open from Home
     var on = b.dataset.tab === tab || (b.dataset.tab === 'money' && !!MONEY_TABS[tab]) || (b.dataset.tab === 'home' && (tab === 'cats' || tab === 'settings'));
     if (on) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
@@ -1456,6 +1461,7 @@ document.addEventListener('click', function (ev) {
 document.addEventListener('change', function (ev) {
   var t = ev.target;
   if (t.id === 'meName') { save('fm.me', t.value.trim().slice(0, 30)); toast('Saved'); render(); }
+  else if (t.id === 'aiKey') { save('fm.gemini', t.value.trim()); toast(t.value.trim() ? 'Assistant on: tap Ask' : 'Assistant off'); render(); }
   else if (t.id === 'goalIn') { if (!setOp('goal', numberOf(t.value))) { toast('Goal saved'); render(); trySync(); } }
   else if (t.hasAttribute('data-daily')) { if (!setOp('daily', numberOf(t.value))) { toast('Budget saved'); trySync(); } }
   else if (t.hasAttribute('data-budget')) { if (!setOp('budget', numberOf(t.value), t.dataset.budget)) { toast('Budget saved'); trySync(); } }

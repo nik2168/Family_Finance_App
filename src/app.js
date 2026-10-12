@@ -11,7 +11,7 @@ var SHEET_PICS = { home2: '--mint', house: '--peri', job: '--sky', crops: '--min
 // Category pictures: by name, then by a word in it ("Petrol & diesel" gets the fuel pump); anything else gets the Others picture.
 var IMG = { Job: 'job', Dairy: 'dairy', Crops: 'crops', House: 'house', Others: 'others', Interest: 'coin', 'Loan interest': 'bank' };
 var PICS = [[/salary|job|wage|pension/, 'job'], [/rent|house|home|ghar/, 'house'], [/kirana|grocer|ration|mart/, 'cart'], [/milk|doodh/, 'milk'],
-  [/sabzi|vegetable|fruit/, 'leafy'], [/petrol|diesel|fuel|cng/, 'fuel'], [/medic|doctor|health|pharma|hospital|dawa/, 'pill'],
+  [/sabzi|vegetable|fruit/, 'leafy'], [/petrol|diesel|fuel|cng/, 'fuel'], [/fitness|gym|protein|workout|yoga/, 'muscle'], [/medic|doctor|health|pharma|hospital|dawa/, 'pill'],
   [/mobile|recharge|phone|wifi|internet|broadband|dth/, 'mobile'], [/school|fee|college|education/, 'school'], [/tuition|book|coaching|class/, 'books'],
   [/electric|bijli|power|bill/, 'volt'], [/eat|food|restaurant|hotel|swiggy|zomato|dining/, 'food'], [/chai|tea|snack/, 'tea'],
   [/diwali|festival|puja|pooja|holi|eid|christmas/, 'diya'], [/gift|shagun|wedding|shaadi/, 'gift'], [/gas|lpg|cylinder/, 'fire'],
@@ -19,7 +19,7 @@ var PICS = [[/salary|job|wage|pension/, 'job'], [/rent|house|home|ghar/, 'house'
   [/cloth|kapde|dress|shoe/, 'shirt'], [/donat|temple|mandir|church|masjid|charity/, 'pray'], [/gold|jewel/, 'gem'],
   [/loan|emi|bank/, 'bank'], [/interest/, 'coin'], [/insurance|lic/, 'shield'], [/invest|sip|mutual|fund/, 'up'],
   [/business|shop|dukaan|sale/, 'bag'], [/farm|crop|kheti/, 'crops'], [/dairy|cattle|cow|buffalo/, 'dairy']];
-var PIC_BG = { cart: '--butter', milk: '--sky', leafy: '--mint', fuel: '--butter', pill: '--blush', mobile: '--sky', school: '--sky', books: '--mint', volt: '--mint',
+var PIC_BG = { cart: '--butter', milk: '--sky', leafy: '--mint', fuel: '--butter', pill: '--blush', muscle: '--peri', mobile: '--sky', school: '--sky', books: '--mint', volt: '--mint',
   food: '--blush', tea: '--butter', diya: '--butter', gift: '--lavender', fire: '--sky', scooter: '--peri', bus: '--peri', thread: '--lavender', shirt: '--lavender',
   pray: '--butter', gem: '--lavender', bank: '--blush', coin: '--butter', shield: '--sky', up: '--lavender', bag: '--butter', crops: '--butter', dairy: '--blush',
   job: '--sky', house: '--peri' };

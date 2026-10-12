@@ -106,6 +106,12 @@ function toast(msg, long) {
   toast.timer = setTimeout(function () { t.hidden = true; }, long ? 5000 : 2200);
 }
 function me() { return load('fm.me', ''); }
+// While a sheet is open the page behind is pinned where it was (iOS Safari ignores overflow:hidden for touch), and put back after.
+function lockPage(on) {
+  var b = document.body.style;
+  if (on && !b.position) { lockPage.y = window.scrollY; b.position = 'fixed'; b.left = b.right = '0'; b.top = -lockPage.y + 'px'; }
+  else if (!on && b.position && !document.querySelector('dialog[open]')) { b.position = b.left = b.right = b.top = ''; window.scrollTo(0, lockPage.y); }
+}
 // An amount asked for in the in-app question, saved as a setting (the daily budget, the savings goal).
 function askSetting(key, title, text, current, done) {
   ask({ title: title, text: text, input: current ? String(current) : '', numeric: true, ph: '₹ amount', ok: 'Save', need: 'Type the amount',
@@ -128,6 +134,7 @@ function ask(o) {
   $('#askOk').textContent = o.ok || 'OK';
   $('#askOk').className = 'btn' + (o.danger ? ' danger' : '');
   $('#ask').showModal();
+  lockPage(true);
   if (o.input != null) { $('#askInput').focus(); $('#askInput').select(); }
   return new Promise(function (resolve) { state.ask = { resolve: resolve, o: o }; });
 }
@@ -1097,6 +1104,7 @@ function openSheet(sh, values) {
   var by = values.by || (mode === 'add' ? me() : '');
   $('#byLine').textContent = isEntry ? (by ? 'Added by ' + by : mode === 'add' ? 'Put your name in Settings to show who added it' : '') : '';
   $('#sheet').showModal();
+  lockPage(true);
   // Open the number pad straight away for new things; editing keeps the keyboard down so the form stays visible.
   if (mode === 'edit' || mode === 'loan-edit' || (isBill && sh.id)) $('#saveBtn').focus();
   else if ((isEntry || isBill) && !sh.category) $('#catGrid').focus();
@@ -1293,10 +1301,16 @@ $('#amount').addEventListener('input', function () {
 $('#amount').addEventListener('keydown', function (ev) {
   if (ev.key === 'Enter' && !$('#noteBox').hidden) { ev.preventDefault(); $('#note').focus(); }
 });
-// Keep the field being typed in above the phone keyboard.
+// Keep the field being typed in above the phone keyboard: only the sheet scrolls (scrollIntoView moved the whole page on iOS
+// when the sheet had little room to scroll, as in Give money), the field going about 90px below the top of what is visible.
 $('#sheet').addEventListener('focusin', function (ev) {
-  if (ev.target.tagName === 'INPUT') setTimeout(function () { ev.target.scrollIntoView({ block: 'center', behavior: 'smooth' }); }, 300);
+  if (ev.target.tagName !== 'INPUT') return;
+  setTimeout(function () {
+    var d = $('#sheet'), top = Math.max(window.visualViewport ? visualViewport.offsetTop : 0, d.getBoundingClientRect().top) + 90;
+    d.scrollTo({ top: d.scrollTop + ev.target.getBoundingClientRect().top - top, behavior: 'smooth' });
+  }, 300);
 });
+['#sheet', '#ask'].forEach(function (id) { $(id).addEventListener('close', function () { lockPage(false); }); });
 
 document.addEventListener('click', function (ev) {
   closeDDs(ev.target); // a tap outside an open dropdown closes it

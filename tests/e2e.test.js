@@ -24,11 +24,14 @@ const ym = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'
   var errors = [];
   try {
     const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, hasTouch: true });
-    let online = true, oldScript = false;
+    let online = true, oldScript = false, noNotes = false, notesSentToOld = false;
     await ctx.route(SCRIPT, route => {
       if (!online) return route.abort('internetdisconnected');
       // oldScript: what a deployment from before History/Loans replies (ignores ops, no loans, no settings)
+      // noNotes: a script from before notes (its reply has none; it would refuse them)
+      if (noNotes && JSON.parse(route.request().postData()).ops.some(o => o.kind === 'note')) notesSentToOld = true;
       const reply = oldScript ? { rows: [], othersLimit: 3000, done: [], rejected: [] } : backend.doPost(route.request().postData());
+      if (noNotes) delete reply.notes;
       route.fulfill({ json: reply, headers: { 'access-control-allow-origin': '*' } });
     });
     var page = await ctx.newPage();
@@ -68,7 +71,7 @@ const ym = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'
     await page.evaluate(() => document.fonts.ready);
     assert.ok(await page.evaluate(() => document.fonts.check('600 16px Lexend')), 'Lexend loaded offline');
     assert.deepStrictEqual(await page.evaluate(() => [...document.images].filter(i => i.offsetParent && !i.naturalWidth).map(i => i.src)), []);
-    assert.match(await page.textContent('#hero'), /Focus: grow savings.*Start your savings/, 'no loans, no savings yet: the starter');
+    assert.match(await page.textContent('#glance'), /Set a savings goal.*Set a monthly budget/, 'no goal, no budget yet: the starters');
 
     // A category must be chosen, from the grid; the reason is optional
     await page.click('[data-new="Expense"]');
@@ -235,7 +238,7 @@ const ym = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'
     assert.match(await page.textContent('#insCats'), /No expenses/);
     await page.click('[data-view="month"]');
     await tab('home');
-    assert.match(await page.textContent('#hero'), /Focus: clear loans.*Debt-free by.*Not yet/);
+    assert.match(await page.textContent('#glance'), /Debt-free by.*Not yet/);
 
     // ---- Dark mode screenshots
     await page.emulateMedia({ colorScheme: 'dark' });
@@ -312,6 +315,25 @@ const ym = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'
     await page.waitForFunction(() => JSON.parse(localStorage.getItem('fm.ops')).length === 0);
     assert.strictEqual(SET().focus, 'grow', 'sent once the script answered with its settings');
 
+    // ---- Notes sync to the sheet's Notes tab. A phone that has never heard from a script with notes keeps them waiting, and says so.
+    await tab('home');
+    await page.evaluate(() => localStorage.removeItem('fm.notes'));
+    noNotes = true;
+    await page.evaluate(() => { queue('note', 'add', 'note-e2e-001', { id: 'note-e2e-001', dateTime: new Date().toISOString(), title: 'Groceries', items: [{ t: 'Atta', done: false }, { t: 'Milk', done: false }], text: '' }); render(); trySync(); });
+    await page.waitForSelector('#syncPill:has-text("Update Apps Script to sync")');
+    assert.ok(!notesSentToOld, 'no note was sent to a script without notes');
+    assert.match(await page.textContent('#notes'), /Groceries.*Atta.*Milk/, 'it shows on Home meanwhile');
+    noNotes = false;
+    await sync();
+    await page.waitForFunction(() => JSON.parse(localStorage.getItem('fm.ops')).length === 0);
+    assert.deepStrictEqual(sheet().notes.map(n => n.title), ['Groceries'], 'sent once the script answered with its notes');
+    await page.check('#notes .nti >> nth=1 >> input');
+    await page.waitForFunction(() => JSON.parse(localStorage.getItem('fm.ops')).length === 0);
+    assert.strictEqual(backend.tab('Notes').rows[1][1], '☐ Atta\n☑ Milk', 'a tick reaches the sheet');
+    await page.click('#notes [data-nt-act="del"]');
+    await page.waitForFunction(() => JSON.parse(localStorage.getItem('fm.ops')).length === 0);
+    assert.deepStrictEqual(sheet().notes, []);
+
     // ---- Wrong key shows setup; pasting the link fixes it
     await page.evaluate(s => localStorage.setItem('fm.cfg', JSON.stringify({ url: s, key: 'bad' })), SCRIPT);
     await page.reload();
@@ -356,7 +378,7 @@ const ym = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'
     await shot(page, '12-settings', true);
     await page.click('#backHome');
     assert.match(await page.textContent('#headSub'), /Namaste Sunita/);
-    assert.match(await page.textContent('#strip'), /Left to spend this month/);
+    assert.match(await page.textContent('#glance'), /Left to spend.*on pace for/);
     assert.match(await page.textContent('#due'), /Rent/);
     await page.click('#due .row:has-text("Rent") [data-due]');
     assert.deepStrictEqual([await page.inputValue('#amount'), await page.inputValue('#note'), await page.textContent('#byLine')], ['12000', 'Rent', 'Added by Sunita']);
@@ -596,7 +618,7 @@ const ym = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'
     // iPad portrait: still the sidebar, pages in one column
     await desk.setViewportSize({ width: 820, height: 1180 });
     await desk.click('.nav [data-tab="home"]');
-    const [hero, latest] = await Promise.all(['#hero', '#recent'].map(box));
+    const [hero, latest] = await Promise.all(['#glance', '#recent'].map(box));
     assert.ok(await desk.isVisible('#sideSheet') && latest.y > hero.y + hero.height && latest.x === hero.x, 'tablet: sidebar, Home in one column');
     await wide.close();
 

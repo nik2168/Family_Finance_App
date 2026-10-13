@@ -266,4 +266,30 @@ eq(spost([]).repays.map(x => x.amount), [-5000], 'and it reads back');
 r = spost([op('s15', 'loan', 'delete', sloan.id)]);
 eq(r.settings.loans, {}, 'its EMI goes with it');
 
+// ---- Notes: a Notes tab made with the first one, one row per note, one line per item (☐ to do, ☑ done), the Id hidden
+assert.ok(!B.ss.getSheetByName('Notes'), 'no Notes tab before the first note');
+const note = { id: 'note-00001', dateTime: T, title: 'Groceries', items: [{ t: 'Atta', done: false }, { t: 'Paneer', done: true }], text: '', category: 'Kirana', by: 'Sunita' };
+r = post({ ops: [op('n1', 'note', 'add', note.id, note), op('n2', 'note', 'add', 'note-00002', { ...note, id: 'note-00002', title: '' })] });
+eq([r.done, r.rejected], [['n1'], [{ opId: 'n2', error: 'bad note' }]]);
+const NT = tab('Notes');
+eq(NT.rows[0], ['Title', 'List', 'Notes', 'Category', 'Added', 'By', 'Id']);
+eq(NT.rows[1].slice(0, 4).concat(NT.rows[1].slice(5)), ['Groceries', '☐ Atta\n☑ Paneer', '', 'Kirana', 'Sunita', 'note-00001']);
+eq(NT.hiddenCols, [7], 'the Id column is hidden');
+eq(r.notes, [{ id: 'note-00001', dateTime: T, title: 'Groceries', items: note.items, text: '', category: 'Kirana', by: 'Sunita' }], 'the reply carries the notes');
+eq(post({ ops: [op('n1', 'note', 'add', note.id, { ...note, title: 'Changed' })] }).notes[0].title, 'Groceries', 'a resent add changes nothing');
+// A tick rewrites the row in place; rows handNote in the sheet get an Id and a date; a row without a title is kept as it is
+r = post({ ops: [op('n3', 'note', 'update', note.id, { ...note, items: [{ t: 'Atta', done: true }, { t: 'Paneer', done: true }] })] });
+eq(NT.rows[1][1], '☑ Atta\n☑ Paneer');
+NT.rows[2] = ['To do', 'Bring paneer\n☑  Call Ramesh', 'Before 7', '', '', '', ''];
+NT.rows[3] = ['', 'half handNote', '', '', '', '', ''];
+r = post({ ops: [] });
+const handNote = r.notes.find(n => n.title === 'To do');
+eq(handNote.items, [{ t: 'Bring paneer', done: false }, { t: 'Call Ramesh', done: true }]);
+assert.ok(handNote.id && NT.rows[2][6] === handNote.id && NT.rows[2][4] instanceof Date, 'the typed note got an Id and a date in the sheet');
+eq(NT.rows[3].slice(0, 2), ['', 'half handNote'], 'a row without a title stays');
+r = post({ ops: [op('n4', 'note', 'delete', note.id)] });
+eq(r.notes.map(n => n.title), ['To do']);
+eq([NT.rows[1][0], NT.rows[2][0], NT.rows[3].join('')], ['To do', '', ''], 'the rest moves up and the old last row is blanked');
+eq(NT.rows[2][1], 'half handNote', 'with the half-handNote row kept below the notes');
+
 console.log('Code.gs harness passed');

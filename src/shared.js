@@ -71,6 +71,19 @@ function validateRepay(r) {
   return '';
 }
 
+// A note or checklist (the assistant's save_note): {id, dateTime, title, items: [{t, done}], text, category, by}. The sheet keeps
+// one line per item, so a title or an item is one line.
+function validateNote(n) {
+  if (!n || typeof n !== 'object') return 'bad note';
+  if (!checkId(n.id)) return 'bad id';
+  if (!checkDate(n.dateTime)) return 'bad date';
+  var line = function (v, max) { return okName(v, max) && !/[\r\n]/.test(v); };
+  if (!line(n.title, 60)) return 'bad note';
+  if (!Array.isArray(n.items) || n.items.length > 100 || !n.items.every(function (i) { return i && line(i.t, 80) && typeof i.done === 'boolean'; })) return 'bad note';
+  if (n.text != null && !(typeof n.text === 'string' && n.text.length <= 2000)) return 'bad note';
+  return ['category', 'by'].every(function (k) { return n[k] == null || n[k] === '' || line(n[k], 40); }) ? '' : 'bad note';
+}
+
 // [start, end) in local time. Weeks start Monday. A year is January to December.
 function periodRange(view, date) {
   var y = date.getFullYear(), m = date.getMonth(), d = date.getDate();
@@ -175,10 +188,10 @@ function spendShare(s) {
   return { base: base, slices: slices, overBy: round2(Math.max(0, s.expense - s.income)) };
 }
 
-// ---- Offline operation queue. op = {opId, kind: 'entry'|'loan'|'repay', action: 'add'|'update'|'delete', id, data},
+// ---- Offline operation queue. op = {opId, kind: 'entry'|'loan'|'repay'|'note', action: 'add'|'update'|'delete', id, data},
 // or a category change {opId, kind: 'cat', action: 'add'|'rename'|'delete', data: {type, name, to}} (see applyCat).
 // The phone shows server data with its queued ops applied; Apps Script applies the same ops in the same order.
-var LISTS = { entry: 'rows', loan: 'loans', repay: 'repays' };
+var LISTS = { entry: 'rows', loan: 'loans', repay: 'repays', note: 'notes' };
 
 function indexById(list, id) {
   for (var i = 0; i < list.length; i++) if (list[i].id === id) return i;
@@ -187,7 +200,7 @@ function indexById(list, id) {
 
 function applyOps(snap, ops) {
   var c = snap.cats || CATEGORIES;
-  var out = { rows: (snap.rows || []).slice(), loans: (snap.loans || []).slice(), repays: (snap.repays || []).slice(),
+  var out = { rows: (snap.rows || []).slice(), loans: (snap.loans || []).slice(), repays: (snap.repays || []).slice(), notes: (snap.notes || []).slice(),
     cats: { Income: c.Income.slice(), Expense: c.Expense.slice() }, settings: settingsOf(snap.settings) };
   ops.forEach(function (op) {
     if (op.kind === 'cat') { if (!applyCat(out.cats, out.rows, op)) catInSettings(out.settings, out.cats, op); return; }
@@ -677,7 +690,7 @@ function biggestRise(now, before, fixed, sign) {
 
 if (typeof module !== 'undefined') {
   module.exports = { CATEGORIES: CATEGORIES, NEW_CATEGORIES: NEW_CATEGORIES, DIRS: DIRS, growth: growth, checkCatName: checkCatName, matchName: matchName, applyCat: applyCat, validateEntry: validateEntry, validateLoan: validateLoan,
-    validateRepay: validateRepay, periodRange: periodRange, shiftPeriod: shiftPeriod, periodLabel: periodLabel, buckets: buckets,
+    validateRepay: validateRepay, validateNote: validateNote, periodRange: periodRange, shiftPeriod: shiftPeriod, periodLabel: periodLabel, buckets: buckets,
     summarize: summarize, spendShare: spendShare, applyOps: applyOps, recentEntries: recentEntries, filterEntries: filterEntries, summarizeLoans: summarizeLoans,
     savingRate: savingRate, forecast: forecast, INVEST: INVEST, INTEREST: INTEREST, LOAN_INTEREST: LOAN_INTEREST, newSettings: newSettings, settingsOf: settingsOf,
     validateSet: validateSet, applySet: applySet, catInSettings: catInSettings, monthKey: monthKey, addMonths: addMonths, dayIn: dayIn, totals: totals,

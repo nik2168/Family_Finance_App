@@ -2,7 +2,7 @@
 // Each connected Google Sheet keeps its own copy on the phone under a prefix: the first one 'fm.' (as before), others 'fm.<id>.'.
 function keys(p) {
   var k = {};
-  ['cfg', 'rows', 'loans', 'repays', 'ops', 'limit', 'synced', 'cats', 'settings'].forEach(function (n) { k[n] = p + n; });
+  ['cfg', 'rows', 'loans', 'repays', 'notes', 'ops', 'limit', 'synced', 'cats', 'settings'].forEach(function (n) { k[n] = p + n; });
   return k;
 }
 var P = load('fm.active', 'fm.'), K = keys(P);
@@ -64,7 +64,7 @@ var clock = new Intl.DateTimeFormat('en-IN', { hour: 'numeric', minute: '2-digit
 
 // sheet: {mode: 'add'|'edit'|'loan-add'|'loan-edit'|'repay'|'bill', type, category, id, dir, loan, pay, bill, day}
 var state = { tab: 'home', view: 'month', date: new Date(), f: { q: '', year: '', month: '', cat: '', who: '' }, sheet: null, amt: '', syncing: false, again: false, error: '',
-  out: '', pick: {}, again2: [], due: [], ask: null }; // out: the Money sub-tab last shown; pick: the plan chip picked per focus
+  out: '', again2: [], due: [], ask: null }; // out: the Money sub-tab last shown
 
 function load(k, d) {
   try { var v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; }
@@ -221,7 +221,7 @@ function view() {
   // Before its script has replied, an added sheet shows the household list; the first one (the family's) the starting categories.
   var cats = load(K.cats, null) || (P === 'fm.' ? null : NEW_CATEGORIES), set = load(K.settings, null);
   if (!set) { set = newSettings(); if (load(K.limit, 0) > 0) set.budgets.Others = load(K.limit, 0); } // a script from before settings
-  return applyOps({ rows: load(K.rows, []), loans: load(K.loans, []), repays: load(K.repays, []), cats: cats, settings: set }, load(K.ops, []));
+  return applyOps({ rows: load(K.rows, []), loans: load(K.loans, []), repays: load(K.repays, []), notes: load(K.notes, []), cats: cats, settings: set }, load(K.ops, []));
 }
 
 function waiting() {
@@ -256,17 +256,19 @@ function migratePending() {
 }
 
 // A script from before settings (its reply has none) would refuse these: settings, money added to an investment, and entries
-// without a reason. They wait on the phone until the script is updated.
+// without a reason. One from before notes (its reply has none) would refuse notes. They wait on the phone until the script is updated.
 function needsNew(op) {
   return op.kind === 'set' || (op.kind === 'repay' && op.data && op.data.amount < 0) || (op.kind === 'entry' && op.data && !String(op.data.note || '').trim());
 }
+function held(op) { return op.kind === 'note' ? !load(K.notes, null) : !load(K.settings, null) && needsNew(op); }
 function trySync() {
   var cfg = load(K.cfg, null);
   if (!cfg) return;
   if (state.syncing) { state.again = true; return; }
   state.syncing = true;
   renderSync();
-  var all = load(K.ops, []), ops = load(K.settings, null) ? all : all.filter(function (op) { return !needsNew(op); });
+  var ops = load(K.ops, []).filter(function (op) { return !held(op); }), sent = {};
+  ops.forEach(function (op) { sent[op.opId] = true; });
   fetch(cfg.url, {
     method: 'POST',
     headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // text/plain avoids a CORS preflight Apps Script can't answer
@@ -279,17 +281,20 @@ function trySync() {
     // Re-read the queue: changes made while this request was running must stay.
     save(K.ops, load(K.ops, []).filter(function (op) { return !gone[op.opId]; }));
     var left = load(K.ops, []);
-    // Apps Script takes 500 changes per request: keep going while each round makes progress. Held ops go once settings arrive.
-    if (((data.done.length || data.rejected.length) || (data.settings && ops.length < all.length)) && left.length) state.again = true;
     save(K.rows, data.rows);
     save(K.loans, data.loans || []);
     save(K.repays, data.repays || []);
+    if (Array.isArray(data.notes)) save(K.notes, data.notes);
     save(K.limit, data.othersLimit);
     if (data.cats) save(K.cats, data.cats);
     if (data.settings) save(K.settings, data.settings);
     save(K.synced, Date.now());
+    // Go again while something left can go and it is worth it: this round made progress (Apps Script takes 500 a request), or the op
+    // was not in it (changed meanwhile, or no longer held now that the reply is saved). A script that ignores ops is not asked twice.
+    var moved = data.done.length || data.rejected.length;
+    if (left.some(function (op) { return !held(op) && (moved || !sent[op.opId]); })) state.again = true;
     // A script deployed before History/Loans (or before settings, with changes that need it) is named instead of "waiting" forever.
-    state.error = !Array.isArray(data.loans) || (!data.settings && left.some(needsNew)) ? 'old script' : '';
+    state.error = !Array.isArray(data.loans) || (!data.settings && left.some(needsNew)) || (!data.notes && left.some(function (op) { return op.kind === 'note'; })) ? 'old script' : '';
     if (data.rejected.length) toast(data.rejected.length + (data.rejected.length === 1 ? ' change' : ' changes') + ' could not be saved: ' + data.rejected[0].error, true);
   }).catch(function (err) {
     state.error = /wrong key/.test(err.message) ? 'wrong key' : 'offline';
@@ -392,83 +397,49 @@ function planOf(v, now) {
     p.due = g && g.by && monthsUntil(now, g.by) >= 1 ? monthsUntil(now, g.by) : 0;
     p.pace = g ? monthsToGoal(lt.worth, lt.rate, lt.monthly, g.target, lt.addRate) : null;
     p.chips = g && p.pace !== 0 ? targets(p.pace, p.due).map(function (m) { return { months: m, need: m === p.pace ? lt.monthly : neededForGoal(lt.worth, lt.rate, g.target, m, lt.addRate) }; }) : [];
-    // What the investments were worth on the 1st of each of the last 6 months, and now (one the family already had: from the start)
-    p.spark = [6, 5, 4, 3, 2, 1].map(function (i) {
-      var at = new Date(now.getFullYear(), now.getMonth() - i + 1, 1), before = function (x) { return Date.parse(x.dateTime) < at; };
-      return worthNow(v.loans.filter(function (l) { return before(l) || (set.loans[l.id] || {}).old; }), v.repays.filter(before), 'invested', at);
-    }).concat(p.worth);
   }
   return p;
 }
-// The plan chip picked (the pace, unless another was tapped) and what it means against today's pace.
-function chipText(p, c) {
+// Home's glance: the goal (clearing loans or growing savings; tap for Insights) and the month's budget (tap to change it),
+// each a number and a little forecast line (lineSvg, shrunk by CSS).
+function glRow(attrs, label, big, sub, chart) {
+  return '<button type="button" class="gl" ' + attrs + '><span class="grow gt"><small>' + label + '</small><b class="num">' + big + '</b><small>' + sub + '</small></span>' + chart + '</button>';
+}
+function glSet(id, picture, title, text) {
+  return '<button type="button" class="gl" id="' + id + '">' + img3d(picture, 30) + '<span class="grow gt"><b>' + title + '</b><small>' + text + '</small></span>' + icon('caret-right', 'sm muted') + '</button>';
+}
+// Everyday spending this month added up day by day (as budgetStatus counts it: categories without a bill), then today's pace to the month's end.
+function paceLine(rows, b, now) {
+  var y = now.getFullYear(), m = now.getMonth(), dim = new Date(y, m + 1, 0).getDate(), today = now.getDate(), sum = 0, done = [0], start = new Date(y, m, 1);
+  rows = rows.filter(function (e) { return new Date(e.dateTime) >= start; });
+  for (var i = 1; i <= today; i++) {
+    var sp = totals(rows, new Date(y, m, i), new Date(y, m, i + 1)).spent;
+    Object.keys(sp).forEach(function (c) { if (!b.fixed[c]) sum += sp[c]; });
+    done.push(sum);
+  }
+  var rate = sum / today, pace = done.slice();
+  for (i = today + 1; i <= dim; i++) pace.push(sum + rate * (i - today));
+  return { done: done, pace: pace, end: Math.round(pace[dim]) };
+}
+function glanceHtml(v, p, now) {
+  var at = function (i) { return inMonths(now, i); }, goal, budget, b = budgetStatus(v.rows, v.settings, v.cats, now), d = b.daily;
   if (p.focus === 'debt') {
-    if (c.months === p.pace) return 'Your pace now: what is left each month after expenses' + (p.sips ? ' and ' + money.format(p.sips) + ' of SIPs' : '') + (p.interestIn ? ', with the interest coming in' : '');
-    if (c.need == null) return 'More than this family can put aside';
-    var parts = [money.format(Math.max(0, c.need - p.cash)) + ' more than now'];
-    if (p.pace) parts.push(monthsText(p.pace - c.months) + ' sooner');
-    if (p.pace && p.f.totalInterest - c.interest >= 100) parts.push('about ' + money.format(Math.round((p.f.totalInterest - c.interest) / 100) * 100) + ' less interest');
-    return parts.join(' · ');
+    goal = glRow('id="glGoal" data-tab="insights"', 'Debt-free by', p.pace ? monthYear(inMonths(now, p.pace)) : 'Not yet', lakh(p.owed) + ' left · ' + p.open.length + (p.open.length === 1 ? ' loan' : ' loans'),
+      lineSvg([{ v: [p.owed].concat(p.f.months.slice(0, Math.min(60, p.pace || 24)).map(function (m) { return m.owed; })) }], { fill: '--blush-d', label: 'Owed going down', at: at }));
+  } else if (p.g) {
+    var g = p.g, n = Math.min(120, p.pace || (p.due ? p.due + 12 : 60));
+    goal = glRow('id="glGoal" data-tab="insights"', lakh(g.target) + ' goal' + (g.name ? ' · ' + esc(g.name) : ''), pct(Math.min(1, p.lt.worth / g.target)),
+      p.pace === 0 ? 'reached 🎉' : p.pace ? 'by ' + monthYear(inMonths(now, p.pace)) + ' at your pace' : 'not reached at this pace',
+      lineSvg([{ v: growLine(p.lt, p.lt.monthly, n) }], { fill: '--mint-d', goal: g.target, goalText: '', label: 'Savings growing toward the goal', at: at }));
+  } else goal = glSet('setGoal', 'seed', 'Set a savings goal', 'See when you get there');
+  if (!d) budget = glSet('setBudget', 'bag', 'Set a monthly budget', 'See what is left to spend each day');
+  else {
+    var pl = paceLine(v.rows, b, now), over = pl.end > d.limit;
+    budget = glRow('id="setBudget"', d.left >= 0 ? 'Left to spend' : 'Over the budget', '<span' + (d.left < 0 ? ' class="neg"' : '') + '>' + money.format(Math.abs(d.left)) + '</span>',
+      (d.left > 0 ? 'about ' + money.format(d.perDay) + ' a day · ' : '') + '<span' + (over ? ' class="neg"' : '') + '>on pace for ' + compact(pl.end) + '</span>',
+      lineSvg([{ v: pl.done }, { v: pl.pace, dashed: true }], { fill: over ? '--blush-d' : '--mint-d', goal: d.limit, goalText: compact(d.limit), label: 'Spending this month against the budget', at: function (i) { return new Date(now.getFullYear(), now.getMonth(), i + 1); } }));
   }
-  var lt = p.lt, grows = money.format(Math.round(lt.worth * lt.rate));
-  if (c.months === p.pace) return lt.monthly ? 'Your pace: the ' + money.format(lt.monthly) + ' a month you put in (SIPs), and about ' + grows + ' a month of growth' : 'Growth alone, about ' + grows + ' a month';
-  var more = c.need - lt.monthly, goal = c.months === p.due ? 'Your goal date. ' : '';
-  if (more <= 0) return goal + 'On track: the ' + money.format(lt.monthly) + ' a month you put in now gets there by then';
-  return goal + money.format(more) + ' a month more than now' + (p.pace && c.months < p.pace ? ' · ' + monthsText(p.pace - c.months) + ' sooner' : '');
-}
-function chipsHtml(p, now) {
-  var pick = state.pick[p.focus], sel = p.chips.filter(function (c) { return c.months === pick; })[0] || p.chips.filter(function (c) { return c.months === p.due; })[0] || p.chips[p.chips.length - 1];
-  return '<div class="tchips">' + p.chips.map(function (c) {
-    return '<button type="button" class="tchip" data-plan="' + c.months + '" aria-pressed="' + (c === sel) + '"><small>' + (c.months === p.due ? 'goal ' : 'by ') + monthYear(inMonths(now, c.months)) + '</small>' +
-      '<b class="num">' + (c.need == null ? '–' : money.format(c.need)) + (c.months === p.pace ? ' ✓' : '') + '</b></button>';
-  }).join('') + '</div><p class="tout t-xs soft">' + esc(chipText(p, sel)) + '</p>';
-}
-
-function heroHtml(p, now) {
-  var rate = ring(p.savingsRate, 'saving<br>aim 20%' + (p.savingsRate >= 0.2 ? ' ✓' : ''));
-  if (p.focus === 'debt') {
-    var share = p.borrowed ? p.repaid / p.borrowed : 0;
-    return '<div class="pcard" style="background:var(--blush)"><div class="hrow"><div class="grow"><span class="pill white">' + img3d('rocket', 14) + 'Focus: clear loans</span>' +
-      '<div class="soft t-sm" style="margin-top:10px">Debt-free by</div><div class="big" id="heroDate">' + (p.pace ? monthYear(inMonths(now, p.pace)) : 'Not yet') + '</div>' +
-      '<div class="soft t-sm">' + (p.pace ? monthsText(p.pace) + ' at ' + money.format(p.cash) + ' a month' : p.cash ? 'Not paid off at ' + money.format(p.cash) + ' a month' : 'Nothing is left over each month to pay them') + '</div></div>' + rate + '</div>' +
-      '<div class="ptop"><span><b class="num">' + money.format(p.repaid) + '</b> paid</span><span class="num"><b>' + money.format(p.owed) + '</b> left</span></div>' +
-      '<span class="bar"><i style="width:' + (share * 100).toFixed(1) + '%;background:#0B0B0C"></i></span>' +
-      '<div class="t-xs soft" style="margin:5px 0 10px">' + Math.round(share * 100) + '% of ' + money.format(p.borrowed) + ' borrowed · ' + p.open.length + (p.open.length === 1 ? ' loan' : ' loans') + '</div>' +
-      '<div class="t-sm" style="font-weight:500;margin-bottom:6px">' + (p.pace ? 'Want it sooner? Put aside each month:' : 'To pay them off, put aside each month:') + '</div>' + chipsHtml(p, now) + '</div>';
-  }
-  var lt = p.lt, g = p.g, sp = p.spark, lo = Math.min.apply(null, sp), hi = Math.max.apply(null, sp), start = !p.worth;
-  var spark = hi > lo ? '<svg class="spark" viewBox="0 0 120 36" preserveAspectRatio="none" aria-hidden="true"><path d="' + sp.map(function (x, i) { return (i ? 'L' : 'M') + (i * 20) + ' ' + (34 - (x - lo) / (hi - lo) * 30).toFixed(1); }).join(' ') +
-    '" fill="none" stroke="#0B0B0C" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linejoin="round"/></svg>' : '';
-  // This month: growth, and money put in or taken out (not money the family already had)
-  var month = '▲ ' + money.format(Math.round(p.growth)) + ' growth this month' + (p.added > 0 ? ' · ' + money.format(Math.round(p.added)) + ' put in' : p.added < 0 ? ' · ' + money.format(Math.round(-p.added)) + ' taken out' : '');
-  var goal;
-  if (!g) {
-    goal = '<button type="button" class="btn ink" id="setGoal" style="margin-top:12px">' + icon('plus', 'sm') + 'Set a savings goal</button><p class="tout t-xs soft">See when you get there, and what to put in each month.</p>';
-  } else {
-    var share = Math.min(1, lt.worth / g.target), reached = p.pace === 0;
-    goal = '<div class="ptop"><span><b>' + lakh(g.target) + (g.by ? ' by ' + monthYear(dayIn(g.by, 1)) : ' goal') + '</b>' + (g.name ? ' · ' + esc(g.name) : '') + '</span><span class="num">' + Math.round(share * 100) + '%</span></div>' +
-      '<span class="bar"><i style="width:' + (share * 100).toFixed(1) + '%;background:#0B0B0C"></i></span>' +
-      '<div class="t-xs soft" style="margin:5px 0 10px">' + lakh(lt.worth) + ' of ' + lakh(g.target) + ' · ' + (reached ? 'reached 🎉' : p.pace ? 'at your pace by ' + monthYear(inMonths(now, p.pace)) : 'not reached at this pace') + '</div>' +
-      (reached ? '' : '<div class="t-sm" style="font-weight:500;margin-bottom:6px">To get there, put in each month:</div>' + chipsHtml(p, now));
-  }
-  return '<div class="pcard" style="background:var(--mint)"><div class="hrow"><div class="grow"><span class="pill white">' + img3d('seed', 14) + 'Focus: grow savings</span>' +
-    '<div class="soft t-sm" style="margin-top:10px">' + (start ? 'Start your savings' : 'Savings worth now') + '</div><div class="big num" id="heroWorth">' + money.format(Math.round(p.worth)) + '</div>' +
-    '<div class="soft t-sm">' + (start ? 'Add an FD, RD or SIP in Money to see it grow' : month) + '</div></div>' + rate + '</div>' + spark + goal + '</div>';
-}
-
-// Left to spend: the daily-spending budget against this month's everyday spending (categories without a bill).
-function stripHtml(b) {
-  var over = b.over.length ? '<span class="pill bad">' + esc(b.over[0].cat) + ' ' + money.format(b.over[0].over) + ' over' + (b.over.length > 1 ? ' +' + (b.over.length - 1) : '') + '</span>' : '';
-  if (!b.daily) {
-    return '<button type="button" class="card strip" id="setBudget" style="text-align:left;width:100%"><div class="l1">' + img3d('bag', 30) + '<div class="grow"><b>Set a monthly budget</b>' +
-      '<div class="t-sm muted">See what is left to spend each day</div></div>' + (over || icon('caret-right', 'sm muted')) + '</div></button>';
-  }
-  var d = b.daily, used = Math.min(1, d.spent / d.limit);
-  return '<div class="card strip" id="leftToSpend"><div class="l1">' + img3d('bag', 30) + '<div class="grow"><div class="t-sm muted">Left to spend this month</div>' +
-    (d.left >= 0 ? '<b class="num" style="font-size:18px">' + money.format(d.left) + '</b> <span class="t-sm muted">· about ' + money.format(d.perDay) + ' a day</span>'
-      : '<b class="num neg" style="font-size:18px">' + money.format(-d.left) + ' over</b> <span class="t-sm muted">the budget</span>') + '</div></div>' +
-    '<span class="bar"><i style="width:' + (used * 100).toFixed(1) + '%;background:var(' + (d.left < 0 ? '--blush-d' : used > 0.85 ? '--butter-d' : '--mint-d') + ')"></i></span>' +
-    '<div class="l3 t-xs muted"><span>' + money.format(d.spent) + ' of the ' + money.format(d.limit) + ' everyday budget · ' + d.days + (d.days === 1 ? ' day' : ' days') + ' to go</span>' + over + '</div></div>';
+  return '<div class="card glance">' + goal + budget + '</div>';
 }
 
 // Due soon: the next bills, EMIs, SIPs and monthly interest.
@@ -489,10 +460,34 @@ function dueHtml(list, now) {
   }).join('') + '</div>';
 }
 
+// Notes and lists the assistant keeps (ai.js save_note): note ops, synced to the sheet's Notes tab like entries (only on the phone
+// while no sheet is connected). Tick items, copy, share, add a finished list as an expense, or ✕ to remove. The same markup shows in
+// the assistant's card, and these handlers serve both.
+function notes(v) { return (v || view()).notes.slice().sort(function (a, b) { return Date.parse(b.dateTime) - Date.parse(a.dateTime); }); }
+function noteText(n) { return [n.title, n.text].concat(n.items.map(function (i) { return (i.done ? '☑ ' : '☐ ') + i.t; })).filter(Boolean).join('\n'); }
+function notesHtml(list) {
+  return list.map(function (n) {
+    var all = n.items.length && n.items.every(function (i) { return i.done; });
+    return '<div class="card nt" data-nt="' + esc(n.id) + '"><h2><span class="grow">' + esc(n.title) + '</span>' +
+      [['copy', 'copy', 'Copy'], ['share', 'share', 'Share'], ['del', 'x', 'Remove']].map(function (a) { return '<button type="button" class="rbtn xs" data-nt-act="' + a[0] + '" aria-label="' + a[2] + '">' + icon(a[1], 'sm') + '</button>'; }).join('') + '</h2>' +
+      (n.text ? '<p class="t-sm">' + esc(n.text) + '</p>' : '') +
+      n.items.map(function (it, i) { return '<label class="nti"><input type="checkbox" data-nti="' + i + '"' + (it.done ? ' checked' : '') + '><span>' + esc(it.t) + '</span></label>'; }).join('') +
+      (all ? '<button type="button" class="pay" data-nt-act="exp">Add as expense</button>' : '') + '</div>';
+  }).join('');
+}
+function noteAct(btn, act) {
+  var box = btn.closest('[data-nt]'), n = findById(notes(), box.dataset.nt);
+  if (!n) return;
+  if (act === 'copy' && navigator.clipboard) navigator.clipboard.writeText(noteText(n)).then(function () { var h = btn.innerHTML; btn.innerHTML = icon('check', 'sm'); setTimeout(function () { btn.innerHTML = h; }, 1500); }); // a toast hides behind the assistant
+  else if (act === 'share') shareText(noteText(n));
+  else if (act === 'exp') openSheet({ mode: 'add', type: 'Expense', category: matchName(view().cats.Expense, n.category || n.title) || '' }, { note: n.title });
+  else if (act === 'del' && !queue('note', 'delete', n.id)) { box.remove(); render(); trySync(); }
+}
+
 function renderHome(v) {
   var now = new Date(), s = summarize(v.rows, 'month', now, 0, v.cats), w = waiting(), p = planOf(v, now);
-  $('#hero').innerHTML = heroHtml(p, now);
-  $('#strip').innerHTML = stripHtml(budgetStatus(v.rows, v.settings, v.cats, now));
+  $('#notes').innerHTML = notesHtml(notes(v));
+  $('#glance').innerHTML = glanceHtml(v, p, now);
   $('#heroIn').textContent = compact(s.income); // three side by side on a phone: ₹13.5K (the labels say it in full)
   $('#heroOut').textContent = compact(s.expense);
   var owed = summarizeLoans(loansOf(v, 'borrowed'), v.repays, null, null, now).owed;
@@ -855,6 +850,9 @@ function shareSummary() {
     p.focus === 'debt' ? (p.pace ? 'Loans: ' + money.format(p.owed) + ' left, debt-free by ' + monthYear(inMonths(now, p.pace)) : 'Loans: ' + money.format(p.owed) + ' left')
       : 'Savings: about ' + lakh(p.worth) + (p.g && p.pace ? ', ' + lakh(p.goal) + ' by ' + monthYear(inMonths(now, p.pace)) : ''),
     '— Family Money'].filter(Boolean).join('\n');
+  shareText(text);
+}
+function shareText(text) {
   if (navigator.share) return navigator.share({ text: text }).catch(function () {});
   window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank', 'noopener');
 }
@@ -907,7 +905,8 @@ function renderSettings(v) {
     // The assistant (ai.js) uses the family's own Gemini key, kept on this phone only.
     '<div class="card set"><h2>Assistant</h2><div class="row">' + img3d('spark', 26) + '<div class="grow">Gemini key<small>Talk or type to add entries and ask about your money</small></div>' +
       '<input class="field" type="password" id="aiKey" value="' + esc(load('fm.gemini', '')) + '" placeholder="Paste key" autocomplete="off" style="width:130px;text-align:left" aria-label="Gemini key"></div>' +
-      '<p class="t-xs muted" style="padding-top:6px">Get a free key at aistudio.google.com. It stays on this phone. What you ask, and the numbers needed to answer, go to Google; on the free tier Google may use them to improve its products.</p></div>' +
+      '<p class="t-xs muted" style="padding-top:6px">Get a free key at aistudio.google.com. It stays on this phone. What you ask, and the numbers needed to answer, go to Google; on the free tier Google may use them to improve its products.</p>' +
+      (load('fm.gemini', '') ? '<label class="swrow" style="margin-top:8px"><div class="grow"><b>Sounds</b><small>When the assistant opens, listens and stops</small></div><input type="checkbox" class="sw" id="aiSfx"' + (load('fm.sfx', true) ? ' checked' : '') + '></label>' : '') + '</div>' +
     '<div class="card"><h2>Theme</h2>' + segHtml('theme', load('fm.theme', 'auto'), [['auto', 'Auto'], ['light', 'Light'], ['dark', 'Dark']]) + '</div>' +
     '<div class="card"><h2>Sheets on this phone</h2><div style="display:grid;gap:2px">' + sheetsHtml() + '</div></div>' +
     '<button type="button" class="btn soft" data-tab="cats">' + icon('pencil-simple', 'sm') + 'Edit categories</button>' +
@@ -1425,8 +1424,8 @@ document.addEventListener('click', function (ev) {
     if (it2.kind === 'bill') openSheet({ mode: 'add', type: 'Expense', category: it2.category, bill: it2.id }, { amount: it2.amount, note: it2.name });
     else openRepay(it2.id, { emi: 'emi', sip: 'add', int: 'int' }[it2.kind]);
   }
+  else if (d.ntAct) noteAct(t, d.ntAct);
   else if (d.again) { var g = state.again2[Number(d.again)]; openSheet({ mode: 'add', type: g.type, category: g.category }, { amount: g.amount, note: g.note }); }
-  else if (d.plan) { var v0 = view(); state.pick[focusOf(v0.loans, v0.repays, v0.settings, new Date())] = Number(d.plan); render(); }
   else if (d.delRepay) { ask({ title: 'Delete this payment?', ok: 'Delete', danger: true }).then(function (yes) { if (yes) { queue('repay', 'delete', d.delRepay); if (findById(view().rows, d.delRepay + '-paid')) queue('entry', 'delete', d.delRepay + '-paid'); toast('Payment deleted'); render(); trySync(); } }); }
   else if (d.sheet) { if (d.sheet !== P) useSheet(d.sheet); else closeDDs(); }
   else if (d.sren) renameSheet(d.sren);
@@ -1464,6 +1463,8 @@ document.addEventListener('change', function (ev) {
   else if (t.id === 'aiKey') { save('fm.gemini', t.value.trim()); toast(t.value.trim() ? 'Assistant on: tap Ask' : 'Assistant off'); render(); }
   else if (t.id === 'goalIn') { if (!setOp('goal', numberOf(t.value))) { toast('Goal saved'); render(); trySync(); } }
   else if (t.hasAttribute('data-daily')) { if (!setOp('daily', numberOf(t.value))) { toast('Budget saved'); trySync(); } }
+  else if (t.hasAttribute('data-nti')) { var n = findById(notes(), t.closest('[data-nt]').dataset.nt); if (n) { n.items[Number(t.dataset.nti)].done = t.checked; if (!queue('note', 'update', n.id, n)) { render(); trySync(); } } }
+  else if (t.id === 'aiSfx') { save('fm.sfx', t.checked); toast(t.checked ? 'Sounds on' : 'Sounds off'); }
   else if (t.hasAttribute('data-budget')) { if (!setOp('budget', numberOf(t.value), t.dataset.budget)) { toast('Budget saved'); trySync(); } }
 });
 $('#askForm').addEventListener('submit', function (ev) { ev.preventDefault(); answer(true); });

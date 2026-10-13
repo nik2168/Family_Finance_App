@@ -204,10 +204,8 @@ async function connect(ctx) {
     check('Home: latest 3 entries, by day', await page.locator('#recent .lrow').count() === 3 && await page.locator('#recent .dayh').count() > 0);
     check('Home: Income / Expenses buttons show this month', eqv([await page.textContent('#heroIn'), await page.textContent('#heroOut')], [compact(month.income), compact(month.expense)]),
       `${await page.textContent('#heroIn')} / ${await page.textContent('#heroOut')}`);
-    const hero = await page.textContent('#hero'), heroDate = await page.textContent('#heroDate');
-    check('Home: more owed than saved, so the focus is clearing the loans', /Focus: clear loans.*Debt-free by/.test(hero), heroDate);
-    await page.click('#hero .tchip >> nth=0');
-    check('Home: a plan chip says what it takes', /more than now/.test(await page.textContent('#hero .tout')), await page.textContent('#hero .tout'));
+    const heroDate = await page.textContent('#glGoal b');
+    check('Home: more owed than saved, so the glance shows when the loans are cleared', /Debt-free by/.test(await page.textContent('#glGoal')), heroDate);
     await shot('demo-01-home');
 
     // History: every entry can be changed
@@ -249,7 +247,7 @@ async function connect(ctx) {
     await tab('insights');
     await page.click('.seg [data-view="month"]');
 
-    // The loan plan says what the Home hero says
+    // The loan plan says what Home's glance says
     const plan = await page.textContent('#insPlan');
     check('Insights: the loan plan matches Home', plan.includes('Loan plan') && plan.includes(heroDate === 'Not yet' ? 'Not paid off' : 'Debt-free by ' + heroDate), plan.slice(0, 60));
     await page.locator('#insPlan').screenshot({ path: SHOTS ? path.join(SHOTS, 'demo-06-plan.png') : path.join(require('os').tmpdir(), 'fc.png') });

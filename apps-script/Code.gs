@@ -6,8 +6,10 @@
 // The category list lives in the script property CATS (not in a tab, so a hand edit can't orphan entries); changing it rewrites every summary.
 // Settings (budgets, bills, EMIs, SIPs, goals, the focus) live in the property SET (shared.js validateSet); the Others budget is cell B1.
 // Who added an entry is the note on its Date cell ("Added by Sunita"), so the month tables keep their columns.
+// A "Notes" tab (made with the first note) holds the assistant's notes and lists, one row each, one line per item (☐ to do, ☑ done).
 // Every sync loads everything, applies the phone's ops in memory, and rewrites only the month tables / tables that changed.
 var COMMON = 'Loans & Settings';
+var NOTES = 'Notes', N_COLS = 7;                     // Title | List | Notes | Category | Added | By | Id, from row 2
 var MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 var M_TITLE = 19, M_HEAD = 20, M_FIRST = 21;         // month tables: title row, header row, first entry row
 var M_COLS = 6, M_STEP = 7;                          // Date | Category | Income | Expense | Reason | Id, then a gap column
@@ -30,8 +32,8 @@ var COLOR = { ink: '#0B0B0C', muted: '#8A8A8E', line: '#D9D9DE', head: '#F1F1F3'
   income: '#D7F2DC', incomeD: '#8FD6A0', expense: '#F7D9D9', expenseD: '#EE9F9F', saved: '#E8DDFB', savedD: '#B9A5F3', month: '#DCDDF6',
   butter: '#F8E9B8', butterD: '#EBC75E', sky: '#D9EEF6', skyD: '#8DC8E2' };
 var MONEY = '#,##0;-#,##0;"–"', SAVED_MONEY = '#,##0;[Red]-#,##0;"–"';
-var VALIDATE = { entry: validateEntry, loan: validateLoan, repay: validateRepay };
-var LIST_OF = { entry: 'rows', loan: 'loans', repay: 'repays' };
+var VALIDATE = { entry: validateEntry, loan: validateLoan, repay: validateRepay, note: validateNote };
+var LIST_OF = { entry: 'rows', loan: 'loans', repay: 'repays', note: 'notes' };
 
 // Run once from the editor: creates the tabs, moves data from an older layout, and makes the family key (shown in the log).
 function setup() {
@@ -42,9 +44,9 @@ function setup() {
 }
 
 // Body: {key, ops: [op]} (older phones send {key, pending: [entry]}).
-// op = {opId, kind: 'entry'|'loan'|'repay', action: 'add'|'update'|'delete', id, data} or {opId, kind: 'cat', action, data} (applyCat)
+// op = {opId, kind: 'entry'|'loan'|'repay'|'note', action: 'add'|'update'|'delete', id, data} or {opId, kind: 'cat', action, data} (applyCat)
 // or {opId, kind: 'set', action: 'update', data: {key, id, value}} (applySet).
-// Reply: {rows, loans, repays, othersLimit, cats, settings, done: [opId], rejected: [{opId, error}]} or {error}.
+// Reply: {rows, loans, repays, notes, othersLimit, cats, settings, done: [opId], rejected: [{opId, error}]} or {error}.
 function doPost(e) {
   var body;
   try { body = JSON.parse(e.postData.contents); } catch (err) { return reply({ error: 'bad request' }); }
@@ -73,7 +75,7 @@ function doPost(e) {
 
   return reply({
     rows: st.rows.map(function (r) { var e = { id: r.id, dateTime: r.dateTime, type: r.type, category: r.category, amount: r.amount, note: r.note }; if (r.by) e.by = r.by; return e; }),
-    loans: st.loans, repays: st.repays, othersLimit: st.limit, cats: st.cats, settings: settingsReply(st), done: done, rejected: rejected
+    loans: st.loans, repays: st.repays, notes: st.notes, othersLimit: st.limit, cats: st.cats, settings: settingsReply(st), done: done, rejected: rejected
   });
 }
 
@@ -93,12 +95,13 @@ function loadAll(ss) {
   var used = ss.getSheets().some(function (sh) { return /^\d{4}$/.test(sh.getName()) || sh.getName() === 'Entries'; });
   var start = cats ? JSON.parse(cats) : used ? CATEGORIES : NEW_CATEGORIES;
   var set = PropertiesService.getScriptProperties().getProperty('SET');
-  var st = { ss: ss, tz: ss.getSpreadsheetTimeZone(), rows: [], loans: [], repays: [], keep: {}, size: {}, dirty: {}, dirtyCats: !cats && !used,
+  var st = { ss: ss, tz: ss.getSpreadsheetTimeZone(), rows: [], loans: [], repays: [], notes: [], keepN: [], sizeN: 0, dirtyN: false, keep: {}, size: {}, dirty: {}, dirtyCats: !cats && !used,
     cats: { Income: start.Income.slice(), Expense: start.Expense.slice() }, settings: settingsOf(set ? JSON.parse(set) : null), dirtySet: false, dirtyLimit: false,
     keepL: {}, keepR: {}, sizeL: {}, sizeR: {}, payDir: {}, dirtyL: false, dirtyR: false, limit: 0, seen: {} };
   DIRS.forEach(function (d) { st.keepL[d] = []; st.keepR[d] = []; st.sizeL[d] = st.sizeR[d] = 0; });
   ss.getSheets().forEach(function (sh) { if (/^\d{4}$/.test(sh.getName())) readYear(st, sh); });
   readCommon(st, ensureCommon(ss));
+  readNotes(st, ss.getSheetByName(NOTES));
   migrateOld(st);
   return st;
 }
@@ -165,6 +168,27 @@ function readCommon(st, sh) {
       }
     });
   });
+}
+
+function readNotes(st, sh) {
+  if (!sh || sh.getLastRow() < 2) return;
+  sh.getRange(2, 1, sh.getLastRow() - 1, N_COLS).getValues().forEach(function (c, i) {
+    if (isBlank(c)) return;
+    st.sizeN = i + 1;
+    var n = parseNote(c);
+    if (!n) { st.keepN.push(c); return; }
+    if (claim(st, n) || !toDate(c[4])) st.dirtyN = true; // typed by hand: it gets an Id and a date
+    st.notes.push(n);
+  });
+}
+
+// [Title, List, Notes, Category, Added, By, Id] -> note, or null without a title. A list line starting with ☑ is done.
+function parseNote(c) {
+  var line = function (v, max) { return String(v == null ? '' : v).replace(/\s+/g, ' ').trim().slice(0, max); }, title = line(c[0], 60);
+  if (!title) return null;
+  var items = String(c[1]).split('\n').map(function (l) { l = l.trim(); return { t: line(l.replace(/^[☐☑]/, ''), 80), done: l.charAt(0) === '☑' }; });
+  return { id: String(c[6]).trim(), dateTime: (toDate(c[4]) || new Date()).toISOString(), title: title, items: items.filter(function (i) { return i.t; }).slice(0, 100),
+    text: String(c[2]).trim().slice(0, 2000), category: line(c[3], 40), by: line(c[5], 40) };
 }
 
 // Gives rec a usable Id; true when it had to change (so the table is written back).
@@ -240,6 +264,9 @@ function record(st, kind, d) {
   if (kind === 'entry') {
     return { id: d.id, dateTime: d.dateTime, type: d.type, category: d.category, amount: d.amount, note: (d.note || '').trim(), by: d.by || '', home: homeOf(st, d.dateTime) };
   }
+  if (kind === 'note') {
+    return { id: d.id, dateTime: d.dateTime, title: d.title, items: d.items.map(function (i) { return { t: i.t, done: i.done }; }), text: (d.text || '').trim(), category: d.category || '', by: d.by || '' };
+  }
   if (kind === 'loan') {
     var l = { id: d.id, dateTime: d.dateTime, reason: d.reason.trim(), amount: d.amount, interest: d.interest > 0 ? d.interest : 0,
       per: d.per === 'year' ? 'year' : 'month', priority: PRIORITY.hasOwnProperty(d.priority) ? d.priority : 'medium', dir: loanDir(d) };
@@ -255,6 +282,7 @@ function homeOf(st, dateTime) { return Utilities.formatDate(new Date(dateTime), 
 // Mark what must be rewritten. A loan's reason also shows in the repayments table.
 function touch(st, kind, rec) {
   if (kind === 'entry') st.dirty[rec.home] = true;
+  else if (kind === 'note') st.dirtyN = true;
   else if (kind === 'loan') st.dirtyL = st.dirtyR = true;
   else st.dirtyR = true;
 }
@@ -279,6 +307,7 @@ function writeDirty(st) {
   }
   if (st.dirtyL) writeLoans(st, sh);
   if (st.dirtyR) writeRepays(st, sh);
+  if (st.dirtyN) writeNotes(st);
   removeBlankDefault(st.ss);
 }
 
@@ -324,6 +353,15 @@ function writeRepays(st, sh) {
     writeBlock(sh, L_FIRST, PAY_COL[dir], R_COLS, out, st.sizeR[dir]);
     st.sizeR[dir] = out.length;
   });
+}
+
+// A note syncs whole. ponytail: two phones ticking the same list at the same moment: the last one wins; per-item ops if that bites.
+function writeNotes(st) {
+  var out = st.notes.slice().sort(byOldest).map(function (n) {
+    return [safeText(n.title), n.items.map(function (i) { return (i.done ? '☑ ' : '☐ ') + i.t; }).join('\n'), safeText(n.text), safeText(n.category), new Date(n.dateTime), n.by, n.id];
+  }).concat(st.keepN);
+  writeBlock(ensureNotes(st.ss), 2, 1, N_COLS, out, st.sizeN);
+  st.sizeN = out.length;
 }
 
 // Writes rows at (row, col) and blanks whatever was below them before. Strings starting with "=" become formulas.
@@ -458,6 +496,23 @@ function ensureCommon(ss) {
     laid = true;
   });
   if (laid) styleCommon(sh);
+  return sh;
+}
+
+function ensureNotes(ss) {
+  var sh = ss.getSheetByName(NOTES);
+  if (sh) return sh;
+  sh = ss.insertSheet(NOTES, ss.getSheets().length);
+  sh.getRange(1, 1, 1, N_COLS).setValues([['Title', 'List', 'Notes', 'Category', 'Added', 'By', 'Id']]);
+  sh.setHiddenGridlines(true);
+  sh.setTabColor(COLOR.savedD);
+  sh.setFrozenRows(1);
+  sh.getRange(1, 1, 1, N_COLS - 1).setBackground(COLOR.saved).setFontWeight('bold').setFontColor(COLOR.ink);
+  sh.getRange(2, 1, ROWS, 1).setFontWeight('bold');
+  sh.getRange(2, 2, ROWS, 2).setWrap(true).setVerticalAlignment('top');
+  sh.getRange(2, 5, ROWS, 1).setNumberFormat(DATE_FORMAT);
+  [160, 220, 320, 110, 150, 90].forEach(function (px, k) { sh.setColumnWidth(k + 1, px); });
+  sh.hideColumns(N_COLS);
   return sh;
 }
 

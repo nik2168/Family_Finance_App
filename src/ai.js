@@ -23,12 +23,25 @@
     { name: 'add_loan', description: 'Prepare money borrowed or owed (pending), given (lent to someone), or invested (FD, RD, SIP, gold...). The user must tap Save.',
       parameters: { type: 'OBJECT', properties: { dir: { type: 'STRING', enum: DIRS }, reason: { type: 'STRING', description: 'Who or what, e.g. "Ramesh" or "SBI FD"' }, amount: { type: 'NUMBER' },
         interest: { type: 'NUMBER', description: 'Percent' }, per: { type: 'STRING', enum: ['month', 'year'] } }, required: ['dir', 'reason', 'amount'] } },
+    { name: 'add_entries', description: 'Prepare several incomes and expenses at once, when the user names more than one. They see a short list and save them all with one tap or by saying save.',
+      parameters: { type: 'OBJECT', properties: { items: { type: 'ARRAY', items: { type: 'OBJECT', properties: { type: { type: 'STRING', enum: ['Income', 'Expense'] },
+        category: { type: 'STRING', description: 'One of the existing categories for that type' }, amount: { type: 'NUMBER', description: 'Rupees' }, note: { type: 'STRING', description: 'Short, in the user\'s words' },
+        date: { type: 'STRING', description: 'YYYY-MM-DD, default today' } }, required: ['type', 'amount'] } } }, required: ['items'] } },
+    { name: 'confirm', description: 'Save or cancel the card the user is looking at, when they say so ("save", "haan", "cancel", "rehne do").',
+      parameters: { type: 'OBJECT', properties: { action: { type: 'STRING', enum: ['save', 'cancel'] } }, required: ['action'] } },
+    { name: 'save_note', description: 'Save a note or checklist on this phone (groceries, things to do or bring, plans), or add to or tick items on the one with the same title. Saved at once; it shows on Home.',
+      parameters: { type: 'OBJECT', properties: { title: { type: 'STRING', description: 'Short, e.g. "Groceries", "To do"' }, items: { type: 'ARRAY', items: { type: 'STRING' }, description: 'Items to add' },
+        done: { type: 'ARRAY', items: { type: 'STRING' }, description: 'Items to tick off' }, text: { type: 'STRING', description: 'A summary or free text' },
+        category: { type: 'STRING', description: 'For a shopping list: the expense category it is paid from' } }, required: ['title'] } },
+    { name: 'notes', description: 'The notes and checklists saved on this phone.' },
+    { name: 'listen', description: 'Listen quietly to a conversation around the user (a call, a meeting, the shopkeeper) and turn it into a note when they tap to finish. Call it when they ask you to listen.' },
     { name: 'query_entries', description: 'Totals and the latest matching entries from the history. Use for any question about past income or spending.',
       parameters: { type: 'OBJECT', properties: { type: { type: 'STRING', enum: ['Income', 'Expense'] }, category: { type: 'STRING' },
         from: { type: 'STRING', description: 'YYYY-MM-DD, inclusive' }, to: { type: 'STRING', description: 'YYYY-MM-DD, inclusive' }, text: { type: 'STRING', description: 'Words to find in notes' } } } },
     { name: 'overview', description: 'This month vs last month, spending by category, budgets and money left to spend, bills, loans, investments, net worth, average monthly saving.' }
   ];
-  var BUSY = { query_entries: 'Checking your history…', overview: 'Looking at your month…', add_entry: 'Preparing it…', add_bill: 'Preparing it…', add_loan: 'Preparing it…' };
+  var BUSY = { query_entries: 'Checking your history…', overview: 'Looking at your month…', add_entry: 'Preparing it…', add_bill: 'Preparing it…', add_loan: 'Preparing it…',
+    add_entries: 'Preparing them…', confirm: 'Saving…', save_note: 'Saving the note…', notes: 'Checking your notes…', listen: 'Getting ready…' };
   var TOOLS = {
     query_entries: function (a) {
       var v = data(), cats = v.cats;
@@ -50,7 +63,27 @@
     },
     add_entry: function (a) { return confirmCard('add_entry', a); },
     add_bill: function (a) { return confirmCard('add_bill', a); },
-    add_loan: function (a) { return confirmCard('add_loan', a); }
+    add_loan: function (a) { return confirmCard('add_loan', a); },
+    add_entries: function (a) { return confirmCard('add_entries', a); },
+    confirm: function (a) { return !pending ? { error: 'No card is open' } : a.action === 'save' ? saveConfirm() : (closeCard(), { saved: false, reason: 'The user cancelled' }); },
+    // Notes harm nothing, so they save at once (money waits for the user's Save), as note ops that sync like entries. Same title: added to.
+    save_note: function (a) {
+      var low = function (x) { return String(x == null ? '' : x).trim().toLowerCase(); }, line = function (x, n) { return String(x == null ? '' : x).replace(/\s+/g, ' ').trim().slice(0, n); };
+      var title = line(a.title, 60) || 'Note', n = notes().filter(function (x) { return low(x.title) === low(title); })[0], fresh = !n;
+      if (fresh) { n = { id: crypto.randomUUID(), dateTime: new Date().toISOString(), title: title, items: [], text: '' }; if (me()) n.by = me(); }
+      (a.items || []).forEach(function (t) { t = line(t, 80); if (t && !n.items.some(function (i) { return low(i.t) === low(t); })) n.items.push({ t: t, done: false }); });
+      (a.done || []).forEach(function (t) { t = low(t); if (t) n.items.forEach(function (i) { if (low(i.t).indexOf(t) >= 0 || t.indexOf(low(i.t)) >= 0) i.done = true; }); });
+      if (a.text) n.text = ((n.text ? n.text + '\n' : '') + String(a.text).trim()).slice(0, 2000);
+      if (a.category) n.category = line(a.category, 40);
+      var bad = validateNote(n) || queue('note', fresh ? 'add' : 'update', n.id, n);
+      if (bad) return { error: bad === 'bad note' ? 'That note is too long (up to 100 items)' : bad };
+      render();
+      trySync();
+      if (!pending) { $('#aiMain').innerHTML = notesHtml([n]); $('#aiFoot').innerHTML = ''; openCard(); }
+      return { saved: true, note: { title: n.title, items: n.items, text: n.text } };
+    },
+    notes: function () { return { notes: notes().map(function (n) { return { title: n.title, items: n.items, text: n.text }; }) }; },
+    listen: function () { setTimeout(startListening); return { listening: true }; }
   };
 
   // ---- Words that blur in one by one (headline, the user's words, the answer in the card). Streaming text only adds words.
@@ -84,7 +117,6 @@
   function greet() {
     fadeTo($('#aiHi'), 'Hello' + (me() ? ' ' + me() : ''));
     fadeTo($('#aiBig'), 'How can I help you today?');
-    $('#aiSugg').classList.remove('ai-gone');
     aiOn = null;
   }
   function busy(t) { $('#aiBusy').textContent = t; $('#aiPill').classList.add('ai-busy'); }
@@ -96,7 +128,6 @@
     if (fresh) {
       lastAsk = '';
       if (cardOn() && !pending) closeCard(true);
-      $('#aiSugg').classList.add('ai-gone');
       fadeTo($('#aiBig'), '');
       aiOn = null;
     }
@@ -184,24 +215,35 @@
     var cats = data().cats, x;
     if (name === 'add_entry') { var type = a.type === 'Income' ? 'Income' : 'Expense'; x = { type: type, category: matchName(cats[type], a.category) || '', amount: a.amount || '', note: a.note || '', date: parseDay(a.date) ? a.date : ymd(new Date()) }; }
     else if (name === 'add_bill') x = { name: a.name || '', category: matchName(cats.Expense, a.category) || '', amount: a.amount || '', day: a.day || '', every: [1, 3, 6, 12].indexOf(Number(a.every)) >= 0 ? Number(a.every) : 1 };
-    else x = { dir: KINDS[a.dir] ? a.dir : 'borrowed', reason: a.reason || '', amount: a.amount || '', interest: a.interest || '', per: a.per === 'year' ? 'year' : 'month' };
+    else if (name === 'add_loan') x = { dir: KINDS[a.dir] ? a.dir : 'borrowed', reason: a.reason || '', amount: a.amount || '', interest: a.interest || '', per: a.per === 'year' ? 'year' : 'month' };
+    else x = { items: (a.items || []).map(function (e) { var type = e.type === 'Income' ? 'Income' : 'Expense'; return { type: type, category: matchName(cats[type], e.category) || 'Others', amount: e.amount || '', note: e.note || '', date: parseDay(e.date) ? e.date : ymd(new Date()) }; }) };
     if (pending) pending.done({ saved: false, reason: 'Replaced by a newer version' }); // "make it 35k": the card updates in place
     return new Promise(function (done) {
       pending = { name: name, v: x, done: function (r) { pending = null; done(r); } };
-      $('#aiMain').innerHTML = '<div class="ai-pv" id="aiPv"><div id="aiPvh"></div><label class="ai-amt"><span>₹</span><input id="aiAmt" inputmode="decimal" placeholder="0" aria-label="Amount"></label></div>' +
+      var many = name === 'add_entries';
+      $('#aiMain').innerHTML = (many ? '' : '<div class="ai-pv" id="aiPv"><div id="aiPvh"></div><label class="ai-amt"><span>₹</span><input id="aiAmt" inputmode="decimal" placeholder="0" aria-label="Amount"></label></div>') +
         '<div id="aiFlds"></div><p class="ai-err" id="aiErr" role="alert"></p>';
       $('#aiFoot').innerHTML = '<button class="ai-save" id="aiSave" type="button"></button><button class="ai-ghost" id="aiCancel" type="button">Cancel</button>';
-      $('#aiAmt').value = grouped(x.amount);
-      fitAmount();
+      if (!many) { $('#aiAmt').value = grouped(x.amount); fitAmount(); }
       drawConfirm();
       openCard();
-      fadeTo($('#aiAns'), 'Check it, change anything, then tap Save.'); // the model waits for the tap, so it says nothing yet
+      fadeTo($('#aiAns'), 'Check it, change anything, then tap Save or say “save”.'); // the model waits for the tap, so it says nothing yet
     });
   }
   function grouped(v) { var n = num(v); return n > 0 ? n.toLocaleString('en-IN', { maximumFractionDigits: 2 }) : String(v || ''); }
   function fitAmount() { $('#aiAmt').style.width = (Math.max(1, $('#aiAmt').value.length) + .4) + 'ch'; }
   function drawConfirm(headOnly) {
     var x = pending.v, n = pending.name, cats = data().cats, h, p, title, tag, sub;
+    // Many at once: just the amount and the note of each (the model picked the category and date), and one Save
+    if (n === 'add_entries') {
+      $('#aiSave').textContent = 'Save' + (x.items.length > 1 ? ' all ' + x.items.length : '');
+      if (!headOnly) $('#aiFlds').innerHTML = '<div class="ai-mis">' + x.items.map(function (e, i) {
+        var inc = e.type === 'Income';
+        return '<div class="ai-mi">' + img(e.category, 24) + '<label class="ai-mamt' + (inc ? ' ai-pos' : '') + '"><span>' + (inc ? '+₹' : '₹') + '</span><input data-i="' + i + '" data-f="amount" inputmode="decimal" placeholder="0" value="' + esc(grouped(e.amount)) + '" aria-label="Amount"></label>' +
+          '<input class="ai-in" data-i="' + i + '" data-f="note" placeholder="' + esc(e.category) + '" value="' + esc(e.note) + '" aria-label="Note" autocomplete="off"><button type="button" class="ai-rm" data-rm="' + i + '" aria-label="Remove">×</button></div>';
+      }).join('') + '</div>';
+      return;
+    }
     if (n === 'add_entry') {
       p = pic(x.category || 'Others'); title = x.category || 'Pick a category'; sub = dayText(x.date);
       tag = '<span class="ai-tag' + (x.type === 'Income' ? '' : ' ai-bad') + '">' + x.type + '</span>';
@@ -236,9 +278,22 @@
   // Saving: the same checks and calls as the app's own form (saveSheet in app.js), then render and sync like it.
   function saveConfirm() {
     var p = pending, x = p.v, amount = Math.round(num(x.amount) * 100) / 100, now = new Date(), id = crypto.randomUUID(), bad, final;
-    var stop = function (t) { $('#aiErr').textContent = t; };
-    if (!(amount > 0)) return stop('Type the amount');
-    if (p.name === 'add_entry') {
+    var stop = function (t) { $('#aiErr').textContent = t; return { saved: false, error: t }; };
+    if (p.name !== 'add_entries' && !(amount > 0)) return stop('Type the amount');
+    if (p.name === 'add_entries') {
+      // All checked first, then all queued. ponytail: a full phone storage could stop the queue part-way; the ones queued stay saved.
+      var list = [];
+      for (var i = 0; i < x.items.length; i++) {
+        var it = x.items[i], amt = Math.round(num(it.amount) * 100) / 100, when = it.date === ymd(now) ? now : new Date(it.date + 'T12:00:00');
+        if (!(amt > 0)) return stop('Type the amount for ' + (it.note || it.category));
+        var en = { id: crypto.randomUUID(), dateTime: (isNaN(when) || when > now ? now : when).toISOString(), type: it.type, category: it.category, amount: amt, note: it.note.trim(), createdAt: now.toISOString() };
+        if (me()) en.by = me();
+        if ((bad = validateEntry(en))) return stop(bad);
+        list.push(en);
+      }
+      list.some(function (e) { return (bad = queue('entry', 'add', e.id, e)); });
+      final = list.map(function (e) { return { type: e.type, category: e.category, amount: e.amount, note: e.note }; });
+    } else if (p.name === 'add_entry') {
       if (!x.category) return stop('Pick a category');
       var dt = x.date === ymd(now) ? now : new Date(x.date + 'T12:00:00');
       if (isNaN(dt) || dt > now) return stop('Pick a valid date');
@@ -267,10 +322,12 @@
     trySync();
     $('#aiSave').classList.add('ai-done');
     $('#aiSave').innerHTML = CHECK + 'Saved';
-    $('#aiPv').classList.add('ai-ok');
+    if ($('#aiPv')) $('#aiPv').classList.add('ai-ok');
     $('#aiCancel').disabled = true;
-    p.done({ saved: true, final: final });
+    var r = { saved: true, final: final };
+    p.done(r);
     setTimeout(function () { if (cardOn() && !pending) closeCard(); }, 1100);
+    return r;
   }
 
   // ---- Gemini Live over a WebSocket
@@ -278,7 +335,7 @@
   var WORKLET = 'class P extends AudioWorkletProcessor{constructor(){super();this.b=new Int16Array(1600);this.n=0}' +
     'process(i){var c=i[0]&&i[0][0];if(c)for(var k=0;k<c.length;k++){var s=Math.max(-1,Math.min(1,c[k]));this.b[this.n++]=s<0?s*32768:s*32767;' +
     'if(this.n===this.b.length){this.port.postMessage(this.b.slice().buffer);this.n=0}}return true}}registerProcessor("pcm",P)';
-  var ws = null, ready = null, inCtx, outCtx, outGain, outAn, micAn, workletLoaded = false, mic = null, micNode = null, micSrc = null;
+  var ws = null, ready = null, kind = '', inCtx, outCtx, outGain, outAn, micAn, workletLoaded = false, mic = null, micNode = null, micSrc = null, stream = null, releaseTimer, wantMic = false;
   var playing = [], playAt = 0, voiceTurn = false, idleTimer;
 
   function systemPrompt() {
@@ -289,26 +346,42 @@
       'Reply in the language the user speaks (English, Hindi or Hinglish), in one or two short sentences. The screen shows the details, so do not read out long lists.',
       'To add an income, expense, bill, loan or investment, call the matching add_ tool. The user checks it on a card and taps Save. Only say it was saved when the result has saved:true.',
       'For any question about the user\'s money, call query_entries or overview first. Never guess numbers and never add them up yourself; use the totals the tools return.',
-      'Amounts: 30k = 30000, 1.5 lakh = 150000. Pick the closest existing category, or Others when nothing fits.'].join('\n');
+      'Amounts: 30k = 30000, 1.5 lakh = 150000. Pick the closest existing category, or Others when nothing fits.',
+      'When the user names several incomes or expenses at once, call add_entries once with all of them (you pick the categories and dates). For one, call add_entry.',
+      'While a card is open: when the user says save (or yes, haan, theek hai) or cancel (no, rehne do), call confirm. For a change, call the same add_ tool again with everything corrected.',
+      'For lists, notes and things to remember (groceries, things to bring or do), call save_note; it saves at once. To add to or tick items on a list, call save_note with its title. Call notes to read them.',
+      'When the user asks you to listen to a conversation, call listen and say nothing more.'].join('\n');
+  }
+  var LISTEN = 'You will hear a conversation (a call, a meeting, a talk at a shop) in English, Hindi or Hinglish. Do not reply while it goes on. ' +
+    'When it ends, call save_note once: a short title, the to-dos, decisions, amounts and dates as items, and a summary of two or three lines as text, ' +
+    'in the language they spoke (Hinglish in Latin letters is fine). Then say in one short sentence that the note is saved.';
+  // A session to talk (the server takes turns), or to listen: turn-taking off, so the whole conversation is one turn and the model
+  // answers once, with a note. ponytail: one Live session holds about 15 minutes of audio; a longer conversation needs splitting.
+  function setupFor(k) {
+    return { model: 'models/' + MODEL, generationConfig: { responseModalities: ['AUDIO'] }, systemInstruction: { parts: [{ text: k ? LISTEN : systemPrompt() }] },
+      tools: [{ functionDeclarations: k ? DECLS.filter(function (d) { return d.name === 'save_note'; }) : DECLS }], inputAudioTranscription: {}, outputAudioTranscription: {},
+      realtimeInputConfig: k ? { automaticActivityDetection: { disabled: true } } : undefined };
   }
   function send(o) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(o)); touch(); }
   // A Live session counts against the free quota while it is open, so a quiet one is closed.
   function touch() { clearTimeout(idleTimer); idleTimer = setTimeout(function () { if (!mic && !playing.length && !pending) hangUp(); }, 60000); }
 
-  function connect() {
+  function connect(k) {
+    k = k || '';
+    if (ready && kind !== k) hangUp();
     if (ready) return ready;
     if (!navigator.onLine) return Promise.reject(new Error('You are offline: the assistant needs the internet'));
+    kind = k;
     ready = new Promise(function (ok, no) {
-      ws = new WebSocket(URL_WS + encodeURIComponent(key()));
-      ws.onopen = function () {
-        send({ setup: { model: 'models/' + MODEL, generationConfig: { responseModalities: ['AUDIO'] }, systemInstruction: { parts: [{ text: systemPrompt() }] },
-          tools: [{ functionDeclarations: DECLS }], inputAudioTranscription: {}, outputAudioTranscription: {} } });
-      };
-      ws.onmessage = function (ev) { (typeof ev.data === 'string' ? Promise.resolve(ev.data) : ev.data.text()).then(function (t) { onMessage(JSON.parse(t), ok); }); };
-      ws.onclose = function (ev) {
+      var s = ws = new WebSocket(URL_WS + encodeURIComponent(key()));
+      s.onopen = function () { send({ setup: setupFor(k) }); };
+      // A socket that was hung up (ws moved on) still closes later: it must not touch the one that replaced it
+      s.onmessage = function (ev) { if (ws === s) (typeof ev.data === 'string' ? Promise.resolve(ev.data) : ev.data.text()).then(function (t) { onMessage(JSON.parse(t), ok); }); };
+      s.onclose = function (ev) {
         var why = ev.reason || (ev.code === 1000 ? '' : 'could not connect (' + ev.code + ')');
         no(new Error(why || 'Closed'));
-        if (ws && why) note(/api key/i.test(why) ? 'That Gemini key did not work. Check it in Settings.' : 'Assistant: ' + why);
+        if (ws !== s) return;
+        if (why) note(/api key/i.test(why) ? 'That Gemini key did not work. Check it in Settings.' : 'Assistant: ' + why);
         ws = null; ready = null; stopMic(); stopPlayback(); unbusy();
       };
     });
@@ -363,12 +436,17 @@
     }
     outCtx.resume(); inCtx.resume();
   }
+  // The mic is asked for once and kept (muted between uses): some browsers ask again on every getUserMedia. releaseMic lets it go.
   function startMic() {
     if (!inCtx || !navigator.mediaDevices) return Promise.reject(new Error('This browser cannot use the microphone here. Type instead.'));
-    return navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, channelCount: 1 } }).then(function (stream) {
-      mic = stream;
+    return (stream && stream.active ? Promise.resolve(stream) : navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, channelCount: 1 } })).then(function (s) {
+      stream = s;
+      s.getTracks().forEach(function (t) { t.enabled = wantMic; });
+      if (!wantMic) return; // the text box was tapped (or the assistant closed) while the mic was being asked for
+      mic = s;
       return (workletLoaded ? Promise.resolve() : inCtx.audioWorklet.addModule(URL.createObjectURL(new Blob([WORKLET], { type: 'text/javascript' })))).then(function () {
         workletLoaded = true;
+        if (mic !== s) return; // stopped meanwhile
         micNode = new AudioWorkletNode(inCtx, 'pcm');
         // The real rate goes along, so a browser that ignores sampleRate:16000 still works (Gemini resamples).
         micNode.port.onmessage = function (e) { send({ realtimeInput: { audio: { data: b64(e.data), mimeType: 'audio/pcm;rate=' + inCtx.sampleRate } } }); };
@@ -378,18 +456,41 @@
         voiceTurn = true;
         $('#aiPill').classList.add('ai-live');
         $('#aiText').placeholder = 'Listening…';
+        sfx('start');
       });
     }, function () { throw new Error('Allow the microphone to talk, or type instead'); });
   }
   function stopMic() {
     if (!mic) return;
-    mic.getTracks().forEach(function (t) { t.stop(); });
+    mic.getTracks().forEach(function (t) { t.enabled = false; });
     if (micSrc) micSrc.disconnect();
     if (micNode) micNode.disconnect();
     mic = micNode = micSrc = null;
-    send({ realtimeInput: { audioStreamEnd: true } });
+    send({ realtimeInput: kind === 'listen' ? { activityEnd: {} } : { audioStreamEnd: true } }); // listening: the conversation is over, now the note
     $('#aiPill').classList.remove('ai-live');
     $('#aiText').placeholder = 'Ask anything…';
+    sfx('stop');
+  }
+  // Really let go of the mic: when the app is hidden, or 2 minutes after the assistant closes.
+  function releaseMic() { stopMic(); if (stream) stream.getTracks().forEach(function (t) { t.stop(); }); stream = null; }
+  function toggleMic() {
+    if (mic) { if (kind === 'listen') busy('Writing the note…'); return stopMic(); }
+    wantMic = true;
+    audioOn();
+    connect().then(startMic).catch(fail);
+  }
+  function startListening() {
+    wantMic = true;
+    connect('listen').then(function () { send({ realtimeInput: { activityStart: {} } }); return startMic(); }).then(function () {
+      fadeTo($('#aiHi'), ''); fadeTo($('#aiBig'), 'Listening… tap the orb when it is over'); aiOn = null;
+    }).catch(fail);
+  }
+  // Sounds: Kenney's Interface Sounds (CC0), played through the voice's audio context (iOS lets it play once a tap made it).
+  var SFX = {};
+  function sfx(name) {
+    if (!outCtx || !load('fm.sfx', true)) return; // Settings > Assistant > Sounds
+    (SFX[name] = SFX[name] || fetch('assets/sounds/' + name + '.mp3').then(function (r) { return r.arrayBuffer(); }).then(function (b) { return outCtx.decodeAudioData(b); }))
+      .then(function (buf) { var s = outCtx.createBufferSource(); s.buffer = buf; s.connect(outCtx.destination); s.start(); }).catch(function () { SFX[name] = null; });
   }
   function b64(buf) { var s = '', u = new Uint8Array(buf); for (var i = 0; i < u.length; i += 0x8000) s += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000)); return btoa(s); }
   // Gemini sends 24 kHz 16-bit PCM chunks; play them back to back.
@@ -517,35 +618,58 @@
     greet();
     startOrb();
     audioOn(); // inside the tap (iOS)
-    connect().catch(fail); // early, so the first answer is quick
+    sfx('open');
+    clearTimeout(releaseTimer);
+    wantMic = true;
+    connect().then(startMic).catch(fail); // voice first; typing stops it
   }
   function closeAI() {
     var ai = $('#ai');
     if (cardOn()) closeCard(true);
+    wantMic = false;
     hangUp();
+    releaseTimer = setTimeout(releaseMic, 120000);
     ai.classList.remove('ai-on');
     setTimeout(function () { if (!ai.classList.contains('ai-on')) { ai.close(); lockPage(false); } }, 350);
   }
-  function askAI(t) {
+  // A typed question, or a photo (a JPEG frame, then what to do with it) shown as `shown`.
+  function askAI(t, shown, image) {
     t = t.trim();
     if (!t) return;
     voiceTurn = false;
     stopPlayback();
-    userSaid(t, true);
+    userSaid(shown || t, true);
     userNew = true; newTurn = true;
-    busy('Thinking…');
-    connect().then(function () { send({ realtimeInput: { text: t } }); }).catch(fail);
+    busy(image ? 'Reading the bill…' : 'Thinking…');
+    connect().then(function () {
+      if (image) send({ realtimeInput: { video: { data: image, mimeType: 'image/jpeg' } } });
+      send({ realtimeInput: { text: t } });
+    }).catch(fail);
   }
+  // A photo of a bill, shrunk to 1280px: its lines open the many-entries card (add_entries).
+  $('#aiPhoto').addEventListener('change', function () {
+    var f = this.files[0];
+    this.value = '';
+    if (!f) return;
+    createImageBitmap(f).then(function (b) {
+      var k = Math.min(1, 1280 / Math.max(b.width, b.height)), c = document.createElement('canvas');
+      c.width = Math.round(b.width * k); c.height = Math.round(b.height * k);
+      c.getContext('2d').drawImage(b, 0, 0, c.width, c.height);
+      askAI('This photo is a bill or receipt. Add its items with add_entries, one per line, with the amounts as printed.', 'Photo of a bill', c.toDataURL('image/jpeg', 0.8).split(',')[1]);
+    }).catch(function () { note('That photo could not be read. Try another.'); });
+  });
 
   $('#aiBtn').addEventListener('click', openAI);
   $('#aiClose').addEventListener('click', closeAI);
   $('#ai').addEventListener('cancel', function (e) { e.preventDefault(); if (cardOn()) closeCard(); else closeAI(); });
   $('#aiPill').addEventListener('submit', function (e) { e.preventDefault(); var t = $('#aiText').value; $('#aiText').value = ''; askAI(t); });
-  $('#aiSugg').addEventListener('click', function (e) { var c = e.target.closest('.ai-chip'); if (c) askAI(c.textContent); });
-  $('#aiWave').addEventListener('click', function () { if (mic) return stopMic(); audioOn(); connect().then(startMic).catch(fail); });
+  $('#aiWave').addEventListener('click', toggleMic);
+  $('#aiText').addEventListener('focus', function () { wantMic = false; if (mic) toggleMic(); }); // typing instead
+  $('#ai').addEventListener('click', function (e) { if (e.target.closest('#aiOrb')) toggleMic(); }); // the orb is a big talk button too
   $('#aiCard').addEventListener('click', function (e) {
-    var b = e.target.closest('[data-k]');
-    if (b && pending) {
+    var b = e.target.closest('[data-k]'), rm = e.target.closest('[data-rm]');
+    if (rm && pending) { pending.v.items.splice(Number(rm.dataset.rm), 1); if (pending.v.items.length) drawConfirm(); else closeCard(); }
+    else if (b && pending) {
       var x = pending.v, k = b.dataset.k;
       x[k] = k === 'every' ? Number(b.dataset.v) : b.dataset.v;
       if (k === 'type' && data().cats[x.type].indexOf(x.category) < 0) x.category = '';
@@ -559,13 +683,14 @@
     if (!pending) return;
     if (el.id === 'aiAmt') { el.value = el.value.replace(/[^\d.,]/g, ''); pending.v.amount = el.value; fitAmount(); }
     else if (el.dataset.in && el.dataset.in !== 'date') pending.v[el.dataset.in] = el.value;
+    else if (el.dataset.f) { if (el.dataset.f === 'amount') el.value = el.value.replace(/[^\d.,]/g, ''); pending.v.items[Number(el.dataset.i)][el.dataset.f] = el.value; }
     else return;
     $('#aiErr').textContent = '';
     drawConfirm(true);
   });
-  $('#aiCard').addEventListener('focusout', function (e) { if (e.target.id === 'aiAmt') { e.target.value = grouped(e.target.value); fitAmount(); } });
+  $('#aiCard').addEventListener('focusout', function (e) { if (e.target.id === 'aiAmt') { e.target.value = grouped(e.target.value); fitAmount(); } else if (e.target.dataset.f === 'amount') e.target.value = grouped(e.target.value); });
   $('#aiCard').addEventListener('change', function (e) { if (pending && e.target.dataset.in === 'date' && e.target.value) { pending.v.date = e.target.value; drawConfirm(); } });
-  document.addEventListener('visibilitychange', function () { if ($('#ai').open) startOrb(); });
+  document.addEventListener('visibilitychange', function () { if (document.hidden) releaseMic(); else if ($('#ai').open) startOrb(); });
   window.addEventListener('offline', hangUp);
   if (window.visualViewport) visualViewport.addEventListener('resize', fitAI);
 })();

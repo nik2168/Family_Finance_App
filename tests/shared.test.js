@@ -376,4 +376,20 @@ assert.deepStrictEqual(s.biggestRise({ Food: 2000, Kirana: 5000, Fuel: 100, Hous
 // Loan interest paid is added back for the forecast (it charges interest itself); interest got is left out
 assert.strictEqual(s.savingRate([sav(2026, 8, 3000), { ...sav(2026, 8, -600), id: 'li-0001', category: 'loan interest' }], NOW, 3).perMonth, 1000);
 
+// Notes: one line per title and item (the sheet keeps one line per item), up to 100 items; synced through the same queue
+const note = { id: 'note-0001', dateTime: iso(2026, 9, 11), title: 'Groceries', items: [{ t: 'Atta', done: false }, { t: 'Paneer', done: true }], text: '', category: 'Kirana', by: '' };
+assert.strictEqual(s.validateNote(note), '');
+assert.strictEqual(s.validateNote({ ...note, text: 'Ramesh lends 5000.\nPay on Friday.' }), '', 'free text can have lines');
+[{ ...note, title: '' }, { ...note, title: 'Two\nlines' }, { ...note, items: [{ t: 'Atta\nMilk', done: false }] }, { ...note, items: [{ t: 'Atta' }] },
+  { ...note, items: Array.from({ length: 101 }, (_, i) => ({ t: 'Item ' + i, done: false })) }, { ...note, text: 'x'.repeat(2001) }, { ...note, title: ' Groceries' }]
+  .forEach(n => assert.strictEqual(s.validateNote(n), 'bad note', JSON.stringify(n).slice(0, 80)));
+assert.strictEqual(s.validateNote({ ...note, id: 'x' }), 'bad id');
+v = s.applyOps({ notes: [note] }, [
+  { opId: 'n1', kind: 'note', action: 'add', id: 'note-0002', data: { ...note, id: 'note-0002', title: 'To do' } },
+  { opId: 'n2', kind: 'note', action: 'update', id: 'note-0001', data: { ...note, items: [{ t: 'Atta', done: true }, { t: 'Paneer', done: true }] } },
+  { opId: 'n3', kind: 'note', action: 'delete', id: 'note-0002' }
+]);
+assert.deepStrictEqual(v.notes.map(n => [n.id, n.items.map(i => i.done)]), [['note-0001', [true, true]]]);
+assert.deepStrictEqual(s.applyOps({}, []).notes, [], 'a snapshot from before notes');
+
 console.log('all tests passed');

@@ -9,7 +9,7 @@ const APP = path.join(__dirname, '..', 'src');
 (async () => {
   const srv = spawn('python3', ['-m', 'http.server', '8766', '-d', APP], { stdio: 'ignore' });
   await new Promise(r => setTimeout(r, 800));
-  const browser = await chromium.launch();
+  const browser = await chromium.launch({ args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'] }); // a fake mic, allowed
   const errors = [];
   try {
     const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } });
@@ -21,9 +21,14 @@ const APP = path.join(__dirname, '..', 'src');
         localStorage.setItem('fm.rows', JSON.stringify([e(Date.now() - 6e4, 'Expense', 'Kirana', 500, 'Kirana'), e(Date.now() - 12e4, 'Expense', 'Kirana', 300, 'Atta'),
           e(new Date(now.getFullYear(), now.getMonth() - 1, 15).getTime(), 'Expense', 'Kirana', 999, 'Kirana')]));
       }
-      window.__sent = []; window.__urls = []; window.__next = null;
+      window.__sent = []; window.__urls = []; window.__next = null; window.__gum = 0;
+      const gum = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+      navigator.mediaDevices.getUserMedia = c => { __gum++; return gum(c); }; // counts the times the browser could ask for the mic
+      window.__played = 0; // sounds played (no voice comes from the fake, so every buffer played is a sound)
+      const start = AudioBufferSourceNode.prototype.start;
+      AudioBufferSourceNode.prototype.start = function () { __played++; return start.apply(this, arguments); };
       window.WebSocket = function (url) {
-        const s = this, reply = o => setTimeout(() => s.onmessage && s.onmessage({ data: JSON.stringify(o) }), 5);
+        const s = window.__ws = this, reply = o => setTimeout(() => s.onmessage && s.onmessage({ data: JSON.stringify(o) }), 5);
         __urls.push(url);
         s.readyState = 0;
         setTimeout(() => { s.readyState = 1; if (s.onopen) s.onopen(); }, 5);
@@ -57,9 +62,14 @@ const APP = path.join(__dirname, '..', 'src');
     await page.waitForSelector('#ai[open]');
     const setup = (await page.waitForFunction(() => __sent.find(m => m.setup)).then(h => h.jsonValue())).setup;
     assert.strictEqual(setup.model, 'models/gemini-3.8-live');
-    assert.deepStrictEqual(setup.tools[0].functionDeclarations.map(d => d.name), ['add_entry', 'add_bill', 'add_loan', 'query_entries', 'overview']);
+    assert.deepStrictEqual(setup.tools[0].functionDeclarations.map(d => d.name), ['add_entry', 'add_bill', 'add_loan', 'add_entries', 'confirm', 'save_note', 'notes', 'listen', 'query_entries', 'overview']);
     assert.ok((await page.evaluate(() => __urls[0])).endsWith('?key=test-key'));
     await page.waitForFunction(() => document.querySelector('#aiBig').textContent.trim() === 'How can I help you today?');
+    // Voice first: the mic is on as it opens, with a sound; tapping the text box stops it
+    await page.waitForSelector('.ai-pill.ai-live');
+    await page.waitForFunction(() => __played >= 2); // opened, listening
+    await page.focus('#aiText');
+    await page.waitForSelector('.ai-pill:not(.ai-live)');
 
     // "got my salary 30k today": a confirm card, saved by the user's tap through the app's own queue
     await say('got my salary 30k today', { name: 'add_entry', args: { type: 'Income', category: 'salary', amount: 30000, note: 'October salary' } });
@@ -96,9 +106,100 @@ const APP = path.join(__dirname, '..', 'src');
     assert.strictEqual((await lastAnswer()).response.saved, false);
     assert.strictEqual(await page.evaluate(() => view().loans.length), 0);
 
+    // Several at once: amount and note per row, one Save for all
+    await say('chai 20, auto 80, got 500 from Ramesh', { name: 'add_entries', args: { items: [{ type: 'Expense', category: 'kirana', amount: 20, note: 'Chai' },
+      { type: 'Expense', category: 'travel', amount: 80, note: 'Auto' }, { type: 'Income', category: 'others', amount: 500, note: 'From Ramesh' }] } });
+    await page.waitForSelector('.ai-card.ai-on .ai-mi');
+    assert.strictEqual(await page.locator('.ai-mi').count(), 3);
+    assert.strictEqual(await page.textContent('#aiSave'), 'Save all 3');
+    await page.fill('.ai-mi >> nth=1 >> [data-f=amount]', '90');
+    await page.click('.ai-mi >> nth=0 >> .ai-rm');
+    assert.strictEqual(await page.textContent('#aiSave'), 'Save all 2');
+    await page.click('#aiSave');
+    const many = await lastAnswer();
+    assert.deepStrictEqual(many.response.final.map(e => [e.type, e.category, e.amount, e.note]), [['Expense', 'Others', 90, 'Auto'], ['Income', 'Others', 500, 'From Ramesh']]);
+    assert.strictEqual(await page.evaluate(() => view().rows.filter(e => (e.note === 'Auto' && e.amount === 90) || e.note === 'From Ramesh').length), 2);
+    await page.waitForSelector('.ai-card:not(.ai-on)');
+
+    // "Save", said while the card is open, saves it (the card's own call is answered too)
+    await say('spent 250 on milk', { name: 'add_entry', args: { type: 'Expense', category: 'milk', amount: 250, note: 'Milk' } });
+    await page.waitForSelector('.ai-card.ai-on #aiSave');
+    await page.evaluate(() => __ws.onmessage({ data: JSON.stringify({ toolCall: { functionCalls: [{ id: 'v1', name: 'confirm', args: { action: 'save' } }] } }) }));
+    await page.waitForFunction(n => __sent.filter(m => m.toolResponse).length >= n, answers + 2);
+    answers += 2;
+    const conf = await page.evaluate(() => __sent.filter(m => m.toolResponse).map(m => m.toolResponse.functionResponses[0]).find(r => r.name === 'confirm'));
+    assert.strictEqual(conf.response.saved, true);
+    assert.strictEqual(await page.evaluate(() => view().rows.filter(e => e.category === 'Milk' && e.amount === 250).length), 1);
+    await page.waitForSelector('.ai-card:not(.ai-on)');
+
+    // Notes: saved at once and shown in the card; the same title adds to it and ticks by voice
+    await say('note down atta and paneer for groceries', { name: 'save_note', args: { title: 'Groceries', items: ['Atta', 'Paneer'], category: 'Kirana' } });
+    await page.waitForSelector('.ai-card.ai-on .nt');
+    assert.deepStrictEqual(await page.$$eval('.ai-card .nti span', s => s.map(x => x.textContent)), ['Atta', 'Paneer']);
+    assert.strictEqual((await lastAnswer()).response.saved, true);
+    await say('add milk, paneer is done', { name: 'save_note', args: { title: 'groceries', items: ['Milk', 'atta'], done: ['paneer'] } });
+    assert.deepStrictEqual((await lastAnswer()).response.note.items, [{ t: 'Atta', done: false }, { t: 'Paneer', done: true }, { t: 'Milk', done: false }]);
+    await say('what is on my list?', { name: 'notes', args: {} });
+    assert.strictEqual((await lastAnswer()).response.notes[0].items.length, 3);
+    await page.keyboard.press('Escape'); // the card
+    await page.waitForSelector('.ai-card:not(.ai-on)');
+
     await page.keyboard.press('Escape');
     await page.waitForFunction(() => !$('#ai').open);
-    assert.ok((await page.textContent('#recent')).includes('October salary'), 'the saved entry shows on Home');
+    const recent = await page.textContent('#recent');
+    assert.ok(['Milk', 'From Ramesh', 'Auto'].every(t => recent.includes(t)), 'the saved entries show on Home');
+
+    // The note stays on Home: tick the rest, then a finished list can become an expense; ✕ removes it
+    assert.match(await page.textContent('#notes'), /Groceries.*Atta.*Paneer.*Milk/);
+    await page.check('#notes .nti >> nth=0 >> input');
+    await page.check('#notes .nti >> nth=2 >> input');
+    assert.ok(await page.evaluate(() => notes()[0].items.every(i => i.done)), 'ticks are kept');
+    await page.click('#notes [data-nt-act="exp"]');
+    await page.waitForSelector('#sheet[open]');
+    assert.strictEqual(await page.inputValue('#note'), 'Groceries');
+    assert.strictEqual(await page.getAttribute('#catGrid [aria-pressed="true"]', 'data-cat'), 'Kirana');
+    await page.click('#cancel');
+    await page.waitForFunction(() => !$('#sheet').open);
+    await page.click('#notes [data-nt-act="del"]');
+    assert.strictEqual(await page.evaluate(() => notes().length), 0);
+    assert.ok(await page.locator('#notes').isHidden());
+
+    // Sounds can be turned off (Settings > Assistant, this phone only)
+    await page.click('#setBtn');
+    await page.uncheck('#aiSfx');
+    await page.click('#backHome');
+    const played = await page.evaluate(() => __played);
+
+    // Listening: a session of its own with turn-taking off; tapping the orb ends the conversation. The mic is asked for once.
+    await page.click('#aiBtn');
+    await page.waitForSelector('#ai[open]');
+    await say('listen to this conversation', { name: 'listen', args: {} });
+    await page.waitForSelector('.ai-pill.ai-live');
+    const ls = await page.evaluate(() => __sent.filter(m => m.setup).pop().setup);
+    assert.strictEqual(ls.realtimeInputConfig.automaticActivityDetection.disabled, true);
+    assert.deepStrictEqual(ls.tools[0].functionDeclarations.map(d => d.name), ['save_note']);
+    assert.ok(await page.evaluate(() => __sent.some(m => m.realtimeInput && m.realtimeInput.activityStart)));
+    await page.click('#aiOrb', { force: true }); // it swells with the voice, so it is never still
+    await page.waitForFunction(() => __sent.some(m => m.realtimeInput && m.realtimeInput.activityEnd));
+    await page.evaluate(() => __ws.onmessage({ data: JSON.stringify({ toolCall: { functionCalls: [{ id: 'l1', name: 'save_note', args: { title: 'Call with Ramesh', items: ['Pay him 2000 on Friday'], text: 'Ramesh lends 5000 at 2% a month.' } }] } }) }));
+    await page.waitForSelector('.ai-card.ai-on .nt');
+    assert.match(await page.textContent('.ai-card .nt'), /Call with Ramesh.*Ramesh lends 5000.*Pay him 2000 on Friday/);
+    await page.keyboard.press('Escape');
+    await page.waitForSelector('.ai-card:not(.ai-on)');
+    await page.click('#aiWave'); // talk again: a normal session, the same mic
+    await page.waitForSelector('.ai-pill.ai-live');
+    assert.ok(!(await page.evaluate(() => __sent.filter(m => m.setup).pop().setup)).realtimeInputConfig);
+    assert.strictEqual(await page.evaluate(() => __gum), 1, 'the mic is asked for once');
+    await page.click('#aiWave');
+    await page.waitForSelector('.ai-pill:not(.ai-live)');
+    assert.strictEqual(await page.evaluate(() => __played), played, 'no sounds once they are off');
+
+    // A photo of a bill goes as a JPEG frame
+    await page.setInputFiles('#aiPhoto', path.join(APP, 'assets', 'icons', 'icon-192.png'));
+    await page.waitForFunction(() => __sent.some(m => m.realtimeInput && m.realtimeInput.video && m.realtimeInput.video.mimeType === 'image/jpeg'));
+    await page.waitForFunction(() => $('#aiHi').textContent.trim() === 'Photo of a bill');
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => !$('#ai').open);
 
     // No key: no assistant
     await setKey('');

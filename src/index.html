@@ -98,7 +98,7 @@ section{display:flex;flex-direction:column;gap:14px}
 .secr{display:flex;align-items:center;gap:8px;min-width:0}
 .big{font-size:38px;font-weight:600;letter-spacing:-.03em;line-height:1.05}
 .inlist{background:rgba(255,255,255,.62);border-radius:20px;padding:2px 14px;margin-top:12px}
-/* Focus hero: progress bar, savings-rate ring, target chips */
+/* Insights summary: the savings-rate ring */
 .hrow{display:flex;gap:12px;align-items:flex-start}
 .ringbox{display:flex;flex-direction:column;align-items:center;gap:3px;text-align:center}
 .ringbox small{font-size:12px;line-height:1.25;color:rgba(11,11,12,.68)}
@@ -107,16 +107,25 @@ section{display:flex;flex-direction:column;gap:14px}
 .ring .rt{fill:none;stroke:rgba(255,255,255,.8);stroke-width:4}
 .ring .rv{fill:none;stroke:#0B0B0C;stroke-width:4;stroke-linecap:round}
 .ring b{font-size:14px;font-weight:600}
-.ptop{display:flex;justify-content:space-between;gap:8px;font-size:13px;margin:14px 0 6px}
-.ptop b{font-weight:600}
-.tchips{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
-.tchip{background:rgba(255,255,255,.72);border-radius:16px;padding:8px 6px;text-align:center;color:#0B0B0C;display:flex;flex-direction:column;gap:1px;min-width:0}
-.tchip small{font-size:12px;color:rgba(11,11,12,.66)}
-.tchip b{font-size:15px;font-weight:600;white-space:nowrap}
-.tchip[aria-pressed="true"]{background:#0B0B0C;color:#fff}
-.tchip[aria-pressed="true"] small{color:rgba(255,255,255,.75)}
-.tout{margin-top:8px;min-height:2.6em}
-.spark{display:block;width:100%;height:34px;margin-top:8px}
+/* Home's glance: two rows, a number on the left and a little forecast line (lineSvg, shrunk) on the right */
+.glance{padding:6px 18px}
+.gl{display:flex;align-items:center;gap:12px;width:100%;text-align:left;padding:10px 0;color:var(--ink)}
+.gl+.gl{border-top:1px solid var(--line)}
+.gt small{display:block;font-size:12.5px;color:var(--muted)}
+.gt b{display:block;font-size:20px;font-weight:600;letter-spacing:-.01em;line-height:1.25}
+.gl .chart{flex:0 0 42%;margin:0}
+.gl .chart .plot{height:46px;border:0}
+.gl .cticks{display:none}
+.gl .chart .gline b{font-size:10.5px;bottom:2px}
+/* Notes and lists from the assistant (app.js notesHtml): on Home, and in the assistant's card */
+#notes:empty{display:none}
+.nt h2 .rbtn{flex:none}
+.nt p{white-space:pre-line;margin:2px 0 6px}
+.nti{display:flex;align-items:center;gap:10px;padding:7px 0;font-size:14.5px;cursor:pointer}
+.nti+.nti{border-top:1px solid var(--line)}
+.nti input{width:20px;height:20px;flex:none;accent-color:var(--ink);margin:0}
+.nti input:checked+span{text-decoration:line-through;color:var(--muted)}
+.nt .pay{margin-top:8px}
 .picks{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
 .pick{display:flex;flex-direction:column;gap:1px;text-align:left;border-radius:22px;padding:12px 12px 14px 14px;color:var(--on-pastel);box-shadow:var(--shadow);min-width:0}
 .pick .ptop2{display:flex;width:100%;justify-content:space-between;align-items:center;margin-bottom:6px}
@@ -391,10 +400,12 @@ dialog::backdrop{background:rgba(8,10,12,.42)}
 }
 
 /* The assistant (ai.js): a glowing orb in the tab bar (the sidebar on wide screens), then a full-screen dark dialog with the orb, a frosted pill and a glass card */
-.ai-orb span{width:26px;height:26px;flex:none;border-radius:50%;position:relative;background:radial-gradient(circle at 34% 28%,#bfdbfe 0,#3b82f6 26%,#1e3a8a 55%,#020617 80%);box-shadow:0 0 14px 1px rgba(59,130,246,.6),inset 0 0 5px rgba(191,219,254,.9)}
+.ai-orb span{width:44px;height:44px;flex:none;border-radius:50%;position:relative;background:radial-gradient(circle at 34% 28%,#bfdbfe 0,#3b82f6 26%,#1e3a8a 55%,#020617 80%);box-shadow:0 0 14px 1px rgba(59,130,246,.6),inset 0 0 5px rgba(191,219,254,.9)}
 .ai-orb span::after{content:"";position:absolute;inset:-1px;border-radius:50%;background:conic-gradient(from 0deg,transparent 0 62%,rgba(255,255,255,.95) 74%,transparent 86%);-webkit-mask:radial-gradient(circle,transparent 60%,#000 63%);mask:radial-gradient(circle,transparent 60%,#000 63%)}
 @media (prefers-reduced-motion:no-preference){.ai-orb span::after{animation:spin 3.2s linear infinite}}
-@media (min-width:768px){.ai-orb span{width:22px;height:22px}}
+/* phones: the orb alone (its aria-label names it); the sidebar shows "Ask" beside a small orb */
+.ai-orb small{display:none}
+@media (min-width:768px){.ai-orb span{width:22px;height:22px}.ai-orb small{display:inline;font-size:inherit}}
 #ai{--ai-ease:cubic-bezier(.2,.9,.2,1);--ai-glass:rgba(255,255,255,.08);--ai-edge:rgba(255,255,255,.16);--ai-t2:rgba(255,255,255,.62);--ai-good:#86efac;--ai-bad:#fca5a5;
   position:fixed;inset:0;width:100%;height:100%;max-width:none;max-height:none;margin:0;border-radius:0;overflow:hidden;color:#fff;animation:none;
   background:radial-gradient(125% 52% at 50% 112%,#cfe0ff 0%,#5a95ff 12%,#2259e6 24%,#0c2c8f 37%,#05144a 52%,#010515 69%,#000 84%);
@@ -403,7 +414,7 @@ dialog::backdrop{background:rgba(8,10,12,.42)}
 #ai::backdrop{background:transparent}
 .ai-x{position:absolute;z-index:4;top:calc(env(safe-area-inset-top) + 16px);right:16px;width:40px;height:40px;border-radius:50%;display:grid;place-items:center;background:var(--ai-glass);border:1px solid var(--ai-edge);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px)}
 .ai-x svg{width:15px;height:15px}
-#aiOrb{position:absolute;left:50%;top:calc(env(safe-area-inset-top) + 4%);width:86%;max-width:360px;aspect-ratio:1;pointer-events:none;mix-blend-mode:screen;transform:translateX(-50%) scale(var(--s,1))}
+#aiOrb{position:absolute;left:50%;top:calc(env(safe-area-inset-top) + 4%);width:86%;max-width:360px;aspect-ratio:1;cursor:pointer;mix-blend-mode:screen;transform:translateX(-50%) scale(var(--s,1))}
 .ai-cssorb::before{content:"";position:absolute;inset:21%;border-radius:50%;background:radial-gradient(circle at 34% 28%,#bfdbfe 0,#3b82f6 26%,#1e3a8a 55%,#020617 80%);box-shadow:0 0 60px 6px rgba(59,130,246,.55),inset 0 0 24px rgba(191,219,254,.8)}
 .ai-say{position:absolute;left:50%;top:53%;width:min(calc(100% - 48px),520px);transform:translateX(-50%);text-align:center}
 #aiHi{min-height:1.5em;margin:0 0 10px;font-size:17px;color:var(--ai-t2)}
@@ -414,9 +425,6 @@ dialog::backdrop{background:rgba(8,10,12,.42)}
 @keyframes aiIn{from{opacity:0;filter:blur(10px);transform:translateY(6px)}}
 .ai-fading .ai-w{animation:aiOut .26s ease forwards}
 @keyframes aiOut{to{opacity:0;filter:blur(10px)}}
-.ai-sugg{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin-top:26px;transition:opacity .35s,filter .35s}
-.ai-sugg.ai-gone{opacity:0;filter:blur(8px);pointer-events:none}
-.ai-chip{padding:9px 14px;border-radius:999px;font-size:13px;background:var(--ai-glass);border:1px solid var(--ai-edge);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px)}
 #aiNote{position:absolute;z-index:4;top:calc(env(safe-area-inset-top) + 20px);left:50%;max-width:70%;transform:translate(-50%,-8px);padding:8px 14px;border-radius:999px;font-size:13px;text-align:center;opacity:0;pointer-events:none;transition:opacity .3s,transform .3s;background:rgba(0,0,0,.5);border:1px solid var(--ai-edge);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px)}
 #aiNote.ai-on{opacity:1;transform:translate(-50%,0)}
 .ai-pill{position:absolute;z-index:2;left:max(16px,calc(50% - 260px));right:max(16px,calc(50% - 260px));bottom:calc(env(safe-area-inset-bottom) + 22px);height:64px;border-radius:999px;display:flex;align-items:center;gap:6px;padding:0 8px 0 24px;
@@ -424,7 +432,11 @@ dialog::backdrop{background:rgba(8,10,12,.42)}
   box-shadow:inset 0 1px 0 rgba(255,255,255,.25),0 14px 30px -12px rgba(0,0,0,.45);transition:left .5s var(--ai-ease),right .5s var(--ai-ease),opacity .3s}
 .ai-pill input{flex:1;min-width:0;background:none;border:0;outline:0;font-size:17px}
 .ai-pill input::placeholder{color:rgba(255,255,255,.72)}
-.ai-wave{width:48px;height:48px;border-radius:50%;display:flex;align-items:center;justify-content:center;gap:3px;transition:background .3s}
+.ai-wave{position:relative;width:48px;height:48px;border-radius:50%;display:flex;align-items:center;justify-content:center;gap:3px;transition:background .3s}
+.ai-wave::after{content:"";position:absolute;inset:-12px -10px -12px -16px} /* a bigger, invisible place to tap */
+.ai-cam{position:relative;flex:none;width:40px;height:40px;border-radius:50%;display:grid;place-items:center;cursor:pointer;opacity:.85}
+.ai-cam svg{width:22px;height:22px}
+.ai-cam input{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
 .ai-wave i{width:2.5px;border-radius:2px;background:#fff;height:calc(var(--b) * (1 + var(--l,0) * 1.6));transition:height .08s}
 .ai-pill.ai-live .ai-wave{background:rgba(255,255,255,.16);box-shadow:0 0 22px rgba(147,197,253,.45)}
 .ai-busyrow{display:none;align-items:center;gap:10px;font-size:15px;white-space:nowrap}
@@ -432,7 +444,7 @@ dialog::backdrop{background:rgba(8,10,12,.42)}
 .ai-dots i{width:5px;height:5px;border-radius:50%;background:#fff;animation:aiDot 1s infinite;animation-delay:calc(var(--i) * .15s)}
 @keyframes aiDot{0%,80%,100%{opacity:.25;transform:none}40%{opacity:1;transform:translateY(-3px)}}
 .ai-pill.ai-busy{left:calc(50% - 112px);right:calc(50% - 112px);padding:0 18px;justify-content:center}
-.ai-pill.ai-busy input,.ai-pill.ai-busy .ai-wave{display:none}
+.ai-pill.ai-busy input,.ai-pill.ai-busy .ai-wave,.ai-pill.ai-busy .ai-cam{display:none}
 .ai-pill.ai-busy .ai-busyrow{display:flex}
 .ai-pill.ai-hide{opacity:0;pointer-events:none}
 .ai-card{position:absolute;z-index:3;left:max(12px,calc(50% - 280px));right:max(12px,calc(50% - 280px));bottom:calc(env(safe-area-inset-bottom) + 22px);top:calc(100% - env(safe-area-inset-bottom) - 86px);border-radius:32px;display:flex;flex-direction:column;overflow:hidden;
@@ -501,12 +513,26 @@ dialog::backdrop{background:rgba(8,10,12,.42)}
 .ai-save svg{width:20px;height:20px}
 .ai-save path{stroke-dasharray:24;stroke-dashoffset:24;animation:aiDraw .4s .1s forwards}
 @keyframes aiDraw{to{stroke-dashoffset:0}}
+/* Many entries at once: amount and note per row */
+.ai-mis{margin-top:12px;display:grid;gap:8px}
+.ai-mi{display:flex;align-items:center;gap:8px}
+.ai-mamt{display:flex;align-items:baseline;flex:none;width:96px;padding:11px 10px;border-radius:16px;background:var(--ai-glass);border:1px solid rgba(255,255,255,.12);font-weight:600;font-variant-numeric:tabular-nums}
+.ai-mamt span{flex:none;white-space:nowrap;opacity:.7;margin-right:2px}
+.ai-mamt input{width:100%;min-width:0;padding:0;background:none;border:0;outline:0;font:inherit;color:inherit}
+.ai-mi .ai-in{flex:1;min-width:0}
+.ai-rm{flex:none;width:32px;height:32px;border-radius:50%;font-size:20px;line-height:1;color:var(--ai-t2)}
+/* A note in the card: app.js notesHtml, in glass */
+#ai .nt{margin-top:12px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);box-shadow:none;color:#fff}
+#ai .nt .rbtn{background:rgba(255,255,255,.1);color:#fff}
+#ai .nti+.nti{border-top-color:rgba(255,255,255,.08)}
+#ai .nti input{accent-color:#fff}
+#ai .nti input:checked+span{color:var(--ai-t2)}
 .ai-ghost{min-height:48px;padding:0 18px;border-radius:999px;background:var(--ai-glass);border:1px solid rgba(255,255,255,.12)}
 @media (prefers-reduced-motion:reduce){.ai-w,.ai-fading .ai-w,.ai-trk i,.ai-dots i{animation:none}#ai,.ai-card,.ai-pill,.ai-cbody{transition:none}}
 </style>
 </head>
 <body>
-<!-- Icons: Phosphor (MIT), bold + fill weights, copied from @phosphor-icons/core 2.1.1. 3D images: Microsoft Fluent Emoji (MIT). -->
+<!-- Icons: Phosphor (MIT), bold + fill weights, copied from @phosphor-icons/core 2.1.1. 3D images: Microsoft Fluent Emoji (MIT). Sounds: Kenney Interface Sounds (CC0, kenney.nl). -->
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
   <symbol id="i-arrow-down-left" viewBox="0 0 256 256"><path d="M200.49,72.48,93,180h75a12,12,0,0,1,0,24H64a12,12,0,0,1-12-12V88a12,12,0,0,1,24,0v75L183.51,55.51a12,12,0,0,1,17,17Z"/></symbol>
   <symbol id="i-arrow-up-right" viewBox="0 0 256 256"><path d="M204,64V168a12,12,0,0,1-24,0V93L72.49,200.49a12,12,0,0,1-17-17L163,76H88a12,12,0,0,1,0-24H192A12,12,0,0,1,204,64Z"/></symbol>
@@ -525,6 +551,7 @@ dialog::backdrop{background:rgba(8,10,12,.42)}
   <symbol id="i-link" viewBox="0 0 256 256"><path d="M117.18,188.74a12,12,0,0,1,0,17l-5.12,5.12A58.26,58.26,0,0,1,70.6,228h0A58.62,58.62,0,0,1,29.14,127.92L63.89,93.17a58.64,58.64,0,0,1,98.56,28.11,12,12,0,1,1-23.37,5.44,34.65,34.65,0,0,0-58.22-16.58L46.11,144.89A34.62,34.62,0,0,0,70.57,204h0a34.41,34.41,0,0,0,24.49-10.14l5.11-5.12A12,12,0,0,1,117.18,188.74ZM226.83,45.17a58.65,58.65,0,0,0-82.93,0l-5.11,5.11a12,12,0,0,0,17,17l5.12-5.12a34.63,34.63,0,1,1,49,49L175.1,145.86A34.39,34.39,0,0,1,150.61,156h0a34.63,34.63,0,0,1-33.69-26.72,12,12,0,0,0-23.38,5.44A58.64,58.64,0,0,0,150.56,180h.05a58.28,58.28,0,0,0,41.47-17.17l34.75-34.75a58.62,58.62,0,0,0,0-82.91Z"/></symbol>
   <symbol id="i-note-pencil" viewBox="0 0 256 256"><path d="M232.49,55.51l-32-32a12,12,0,0,0-17,0l-96,96A12,12,0,0,0,84,128v32a12,12,0,0,0,12,12h32a12,12,0,0,0,8.49-3.51l96-96A12,12,0,0,0,232.49,55.51ZM192,49l15,15L196,75,181,60Zm-69,99H108V133l56-56,15,15Zm105-7.43V208a20,20,0,0,1-20,20H48a20,20,0,0,1-20-20V48A20,20,0,0,1,48,28h67.43a12,12,0,0,1,0,24H52V204H204V140.57a12,12,0,0,1,24,0Z"/></symbol>
   <symbol id="i-magnifying-glass" viewBox="0 0 256 256"><path d="M232.49,215.51,185,168a92.12,92.12,0,1,0-17,17l47.53,47.54a12,12,0,0,0,17-17ZM44,112a68,68,0,1,1,68,68A68.07,68.07,0,0,1,44,112Z"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 256 256"><path d="M216,28H88A12,12,0,0,0,76,40V76H40A12,12,0,0,0,28,88V216a12,12,0,0,0,12,12H168a12,12,0,0,0,12-12V180h36a12,12,0,0,0,12-12V40A12,12,0,0,0,216,28ZM156,204H52V100H156Zm48-48H180V88a12,12,0,0,0-12-12H100V52H204Z"/></symbol>
   <symbol id="i-x" viewBox="0 0 256 256"><path d="M208.49,191.51a12,12,0,0,1-17,17L128,145,64.49,208.49a12,12,0,0,1-17-17L111,128,47.51,64.49a12,12,0,0,1,17-17L128,111l63.51-63.52a12,12,0,0,1,17,17L145,128Z"/></symbol>
   <symbol id="i-clock-counter-clockwise-fill" viewBox="0 0 256 256"><path d="M224,128A96,96,0,0,1,62.11,197.82a8,8,0,1,1,11-11.64A80,80,0,1,0,71.43,71.43C67.9,75,64.58,78.51,61.35,82L77.66,98.34A8,8,0,0,1,72,112H32a8,8,0,0,1-8-8V64a8,8,0,0,1,13.66-5.66L50,70.7c3.22-3.49,6.54-7,10.06-10.55A96,96,0,0,1,224,128ZM128,72a8,8,0,0,0-8,8v48a8,8,0,0,0,3.88,6.86l40,24a8,8,0,1,0,8.24-13.72L136,123.47V80A8,8,0,0,0,128,72Z"/></symbol>
   <symbol id="i-clock-counter-clockwise" viewBox="0 0 256 256"><path d="M140,80v41.21l34.17,20.5a12,12,0,1,1-12.34,20.58l-40-24A12,12,0,0,1,116,128V80a12,12,0,0,1,24,0ZM128,28A99.38,99.38,0,0,0,57.24,57.34c-4.69,4.74-9,9.37-13.24,14V64a12,12,0,0,0-24,0v40a12,12,0,0,0,12,12H72a12,12,0,0,0,0-24H57.77C63,86,68.37,80.22,74.26,74.26a76,76,0,1,1,1.58,109,12,12,0,0,0-16.48,17.46A100,100,0,1,0,128,28Z"/></symbol>
@@ -571,8 +598,8 @@ dialog::backdrop{background:rgba(8,10,12,.42)}
 
     <section id="home">
       <div class="colA">
-        <div id="hero"></div>
-        <div id="strip"></div>
+        <div class="list" id="notes"></div>
+        <div id="glance"></div>
         <div class="picks">
           <button type="button" class="pick" data-new="Income" style="background:var(--mint)"><span class="ptop2"><img class="e" src="assets/3d/up.png" width="30" height="30" alt=""><span class="plus"><svg class="i sm"><use href="#i-plus"/></svg></span></span><small>Income</small><b class="num" id="heroIn">₹0</b></button>
           <button type="button" class="pick" data-new="Pending" style="background:var(--butter)"><span class="ptop2"><img class="e" src="assets/3d/bank.png" width="30" height="30" alt=""><span class="plus"><svg class="i sm"><use href="#i-plus"/></svg></span></span><small>Pending</small><b class="num" id="heroPend">₹0</b></button>
@@ -658,7 +685,7 @@ dialog::backdrop{background:rgba(8,10,12,.42)}
     <div class="nav">
       <button type="button" data-tab="home" aria-current="page"><svg class="i"><use href="#i-house-fill"/></svg>Home</button>
       <button type="button" data-tab="history"><svg class="i"><use href="#i-clock-counter-clockwise"/></svg>History</button>
-      <button type="button" class="ai-orb" id="aiBtn" aria-label="Ask the assistant" hidden><span></span>Ask</button>
+      <button type="button" class="ai-orb" id="aiBtn" aria-label="Ask the assistant" hidden><span></span><small>Ask</small></button>
       <button type="button" data-tab="insights"><svg class="i"><use href="#i-chart-bar"/></svg>Insights</button>
       <button type="button" data-tab="money"><svg class="i"><use href="#i-hand-coins"/></svg>Money</button>
     </div>
@@ -735,14 +762,10 @@ dialog::backdrop{background:rgba(8,10,12,.42)}
   <div class="ai-say">
     <p id="aiHi"></p>
     <p id="aiBig" class="ai-big" aria-live="polite"></p>
-    <div class="ai-sugg" id="aiSugg">
-      <button class="ai-chip" type="button">Got my salary 30k today</button>
-      <button class="ai-chip" type="button">Kirana this month?</button>
-      <button class="ai-chip" type="button">Am I over budget?</button>
-    </div>
   </div>
   <form class="ai-pill" id="aiPill" autocomplete="off">
     <input id="aiText" placeholder="Ask anything…" aria-label="Ask anything" enterkeyhint="send">
+    <label class="ai-cam" aria-label="Photo of a bill"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3.5 8h3.5l2-3h6l2 3h3.5v11.5h-17z"/><circle cx="12" cy="13.5" r="3.5"/></svg><input type="file" accept="image/*" id="aiPhoto"></label>
     <button class="ai-wave" id="aiWave" type="button" aria-label="Talk"><i style="--b:7px"></i><i style="--b:14px"></i><i style="--b:21px"></i><i style="--b:14px"></i><i style="--b:7px"></i></button>
     <span class="ai-busyrow"><span class="ai-dots"><i style="--i:0"></i><i style="--i:1"></i><i style="--i:2"></i></span><span id="aiBusy">Thinking…</span></span>
   </form>

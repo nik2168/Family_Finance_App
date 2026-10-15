@@ -61,6 +61,14 @@ var money = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR',
 var day = new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
 var dayName = new Intl.DateTimeFormat('en-IN', { weekday: 'short', day: 'numeric', month: 'short' });
 var clock = new Intl.DateTimeFormat('en-IN', { hour: 'numeric', minute: '2-digit' });
+var stampFmt = new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
+// "Added 15 Oct, 10:02 · Edited 16 Oct, 9:00" from the server's stamps; '' for older rows. Edited shows only once it is a minute past Added.
+function stamp(r) {
+  if (!r.createdAt) return '';
+  var s = 'Added ' + stampFmt.format(new Date(r.createdAt));
+  if (r.updatedAt && Date.parse(r.updatedAt) - Date.parse(r.createdAt) > 60000) s += ' · Edited ' + stampFmt.format(new Date(r.updatedAt));
+  return s;
+}
 
 // sheet: {mode: 'add'|'edit'|'loan-add'|'loan-edit'|'repay'|'bill', type, category, id, dir, loan, pay, bill, day}
 var state = { tab: 'home', view: 'month', date: new Date(), f: { q: '', year: '', month: '', cat: '', who: '' }, sheet: null, amt: '', syncing: false, again: false, error: '',
@@ -332,6 +340,7 @@ function entryRow(e, w, editable) {
   return '<' + tag + (editable ? ' type="button" data-edit="' + esc(e.id) + '" class="lrow tap"' : ' class="lrow"') + '>' + disc(e.type, e.category) +
     '<div class="grow"><div class="what">' + esc(e.note || e.category) + '</div>' +
     '<small>' + esc((e.note ? e.category + ' · ' : '') + (e.by ? e.by + ' · ' : '') + clock.format(new Date(e.dateTime))) + '</small>' +
+    (stamp(e) ? '<small class="stamp">' + esc(stamp(e)) + '</small>' : '') +
     (w[e.id] ? '<small style="color:var(--ink-2)">' + icon('clock-countdown', 'sm') + 'Waiting to sync</small>' : '') + '</div>' +
     '<span class="amt num' + (isIn ? ' pos' : '') + '">' + (isIn ? '+' : '−') + esc(money.format(e.amount)) + '</span>' +
     (editable ? '<span class="edit">' + icon('pencil-simple', 'sm') + '</span>' : '') + '</' + tag + '>';
@@ -608,14 +617,14 @@ function loanCard(l, w, T, x, now) {
   }
   return '<div class="lcard' + (l.done ? ' ldone' : '') + '">' +
     '<button type="button" class="lhead" data-loan-edit="' + esc(l.id) + '"><span class="disc s" style="background:var(' + (PIC_BG[picture] || T.color) + ')">' + img3d(picture, 26) + '</span>' +
-    '<div class="grow">' + (x.star && !l.done && dir === 'borrowed' ? '<span class="star">★ Pay first</span>' : '') + '<div class="what" style="font-weight:600">' + esc(l.reason) + '</div><small>' + esc(info.join(' · ')) + '</small>' +
+    '<div class="grow">' + (x.star && !l.done && dir === 'borrowed' ? '<span class="star">★ Pay first</span>' : '') + '<div class="what" style="font-weight:600">' + esc(l.reason) + '</div><small>' + esc(info.join(' · ')) + '</small>' + (stamp(l) ? '<small class="stamp">' + esc(stamp(l)) + '</small>' : '') +
     (w[l.id] ? '<small style="color:var(--ink-2)">' + icon('clock-countdown', 'sm') + 'Waiting to sync</small>' : '') + '</div>' +
     '<span class="pill ' + (l.done && dir !== 'invested' ? 'ok' : x.goal ? 'warn' : T.pill) + ' num" style="font-weight:600">' + (l.done && dir !== 'invested' ? icon('check', 'sm') + T.done : amount) + '</span></button>' +
     bar + lines.map(function (t) { return '<div class="lfoot"><span>' + (/^<span/.test(t) ? t : esc(t)) + '</span></div>'; }).join('') + box +
     (acts.length ? '<div class="acts">' + acts.map(function (a, i) { return '<button type="button" class="pay' + (i === acts.length - 1 ? '' : ' soft') + '" data-pay="' + esc(l.id) + '" data-kind="' + a[0] + '">' + a[1] + '</button>'; }).join('') + '</div>' : '') +
     (l.repays.length ? '<details><summary>' + l.repays.length + ' ' + T.payments[l.repays.length === 1 ? 0 : 1] + '</summary>' +
       l.repays.map(function (r) {
-        return '<div class="rp"><span class="grow">' + esc(day.format(new Date(r.dateTime))) + (r.amount < 0 ? ', added' : '') + (w[r.id] ? ', waiting to sync' : '') + '</span><b class="num" style="font-weight:600">' + esc(money.format(Math.abs(r.amount))) + '</b>' +
+        return '<div class="rp"><span class="grow">' + esc(day.format(new Date(r.dateTime))) + (r.amount < 0 ? ', added' : '') + (stamp(r) ? ' · ' + esc(stamp(r)) : '') + (w[r.id] ? ', waiting to sync' : '') + '</span><b class="num" style="font-weight:600">' + esc(money.format(Math.abs(r.amount))) + '</b>' +
           '<button type="button" data-del-repay="' + esc(r.id) + '" aria-label="Delete this payment">' + icon('trash', 'sm') + '</button></div>';
       }).join('') + '</details>' : '') + '</div>';
 }

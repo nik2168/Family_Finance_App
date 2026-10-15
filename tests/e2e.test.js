@@ -260,6 +260,10 @@ const ym = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'
     await tab('history');
     assert.strictEqual(await page.locator('#historyList .lrow').count(), 30, 'every entry is listed');
     assert.strictEqual(await page.locator('#historyList .lrow.tap').count(), 30, 'and every one can be changed');
+    // Added/Edited: rows made in the app and synced have a stamp line, rows typed into the sheet have none
+    const stamps = await page.$$eval('#historyList .lrow .stamp', b => b.map(x => x.textContent));
+    assert(stamps.length >= 1 && stamps.length <= 5 && stamps.every(t => /^Added \d{1,2} \w{3}, /.test(t)), 'stamp lines: ' + JSON.stringify(stamps));
+    assert.strictEqual(await page.locator('#historyList .lrow:has-text("Old 3") .stamp').count(), 0, 'a row typed in the sheet has no stamp');
     await page.click('#historyList .lrow:has-text("Old 0")');
     await clearAmount();
     await keypad('99');

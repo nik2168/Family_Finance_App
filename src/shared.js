@@ -198,6 +198,15 @@ function indexById(list, id) {
   return -1;
 }
 
+// An edited record keeps the server's Added/Edited stamps (none yet: the phone's own guess is dropped).
+function keepStamps(data, old) {
+  var out = Object.assign({}, data);
+  delete out.createdAt; delete out.updatedAt;
+  if (old.createdAt) out.createdAt = old.createdAt;
+  if (old.updatedAt) out.updatedAt = old.updatedAt;
+  return out;
+}
+
 function applyOps(snap, ops) {
   var c = snap.cats || CATEGORIES;
   var out = { rows: (snap.rows || []).slice(), loans: (snap.loans || []).slice(), repays: (snap.repays || []).slice(), notes: (snap.notes || []).slice(),
@@ -209,7 +218,7 @@ function applyOps(snap, ops) {
     if (!key) return;
     var list = out[key], i = indexById(list, op.id);
     if (op.action === 'add') { if (i < 0) list.push(op.data); }
-    else if (op.action === 'update') { if (i >= 0) list[i] = op.data; }
+    else if (op.action === 'update') { if (i >= 0) list[i] = keepStamps(op.data, list[i]); } // the phone's createdAt is a guess: the server's stays until the next sync
     else if (op.action === 'delete') {
       if (i >= 0) list.splice(i, 1);
       if (op.kind === 'loan') { out.repays = out.repays.filter(function (r) { return r.loanId !== op.id; }); delete out.settings.loans[op.id]; }

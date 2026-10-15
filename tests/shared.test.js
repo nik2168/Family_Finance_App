@@ -120,6 +120,10 @@ let v = s.applyOps(snap, [
 ]);
 assert.deepStrictEqual(v.rows.map(r => [r.id, r.amount, r.category]), [['srv-00001', 10, 'Dairy'], ['new-00001', 75, 'House']]);
 assert.strictEqual(snap.rows[0].category, 'House', 'snapshot not mutated');
+v = s.applyOps({ rows: [{ ...ok, id: 'st-00001', createdAt: 'C', updatedAt: 'U' }, { ...ok, id: 'st-00002' }] }, [
+  { opId: 's1', kind: 'entry', action: 'update', id: 'st-00001', data: { ...ok, id: 'st-00001', amount: 5, createdAt: 'phone' } },
+  { opId: 's2', kind: 'entry', action: 'update', id: 'st-00002', data: { ...ok, id: 'st-00002', amount: 5, createdAt: 'phone' } }]);
+assert.deepStrictEqual(v.rows.map(r => [r.amount, r.createdAt, r.updatedAt]), [[5, 'C', 'U'], [5, undefined, undefined]], 'an offline edit keeps the server stamps, never the phone guess');
 v = s.applyOps(snap, [
   { opId: 'o6', kind: 'entry', action: 'add', id: 'tmp-00001', data: { ...ok, id: 'tmp-00001' } },
   { opId: 'o7', kind: 'entry', action: 'delete', id: 'tmp-00001' },

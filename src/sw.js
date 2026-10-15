@@ -1,7 +1,7 @@
 // Keeps the app files on the phone so it opens with no network.
 // Opens from cache instantly, then refreshes the cache in the background: a new deploy shows on the next open.
 // ponytail: files refresh one by one, so a single open can mix old and new files if one download fails mid-way; add versioned file names if that ever bites.
-var CACHE = 'family-money-14'; // a new name makes an update arrive whole (app.js needs the shared.js beside it)
+var CACHE = 'family-money-15'; // a new name makes an update arrive whole (app.js needs the shared.js beside it)
 var FILES = ['./', 'index.html', 'app.js', 'shared.js', 'ai.js', 'manifest.json', 'assets/icons/icon-192.png', 'assets/icons/icon-512.png',
   'assets/fonts/lexend-latin.woff2', 'assets/fonts/lexend-latin-ext.woff2'].concat(
   ['bag', 'bank', 'books', 'bus', 'cal', 'cart', 'check', 'coin', 'crops', 'dairy', 'diya', 'farmer', 'fire', 'food', 'fuel', 'gem', 'gift', 'hand', 'home2', 'house',

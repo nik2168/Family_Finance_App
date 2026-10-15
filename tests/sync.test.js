@@ -12,6 +12,7 @@ const T = '2026-10-11T04:30:00.000Z'; // 11 Oct 2026, 10:00 in India
 const entry = (id, extra) => ({ id, dateTime: T, type: 'Expense', category: 'Dairy', amount: 450, note: 'Cattle feed', createdAt: T, ...extra });
 const op = (opId, kind, action, id, data) => ({ opId, kind, action, id, data });
 const OCT = 9, SEP = 8;
+const bare = ({ createdAt, updatedAt, ...r }) => r; // the server's stamps change every run
 const cells = rows => rows.map(r => r.slice(1, 5)); // Category, Income, Expense, Reason
 
 // ---- setup(): only the common tab exists until there is an entry; year tabs are made when needed
@@ -121,8 +122,8 @@ const rep = (id, amount, loanId) => ({ id, loanId: loanId || 'loan-0001', dateTi
 r = post({ ops: [op('l1', 'loan', 'add', 'loan-0001', loan), op('r1', 'repay', 'add', 'rep-00001', rep('rep-00001', 5000)), op('r2', 'repay', 'add', 'rep-00002', rep('rep-00002', 1000, 'loan-9999')), op('l2', 'loan', 'add', 'loan-0002', { ...loan, id: 'loan-0002', reason: '' })] });
 eq(r.done, ['l1', 'r1']);
 eq(r.rejected, [{ opId: 'r2', error: 'loan not found' }, { opId: 'l2', error: 'reason required' }]);
-eq(r.loans, [{ id: 'loan-0001', dateTime: loan.dateTime, reason: loan.reason, amount: 20000, interest: 0, per: 'month', priority: 'medium', dir: 'borrowed' }]);
-eq(r.repays, [{ id: 'rep-00001', loanId: 'loan-0001', dateTime: T, amount: 5000 }]);
+eq(r.loans.map(bare), [{ id: 'loan-0001', dateTime: loan.dateTime, reason: loan.reason, amount: 20000, interest: 0, per: 'month', priority: 'medium', dir: 'borrowed' }]);
+eq(r.repays.map(bare), [{ id: 'rep-00001', loanId: 'loan-0001', dateTime: T, amount: 5000 }]);
 eq(L.rows[4].slice(1, 9), ['From Ramesh, tractor repair', 20000, '', '', 'medium', '=SUMIF($N$5:$N,I5,$M$5:$M)', '=C5-G5', 'loan-0001'], 'paid back and still owed are live formulas');
 eq(L.rows[4].slice(11, 15), ['From Ramesh, tractor repair', 5000, 'loan-0001', 'rep-00001'], 'payments show the loan they belong to');
 r = post({ ops: [op('l3', 'loan', 'update', 'loan-0001', { ...loan, amount: 25000, interest: 1.5, per: 'year', priority: 'high' }), op('r3', 'repay', 'add', 'rep-00003', rep('rep-00003', 2500))] });
@@ -234,12 +235,30 @@ S.props.CATS = JSON.stringify(S.ctx.CATEGORIES);
 const spost = ops => S.ctx.doPost({ postData: { contents: JSON.stringify({ key: 'k', ops }) } });
 r = spost([op('b1', 'entry', 'add', 'by-000001', entry('by-000001', { by: 'Sunita' })), op('b2', 'entry', 'add', 'by-000002', entry('by-000002', { dateTime: early }))]);
 const so = S.tab('2026'), dcol = 7 * OCT;
-eq([so.notes[20][dcol], (so.notes[21] || [])[dcol]], ['', 'Added by Sunita'], '2 Oct (no one) sorts first, 11 Oct is Sunita\'s');
+assert(/^Created \S+\nEdited \S+$/.test(so.notes[20][dcol]) && /^Added by Sunita\nCreated /.test(so.notes[21][dcol]), '2 Oct (no one) sorts first, 11 Oct is Sunita\'s');
 eq([r.rows.find(x => x.id === 'by-000001').by, 'by' in r.rows.find(x => x.id === 'by-000002')], ['Sunita', false]);
 so.notes[21][dcol] = 'Added by Kavita'; // changed by hand in the sheet
 eq(spost([]).rows.find(x => x.id === 'by-000001').by, 'Kavita');
 spost([op('b3', 'entry', 'delete', 'by-000002')]);
-eq([so.notes[20][dcol], so.notes[21][dcol]], ['Added by Kavita', ''], 'notes move with their rows; the freed row loses its note');
+eq([so.notes[20][dcol].split('\n')[0], so.notes[21][dcol]], ['Added by Kavita', ''], 'notes move with their rows; the freed row loses its note');
+
+// ---- Created / Edited: the server's clock; an update keeps Created and moves Edited; read back from the cell note
+const real = Date, tick = ms => { S.ctx.Date = class extends real { constructor(...x) { super(...(x.length ? x : [real.now() + ms])); } static now() { return real.now() + ms; } }; }; // the script's clock only
+const stamps = id => { const x = spost([]).rows.find(y => y.id === id); return [x.createdAt, x.updatedAt]; };
+spost([op('t1', 'entry', 'add', 'stamp-0001', entry('stamp-0001', { createdAt: '2001-01-01T00:00:00.000Z' }))]);
+let [c1, u1] = stamps('stamp-0001');
+assert(c1 && c1 === u1 && c1 !== '2001-01-01T00:00:00.000Z', 'a new entry: Created = Edited, from the server and not the phone');
+tick(60000);
+spost([op('t2', 'entry', 'update', 'stamp-0001', entry('stamp-0001', { amount: 500, createdAt: '2002-02-02T00:00:00.000Z' }))]);
+S.ctx.Date = real;
+const [c2, u2] = stamps('stamp-0001');
+assert(c2 === c1 && u2 > u1, 'an update keeps Created and moves Edited');
+eq(spost([]).rows.find(y => y.id === 'stamp-0001').amount, 500);
+spost([op('t3', 'loan', 'add', 'stamp-loan1', { id: 'stamp-loan1', dateTime: T, reason: 'Stamp loan', amount: 100, dir: 'borrowed' }),
+  op('t4', 'repay', 'add', 'stamp-rep01', { id: 'stamp-rep01', loanId: 'stamp-loan1', dateTime: T, amount: 10 })]);
+r = spost([]);
+assert(r.loans.find(l => l.id === 'stamp-loan1').createdAt && r.repays.find(p => p.id === 'stamp-rep01').updatedAt, 'loans and payments are stamped and read back');
+spost([op('t5', 'loan', 'delete', 'stamp-loan1'), op('t6', 'entry', 'delete', 'stamp-0001')]); // leave the shared sheet as it was
 
 // ---- Settings: kept in the SET property; the Others budget is cell B1; categories and loans keep them tidy
 const set = (opId, key, value, id) => op(opId, 'set', 'update', undefined, { key, id, value });
@@ -275,7 +294,7 @@ const NT = tab('Notes');
 eq(NT.rows[0], ['Title', 'List', 'Notes', 'Category', 'Added', 'By', 'Id']);
 eq(NT.rows[1].slice(0, 4).concat(NT.rows[1].slice(5)), ['Groceries', '☐ Atta\n☑ Paneer', '', 'Kirana', 'Sunita', 'note-00001']);
 eq(NT.hiddenCols, [7], 'the Id column is hidden');
-eq(r.notes, [{ id: 'note-00001', dateTime: T, title: 'Groceries', items: note.items, text: '', category: 'Kirana', by: 'Sunita' }], 'the reply carries the notes');
+eq(r.notes.map(bare), [{ id: 'note-00001', dateTime: T, title: 'Groceries', items: note.items, text: '', category: 'Kirana', by: 'Sunita' }], 'the reply carries the notes');
 eq(post({ ops: [op('n1', 'note', 'add', note.id, { ...note, title: 'Changed' })] }).notes[0].title, 'Groceries', 'a resent add changes nothing');
 // A tick rewrites the row in place; rows handNote in the sheet get an Id and a date; a row without a title is kept as it is
 r = post({ ops: [op('n3', 'note', 'update', note.id, { ...note, items: [{ t: 'Atta', done: true }, { t: 'Paneer', done: true }] })] });

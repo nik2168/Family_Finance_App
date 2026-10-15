@@ -74,7 +74,7 @@ function doPost(e) {
   }
 
   return reply({
-    rows: st.rows.map(function (r) { var e = { id: r.id, dateTime: r.dateTime, type: r.type, category: r.category, amount: r.amount, note: r.note }; if (r.by) e.by = r.by; return e; }),
+    rows: st.rows.map(function (r) { var e = { id: r.id, dateTime: r.dateTime, type: r.type, category: r.category, amount: r.amount, note: r.note }; if (r.by) e.by = r.by; if (r.createdAt) e.createdAt = r.createdAt; if (r.updatedAt) e.updatedAt = r.updatedAt; return e; }),
     loans: st.loans, repays: st.repays, notes: st.notes, othersLimit: st.limit, cats: st.cats, settings: settingsReply(st), done: done, rejected: rejected
   });
 }
@@ -130,8 +130,7 @@ function readYear(st, sh) {
       var id = freshId(st, e.id);
       if (id !== e.id) { e.id = id; st.dirty[home] = true; }
       e.home = home;
-      var by = /^Added by (.+)$/.exec(String(notes[i][m * M_STEP] || '').trim());
-      if (by) e.by = by[1].slice(0, 30);
+      readStamp(e, notes[i][m * M_STEP]);
       st.rows.push(e);
     });
   }
@@ -150,21 +149,22 @@ function readCommon(st, sh) {
   st.limit = Number(sh.getRange(1, 2).getValue()) || 0;
   var last = sh.getLastRow();
   if (last < L_FIRST) return;
-  sh.getRange(L_FIRST, 1, last - L_FIRST + 1, LAST_COL).getValues().forEach(function (row, i) {
+  var block = sh.getRange(L_FIRST, 1, last - L_FIRST + 1, LAST_COL), notes = block.getNotes();
+  block.getValues().forEach(function (row, i) {
     DIRS.forEach(function (dir) {
       var l = row.slice(LOAN_COL[dir] - 1, LOAN_COL[dir] - 1 + L_COLS);
       if (!isBlank(l)) {
         st.sizeL[dir] = i + 1;
         var loan = parseLoan(l[0], l[1], l[2], l[3], l[4], l[5], l[8], dir);
         if (!loan) st.keepL[dir].push(l);
-        else { if (claim(st, loan)) st.dirtyL = st.dirtyR = true; st.loans.push(loan); }
+        else { if (claim(st, loan)) st.dirtyL = st.dirtyR = true; readStamp(loan, notes[i][LOAN_COL[dir] - 1]); st.loans.push(loan); }
       }
       var p = row.slice(PAY_COL[dir] - 1, PAY_COL[dir] - 1 + R_COLS);
       if (!isBlank(p)) {
         st.sizeR[dir] = i + 1;
         var repay = parseRepay(p[0], p[2], p[3], p[4], dir);
         if (!repay) st.keepR[dir].push(p);
-        else { if (claim(st, repay)) st.dirtyR = true; st.payDir[repay.id] = dir; st.repays.push(repay); }
+        else { if (claim(st, repay)) st.dirtyR = true; st.payDir[repay.id] = dir; readStamp(repay, notes[i][PAY_COL[dir] - 1]); st.repays.push(repay); }
       }
     });
   });
@@ -172,12 +172,14 @@ function readCommon(st, sh) {
 
 function readNotes(st, sh) {
   if (!sh || sh.getLastRow() < 2) return;
-  sh.getRange(2, 1, sh.getLastRow() - 1, N_COLS).getValues().forEach(function (c, i) {
+  var block = sh.getRange(2, 1, sh.getLastRow() - 1, N_COLS), notes = block.getNotes();
+  block.getValues().forEach(function (c, i) {
     if (isBlank(c)) return;
     st.sizeN = i + 1;
     var n = parseNote(c);
     if (!n) { st.keepN.push(c); return; }
     if (claim(st, n) || !toDate(c[4])) st.dirtyN = true; // typed by hand: it gets an Id and a date
+    readStamp(n, notes[i][4]);
     st.notes.push(n);
   });
 }
@@ -254,7 +256,9 @@ function applyOp(st, op) {
     if (!matchName(st.cats[d.type], d.category)) { applyCat(st.cats, [], { action: 'add', data: { type: d.type, name: d.category } }); st.dirtyCats = true; }
     d.category = matchName(st.cats[d.type], d.category);
   }
-  var rec = record(st, op.kind, d);
+  var rec = record(st, op.kind, d), now = new Date().toISOString();
+  rec.createdAt = i >= 0 ? list[i].createdAt : now; // the server's clock, not the phone's: an offline phone can queue ops for days
+  rec.updatedAt = now;
   if (i >= 0) { touch(st, op.kind, list[i]); list[i] = rec; } else list.push(rec);
   touch(st, op.kind, rec);
   return '';
@@ -319,10 +323,7 @@ function writeMonth(st, home) {
   }).concat(keep);
   var sh = ensureYearTab(st.ss, home.slice(0, 4), st.cats);
   writeBlock(sh, M_FIRST, 1 + m * M_STEP, M_COLS, out, old);
-  // Who added each one, as the note on its Date cell; rows below the table lose theirs.
-  var notes = rows.map(function (r) { return [r.by ? 'Added by ' + r.by : '']; }).concat(keep.map(function () { return ['']; }));
-  while (notes.length < old) notes.push(['']);
-  if (notes.length) sh.getRange(M_FIRST, 1 + m * M_STEP, notes.length, 1).setNotes(notes);
+  writeStamps(sh, M_FIRST, 1 + m * M_STEP, rows, keep.length, old);
   st.size[home] = out.length;
 }
 
@@ -331,12 +332,14 @@ function writeLoans(st, sh) {
   DIRS.forEach(function (dir) {
     var c = LOAN_COL[dir], A = function (k, r) { return colName(c + k) + r; };
     var ids = colName(PAY_COL[dir] + 3), amounts = colName(PAY_COL[dir] + 2);
-    var out = st.loans.filter(function (l) { return l.dir === dir; }).sort(byOldest).map(function (l, i) {
+    var recs = st.loans.filter(function (l) { return l.dir === dir; }).sort(byOldest);
+    var out = recs.map(function (l, i) {
       var r = L_FIRST + i;
       return [new Date(l.dateTime), safeText(l.reason), l.amount, l.interest || '', l.interest ? l.per : '', dir === 'invested' ? (l.compound === false ? 'Simple' : 'Compound') : l.priority,
         '=SUMIF($' + ids + '$' + L_FIRST + ':$' + ids + ',' + A(8, r) + ',$' + amounts + '$' + L_FIRST + ':$' + amounts + ')', '=' + A(2, r) + '-' + A(6, r), l.id];
     }).concat(st.keepL[dir]);
     writeBlock(sh, L_FIRST, c, L_COLS, out, st.sizeL[dir]);
+    writeStamps(sh, L_FIRST, c, recs, st.keepL[dir].length, st.sizeL[dir]);
     st.sizeL[dir] = out.length;
   });
 }
@@ -346,22 +349,45 @@ function writeRepays(st, sh) {
   var loans = {};
   st.loans.forEach(function (l) { loans[l.id] = l; });
   DIRS.forEach(function (dir) {
-    var out = st.repays.filter(function (p) { return (loans[p.loanId] ? loans[p.loanId].dir : st.payDir[p.id] || 'borrowed') === dir; })
-      .sort(byOldest).map(function (p) {
+    var recs = st.repays.filter(function (p) { return (loans[p.loanId] ? loans[p.loanId].dir : st.payDir[p.id] || 'borrowed') === dir; }).sort(byOldest);
+    var out = recs.map(function (p) {
         return [new Date(p.dateTime), safeText(loans[p.loanId] ? loans[p.loanId].reason : ''), p.amount, p.loanId, p.id];
       }).concat(st.keepR[dir]);
     writeBlock(sh, L_FIRST, PAY_COL[dir], R_COLS, out, st.sizeR[dir]);
+    writeStamps(sh, L_FIRST, PAY_COL[dir], recs, st.keepR[dir].length, st.sizeR[dir]);
     st.sizeR[dir] = out.length;
   });
 }
 
 // A note syncs whole. ponytail: two phones ticking the same list at the same moment: the last one wins; per-item ops if that bites.
 function writeNotes(st) {
-  var out = st.notes.slice().sort(byOldest).map(function (n) {
+  var recs = st.notes.slice().sort(byOldest);
+  var out = recs.map(function (n) {
     return [safeText(n.title), n.items.map(function (i) { return (i.done ? '☑ ' : '☐ ') + i.t; }).join('\n'), safeText(n.text), safeText(n.category), new Date(n.dateTime), n.by, n.id];
   }).concat(st.keepN);
-  writeBlock(ensureNotes(st.ss), 2, 1, N_COLS, out, st.sizeN);
+  var sh = ensureNotes(st.ss);
+  writeBlock(sh, 2, 1, N_COLS, out, st.sizeN);
+  writeStamps(sh, 2, 5, recs, st.keepN.length, st.sizeN); // on the Added cell
   st.sizeN = out.length;
+}
+
+// When a record was made and last changed (server time), plus who added it, as the note on its first cell:
+// "Added by Sunita", "Created <ISO>", "Edited <ISO>". Records from before this have no Created line. ponytail: a row edited by hand in the sheet keeps its old stamps.
+function stampNote(r) { return [r.by ? 'Added by ' + r.by : '', r.createdAt ? 'Created ' + r.createdAt : '', r.updatedAt ? 'Edited ' + r.updatedAt : ''].filter(Boolean).join('\n'); }
+
+function readStamp(rec, text) {
+  text = String(text || '');
+  var by = /^Added by (.+)$/m.exec(text), c = /^Created (\S+)/m.exec(text), u = /^Edited (\S+)/m.exec(text);
+  if (by && !rec.by) rec.by = by[1].trim().slice(0, 30);
+  if (c) rec.createdAt = c[1];
+  if (u) rec.updatedAt = u[1];
+}
+
+// Notes for the rows just written at (row, col): one per record, then blanks for kept rows and for whatever was below before.
+function writeStamps(sh, row, col, recs, kept, oldSize) {
+  var notes = recs.map(function (r) { return [stampNote(r)]; });
+  while (notes.length < Math.max(recs.length + kept, oldSize)) notes.push(['']);
+  if (notes.length) sh.getRange(row, col, notes.length, 1).setNotes(notes);
 }
 
 // Writes rows at (row, col) and blanks whatever was below them before. Strings starting with "=" become formulas.

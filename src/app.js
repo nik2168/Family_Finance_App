@@ -360,7 +360,7 @@ function emptyRow(title, text, picture) {
 
 function ring(rate, sub) {
   var p = rate == null ? 0 : Math.max(0, Math.min(1, rate)) * 100;
-  return '<div class="ringbox"><span class="ring"><svg viewBox="0 0 36 36"><circle class="rt" cx="18" cy="18" r="15.915"/><circle class="rv" cx="18" cy="18" r="15.915" stroke-dasharray="' + p.toFixed(1) + ' 100"/></svg>' +
+  return '<div class="ringbox"><span class="ring"><svg viewBox="0 0 36 36"><circle class="rt" cx="18" cy="18" r="15.915"/>' + (p ? '<circle class="rv" cx="18" cy="18" r="15.915" stroke-dasharray="' + p.toFixed(1) + ' 100"/>' : '') + '</svg>' +
     '<b>' + (rate == null ? '–' : Math.round(rate * 100) + '%') + '</b></span><small>' + sub + '</small></div>';
 }
 
@@ -400,14 +400,10 @@ function planOf(v, now) {
   }
   return p;
 }
-// Home's glance: the goal (clearing loans or growing savings; tap for Insights) and the month's budget (tap to change it),
-// each a number and a little forecast line (lineSvg, shrunk by CSS).
-function glRow(attrs, label, big, sub, chart) {
-  return '<button type="button" class="gl" ' + attrs + '><span class="grow gt"><small>' + label + '</small><b class="num">' + big + '</b><small>' + sub + '</small></span>' + chart + '</button>';
-}
-function glSet(id, picture, title, text) {
-  return '<button type="button" class="gl" id="' + id + '">' + img3d(picture, 30) + '<span class="grow gt"><b>' + title + '</b><small>' + text + '</small></span>' + icon('caret-right', 'sm muted') + '</button>';
-}
+// Home's glance, as pastel tiles (a bento): what is left to spend with the month's line (tap to change the budget), the goal
+// (clearing loans or growing savings) and how much of this month's income was kept (both tap for Insights).
+function tile(cls, attrs, bg, body) { return '<button type="button" class="pcard tile ' + cls + '" ' + attrs + ' style="background:var(' + bg + ')">' + body + '</button>'; }
+function starter(cls, id, bg, picture, title, text) { return tile(cls, 'id="' + id + '"', bg, '<span class="grow">' + img3d(picture, 34) + '</span><b>' + title + '</b><small>' + text + '</small>'); }
 // Everyday spending this month added up day by day (as budgetStatus counts it: categories without a bill), then today's pace to the month's end.
 function paceLine(rows, b, now) {
   var y = now.getFullYear(), m = now.getMonth(), dim = new Date(y, m + 1, 0).getDate(), today = now.getDate(), sum = 0, done = [0], start = new Date(y, m, 1);
@@ -421,25 +417,27 @@ function paceLine(rows, b, now) {
   for (i = today + 1; i <= dim; i++) pace.push(sum + rate * (i - today));
   return { done: done, pace: pace, end: Math.round(pace[dim]) };
 }
-function glanceHtml(v, p, now) {
-  var at = function (i) { return inMonths(now, i); }, goal, budget, b = budgetStatus(v.rows, v.settings, v.cats, now), d = b.daily;
-  if (p.focus === 'debt') {
-    goal = glRow('id="glGoal" data-tab="insights"', 'Debt-free by', p.pace ? monthYear(inMonths(now, p.pace)) : 'Not yet', lakh(p.owed) + ' left · ' + p.open.length + (p.open.length === 1 ? ' loan' : ' loans'),
-      lineSvg([{ v: [p.owed].concat(p.f.months.slice(0, Math.min(60, p.pace || 24)).map(function (m) { return m.owed; })) }], { fill: '--blush-d', label: 'Owed going down', at: at }));
-  } else if (p.g) {
-    var g = p.g, n = Math.min(120, p.pace || (p.due ? p.due + 12 : 60));
-    goal = glRow('id="glGoal" data-tab="insights"', lakh(g.target) + ' goal' + (g.name ? ' · ' + esc(g.name) : ''), pct(Math.min(1, p.lt.worth / g.target)),
-      p.pace === 0 ? 'reached 🎉' : p.pace ? 'by ' + monthYear(inMonths(now, p.pace)) + ' at your pace' : 'not reached at this pace',
-      lineSvg([{ v: growLine(p.lt, p.lt.monthly, n) }], { fill: '--mint-d', goal: g.target, goalText: '', label: 'Savings growing toward the goal', at: at }));
-  } else goal = glSet('setGoal', 'seed', 'Set a savings goal', 'See when you get there');
-  if (!d) budget = glSet('setBudget', 'bag', 'Set a monthly budget', 'See what is left to spend each day');
+function glanceHtml(v, p, now, s) {
+  var b = budgetStatus(v.rows, v.settings, v.cats, now), d = b.daily, budget, goal, rate = s.income > 0 ? s.savings / s.income : null;
+  if (!d) budget = starter('full', 'setBudget', '--lavender', 'bag', 'Set a monthly budget', 'See what is left to spend each day');
   else {
-    var pl = paceLine(v.rows, b, now), over = pl.end > d.limit;
-    budget = glRow('id="setBudget"', d.left >= 0 ? 'Left to spend' : 'Over the budget', '<span' + (d.left < 0 ? ' class="neg"' : '') + '>' + money.format(Math.abs(d.left)) + '</span>',
-      (d.left > 0 ? 'about ' + money.format(d.perDay) + ' a day · ' : '') + '<span' + (over ? ' class="neg"' : '') + '>on pace for ' + compact(pl.end) + '</span>',
-      lineSvg([{ v: pl.done }, { v: pl.pace, dashed: true }], { fill: over ? '--blush-d' : '--mint-d', goal: d.limit, goalText: compact(d.limit), label: 'Spending this month against the budget', at: function (i) { return new Date(now.getFullYear(), now.getMonth(), i + 1); } }));
+    var pl = paceLine(v.rows, b, now), over = pl.end > d.limit, mon = ' ' + MONTHS[now.getMonth()];
+    budget = tile('full', 'id="setBudget"', '--lavender', '<span class="tt"><small>' + (d.left >= 0 ? 'Left to spend' : 'Over the budget') + '</small><span class="pill white">' + (d.days === 1 ? 'Last day' : d.days + ' days left') + '</span></span>' +
+      '<b class="big num' + (d.left < 0 ? ' neg' : '') + '">' + money.format(Math.abs(d.left)) + '</b>' +
+      '<small>' + (d.left > 0 ? 'About ' + money.format(d.perDay) + ' a day, ' : '') + '<span' + (over ? ' class="neg"' : '') + '>' + (d.left > 0 ? 'on' : 'On') + ' pace for ' + compact(pl.end) + '</span></small>' +
+      lineSvg([{ v: pl.done }, { v: pl.pace, dashed: true }], { fill: over ? '--blush-d' : '--lavender-d', goal: d.limit, goalText: 'Budget ' + compact(d.limit), label: 'Spending this month against the budget', ticks: ['1' + mon, (pl.pace.length - 1) + mon] }));
   }
-  return '<div class="card glance">' + goal + budget + '</div>';
+  if (p.focus === 'debt') {
+    goal = tile('', 'id="glGoal" data-tab="insights"', '--butter', img3d('bank', 32) + '<small>Debt-free by</small><b class="tv num">' + (p.pace ? monthYear(inMonths(now, p.pace)) : 'Not yet') + '</b>' +
+      '<small>' + lakh(p.owed) + ' left · ' + p.open.length + (p.open.length === 1 ? ' loan' : ' loans') + '</small>');
+  } else if (p.g) {
+    var g = p.g, gp = pic(g.name || '');
+    goal = tile('', 'id="glGoal" data-tab="insights"', '--mint', img3d(gp === 'others' ? 'seed' : gp, 32) + '<small>' + (g.name ? esc(g.name) : 'Savings goal') + '</small>' + ring(Math.min(1, p.lt.worth / g.target), '') +
+      '<small>' + lakh(p.lt.worth) + ' of ' + lakh(g.target) + '<br>' + (p.pace === 0 ? 'Reached 🎉' : p.pace ? 'By ' + monthYear(inMonths(now, p.pace)) : 'Not at this pace') + '</small>');
+  } else goal = starter('', 'setGoal', '--mint', 'seed', 'Set a savings goal', 'See when you get there');
+  var saved = tile('', 'data-tab="insights"', '--sky', '<small>Saved this month</small><b class="big num' + (rate < 0 ? ' neg' : '') + '">' + (rate == null ? '–' : rate < 0 ? '−' + pct(-rate) : pct(rate)) + '</b>' +
+    '<small>' + (rate == null ? 'No income yet this month' : rate < 0 ? 'Spent more than came in' : 'Target 20%') + '</small>');
+  return budget + goal + saved;
 }
 
 // Due soon: the next bills, EMIs, SIPs and monthly interest.
@@ -450,8 +448,10 @@ function dueText(d, now) {
 }
 function dueHtml(list, now) {
   if (!list.length) return '';
-  return '<div class="card"><h2>Due soon <button type="button" class="see" data-tab="settings">All bills</button></h2>' + list.map(function (d, i) {
-    var picture = d.kind === 'bill' ? pic(d.category) : DUE_ICON[d.kind], late = d.date < new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  var today = new Date(now.getFullYear(), now.getMonth(), now.getDate()), anyLate = list.some(function (d) { return d.date < today; });
+  return '<div class="pcard" style="background:var(' + (anyLate ? '--blush' : '--butter') + ')"><h2><span>Due soon <span class="soft num">' + money.format(round2(list.reduce(function (t, d) { return t + d.amount; }, 0))) + '</span></span>' +
+    '<button type="button" class="see" data-tab="settings">All bills</button></h2>' + list.map(function (d, i) {
+    var picture = d.kind === 'bill' ? pic(d.category) : DUE_ICON[d.kind], late = d.date < today;
     var what = d.kind === 'emi' ? 'EMI · ' : d.kind === 'sip' ? 'Add money · ' : d.kind === 'int' ? (d.dir === 'given' ? 'Interest to get · ' : 'Interest · ') : '';
     var btn = d.kind === 'sip' ? 'Add' : d.kind === 'int' && d.dir === 'given' ? 'Got it' : d.kind === 'bill' ? 'Paid' : 'Pay';
     return '<div class="row"><span class="disc xs" style="background:var(' + (late ? '--blush' : PIC_BG[picture] || '--sky') + ')">' + img3d(picture, 22) + '</span>' +
@@ -487,7 +487,7 @@ function noteAct(btn, act) {
 function renderHome(v) {
   var now = new Date(), s = summarize(v.rows, 'month', now, 0, v.cats), w = waiting(), p = planOf(v, now);
   $('#notes').innerHTML = notesHtml(notes(v));
-  $('#glance').innerHTML = glanceHtml(v, p, now);
+  $('#glance').innerHTML = glanceHtml(v, p, now, s);
   $('#heroIn').textContent = compact(s.income); // three side by side on a phone: ₹13.5K (the labels say it in full)
   $('#heroOut').textContent = compact(s.expense);
   var owed = summarizeLoans(loansOf(v, 'borrowed'), v.repays, null, null, now).owed;
@@ -656,7 +656,7 @@ function renderLoans(v) {
 
 // ---- Insights
 // The lines are drawn stretched to the card (no text inside the SVG, so nothing scales or overlaps); the goal line, its label and
-// the month ticks are HTML on top. sets: [{v: values by month, dashed}], o: {fill, goal, goalText, label, at(i) → date}.
+// the month ticks are HTML on top. sets: [{v: values by month, dashed}], o: {fill, goal, goalText, label, at(i) → date, or ticks: labels}.
 function lineSvg(sets, o) {
   var W = 300, H = 100, n = Math.max.apply(null, sets.map(function (s) { return s.v.length - 1; })) || 1;
   var hi = Math.max.apply(null, [].concat.apply([(o.goal || 0) * 1.1, 1], sets.map(function (s) { return s.v; })));
@@ -664,7 +664,8 @@ function lineSvg(sets, o) {
   var path = function (v) { return v.map(function (val, i) { return (i ? 'L' : 'M') + x(i).toFixed(1) + ' ' + y(val).toFixed(1); }).join(' '); };
   var a = sets[0].v, svg = '<path d="' + path(a) + ' L' + x(a.length - 1).toFixed(1) + ' ' + H + ' L0 ' + H + ' Z" fill="var(' + o.fill + ')" opacity=".4"/>';
   sets.slice().reverse().forEach(function (s) { svg += '<path d="' + path(s.v) + '" fill="none" stroke="var(--ink)" vector-effect="non-scaling-stroke" stroke-linejoin="round" stroke-width="' + (s.dashed ? '1.5" stroke-dasharray="3 4" opacity=".55' : '2.2') + '"/>'; });
-  var ticks = [0, Math.round(n / 3), Math.round(2 * n / 3), n].map(function (i) { return '<span>' + MONTHS[o.at(i).getMonth()] + ' ’' + String(o.at(i).getFullYear()).slice(2) + '</span>'; }).join('');
+  var ticks = (o.ticks || [0, Math.round(n / 3), Math.round(2 * n / 3), n].map(function (i) { return MONTHS[o.at(i).getMonth()] + ' ’' + String(o.at(i).getFullYear()).slice(2); }))
+    .map(function (t) { return '<span>' + t + '</span>'; }).join('');
   return '<div class="chart"><div class="plot"><svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" role="img" aria-label="' + esc(o.label) + '">' + svg + '</svg>' +
     (o.goal ? '<span class="gline" style="bottom:' + (o.goal / hi * (H - 4) / H * 100).toFixed(1) + '%"><b>' + esc(o.goalText) + '</b></span>' : '') + '</div><div class="cticks">' + ticks + '</div></div>';
 }
@@ -906,7 +907,7 @@ function renderSettings(v) {
     '<div class="card set"><h2>Assistant</h2><div class="row">' + img3d('spark', 26) + '<div class="grow">Gemini key<small>Talk or type to add entries and ask about your money</small></div>' +
       '<input class="field" type="password" id="aiKey" value="' + esc(load('fm.gemini', '')) + '" placeholder="Paste key" autocomplete="off" style="width:130px;text-align:left" aria-label="Gemini key"></div>' +
       '<p class="t-xs muted" style="padding-top:6px">Get a free key at aistudio.google.com. It stays on this phone. What you ask, and the numbers needed to answer, go to Google; on the free tier Google may use them to improve its products.</p>' +
-      (load('fm.gemini', '') ? '<label class="swrow" style="margin-top:8px"><div class="grow"><b>Sounds</b><small>When the assistant opens, listens and stops</small></div><input type="checkbox" class="sw" id="aiSfx"' + (load('fm.sfx', true) ? ' checked' : '') + '></label>' : '') + '</div>' +
+      (load('fm.gemini', '') ? '<label class="swrow" style="margin-top:8px"><div class="grow"><b>Sounds</b><small>When the assistant starts and stops listening</small></div><input type="checkbox" class="sw" id="aiSfx"' + (load('fm.sfx', true) ? ' checked' : '') + '></label>' : '') + '</div>' +
     '<div class="card"><h2>Theme</h2>' + segHtml('theme', load('fm.theme', 'auto'), [['auto', 'Auto'], ['light', 'Light'], ['dark', 'Dark']]) + '</div>' +
     '<div class="card"><h2>Sheets on this phone</h2><div style="display:grid;gap:2px">' + sheetsHtml() + '</div></div>' +
     '<button type="button" class="btn soft" data-tab="cats">' + icon('pencil-simple', 'sm') + 'Edit categories</button>' +

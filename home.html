@@ -1,0 +1,910 @@
+<!doctype html>
+<html lang="en" data-device="phone">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Home Concepts</title>
+<!-- Six Home screen concepts for Family Money. A static mockup: sample data, not wired to app.js. Open via a local server (python3 -m http.server) so fonts and pictures load. -->
+<style>
+@font-face{font-family:"Lexend";src:url(src/assets/fonts/lexend-latin.woff2) format("woff2");font-weight:300 700;font-display:swap;
+  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+@font-face{font-family:"Lexend";src:url(src/assets/fonts/lexend-latin-ext.woff2) format("woff2");font-weight:300 700;font-display:swap;
+  unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C4,U+2113,U+2C60-2C7F,U+A720-A7FF}
+
+/* Tokens: copied from src/index.html so the mockup matches the app in light and dark */
+:root{
+  --navh:62px;--dockh:76px;--sh:max(560px,calc(100dvh - 150px));
+  --bg:#F5F5F7;--surface:#FFFFFF;--field:#F1F1F3;--ink:#0B0B0C;--ink-2:#3A3A3C;--muted:#6B6B70;--line:#ECECEF;
+  --primary:#0B0B0C;--on-primary:#FFFFFF;--seg-on:#FFFFFF;--good:#15803D;--bad:#B42318;
+  --shadow:0 1px 2px rgba(11,11,12,.04),0 10px 28px -18px rgba(11,11,12,.28);
+  --lavender:#E8DDFB;--mint:#D7F2DC;--butter:#F8E9B8;--sky:#D9EEF6;--blush:#F7D9D9;--peri:#DCDDF6;--on-pastel:#0B0B0C;
+  --lavender-d:#B9A5F3;--mint-d:#8FD6A0;--butter-d:#EBC75E;--sky-d:#8DC8E2;--blush-d:#EE9F9F;--peri-d:#A6A9EC;
+  --font:"Lexend",system-ui,-apple-system,"Segoe UI",sans-serif;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){--bg:#000000;--surface:#1C1C1E;--field:#2A2A2C;--ink:#FFFFFF;--ink-2:#D1D1D6;--muted:#A1A1A6;--line:#2C2C2E;
+    --primary:#FFFFFF;--on-primary:#0B0B0C;--seg-on:#3A3A3C;--good:#5FD38A;--bad:#FF8A80;--shadow:none;color-scheme:dark}
+}
+:root[data-theme="dark"]{--bg:#000000;--surface:#1C1C1E;--field:#2A2A2C;--ink:#FFFFFF;--ink-2:#D1D1D6;--muted:#A1A1A6;--line:#2C2C2E;
+  --primary:#FFFFFF;--on-primary:#0B0B0C;--seg-on:#3A3A3C;--good:#5FD38A;--bad:#FF8A80;--shadow:none;color-scheme:dark}
+
+*{box-sizing:border-box;margin:0}
+*{scrollbar-width:none}
+*::-webkit-scrollbar{display:none}
+html,body{background:var(--line)}
+body{font-family:var(--font);color:var(--ink);font-size:15px;line-height:1.45;-webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent}
+button,input{font:inherit;color:inherit}
+button{cursor:pointer;border:0;background:none;padding:0}
+button:active{transform:scale(.97)}
+[hidden]{display:none !important}
+:focus-visible{outline:3px solid var(--lavender-d);outline-offset:2px}
+.i{width:22px;height:22px;fill:currentColor;flex:none}
+.i.sm{width:18px;height:18px}
+.e{display:inline-block;object-fit:contain;flex:none;vertical-align:middle}
+.grow{flex:1;min-width:0}
+.num{font-variant-numeric:tabular-nums;white-space:nowrap}
+.muted{color:var(--muted)}
+.pos{color:var(--good)}
+.neg{color:var(--bad)}
+.t-sm{font-size:13.5px}
+.lavender{background:var(--lavender)}.mint{background:var(--mint)}.butter{background:var(--butter)}
+.sky{background:var(--sky)}.blush{background:var(--blush)}.peri{background:var(--peri)}
+
+/* ---------- The review desk: device frame, caption, dock ---------- */
+.desk{min-height:100dvh;display:flex;flex-direction:column;align-items:center;gap:12px;padding:18px 16px calc(var(--dockh) + 20px)}
+.cap{font-size:13.5px;color:var(--muted);text-align:center;max-width:720px;min-height:20px}
+.cap b{color:var(--ink);font-weight:600;margin-right:6px}
+.stage{container:app/inline-size;position:relative;flex:none;background:var(--bg);overflow:auto;overscroll-behavior:contain}
+[data-device="phone"] .stage{width:412px;height:min(866px,var(--sh));border:11px solid #0B0B0C;border-radius:56px;
+  box-shadow:0 0 0 1px var(--line),0 40px 80px -40px rgba(0,0,0,.5)}
+[data-device="laptop"] .stage{width:min(1280px,100%);height:var(--sh);border-radius:18px;
+  box-shadow:0 0 0 1px rgba(11,11,12,.08),0 30px 70px -36px rgba(0,0,0,.45)}
+.dock{position:fixed;left:50%;bottom:calc(10px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:20;display:flex;align-items:center;gap:6px;
+  padding:6px;border-radius:999px;max-width:calc(100vw - 16px);
+  background:color-mix(in srgb,var(--surface) 80%,transparent);-webkit-backdrop-filter:blur(20px) saturate(160%);backdrop-filter:blur(20px) saturate(160%);
+  box-shadow:0 0 0 1px var(--line),0 16px 40px -18px rgba(0,0,0,.45)}
+.dock button{height:42px;border-radius:999px;display:flex;align-items:center;gap:8px;font-size:14px;font-weight:500;color:var(--ink-2);white-space:nowrap}
+.dock .picks{display:flex;gap:2px}
+.dock .picks button{padding:0 14px 0 6px}
+.dock .picks span{width:30px;height:30px;border-radius:999px;display:grid;place-items:center;background:var(--field);font-size:13px;font-weight:600}
+.dock .picks em{font-style:normal}
+.dock .picks button[aria-pressed="true"]{background:var(--primary);color:var(--on-primary)}
+.dock .picks button[aria-pressed="true"] span{background:color-mix(in srgb,var(--on-primary) 18%,transparent)}
+.dock .sep{width:1px;height:24px;background:var(--line);flex:none}
+.dock .dev{display:flex;background:var(--field);border-radius:999px;padding:3px}
+.dock .dev button{height:36px;padding:0 12px}
+.dock .dev button[aria-pressed="true"]{background:var(--seg-on);color:var(--ink);box-shadow:var(--shadow)}
+.dock .tbtn{padding:0 14px;min-width:64px;justify-content:center}
+@media (max-width:1040px){.dock .picks em{display:none}.dock .picks button{padding:0 6px}}
+@media (prefers-reduced-transparency:reduce){.dock{background:var(--surface)}}
+/* A real phone: the mockup fills the screen, the dock sits under it */
+@media (max-width:600px){
+  .desk{padding:0 0 calc(var(--dockh) + env(safe-area-inset-bottom));gap:0}
+  .cap,.dock .dev,.dock .sep{display:none !important}
+  .stage{width:100% !important;height:calc(100dvh - var(--dockh) - env(safe-area-inset-bottom)) !important;border:0 !important;border-radius:0 !important;box-shadow:none !important}
+}
+
+/* ---------- App shell: same as the app (header, floating tab bar; sidebar on wide screens) ---------- */
+.app{min-height:100%;display:flex;flex-direction:column}
+.body{flex:1;display:flex;flex-direction:column}
+.head{display:flex;align-items:center;gap:8px;padding:max(22px,calc(env(safe-area-inset-top) + 12px)) 18px 4px}
+.who{display:flex;align-items:center;gap:10px;flex:1;min-width:0}
+.head .rbtn{width:42px;height:42px}
+.sub{font-size:13px;color:var(--muted);display:flex;align-items:center;gap:5px}
+.head h1{font-size:22px;font-weight:600;letter-spacing:-.01em;line-height:1.2;display:flex;align-items:center;gap:2px;min-width:0}
+.head h1 span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dda{transform:rotate(90deg);opacity:.55}
+.av{width:48px;height:48px;border-radius:999px;display:grid;place-items:center;flex:none}
+.rbtn{width:46px;height:46px;border-radius:999px;background:var(--surface);display:grid;place-items:center;box-shadow:var(--shadow);flex:none;color:var(--ink)}
+.rbtn.xs{width:34px;height:34px;box-shadow:none;background:var(--field)}
+.rbtn:disabled{opacity:.35;cursor:default}
+main{flex:1;padding:10px 18px 24px;container:main/inline-size}
+.v{display:flex;flex-direction:column;gap:14px}
+@media (prefers-reduced-motion:no-preference){.v:not([hidden]){animation:in .38s cubic-bezier(.2,.8,.2,1)}}
+@keyframes in{from{opacity:0;transform:translateY(8px)}}
+.navwrap{position:sticky;bottom:0;z-index:5;padding:8px 16px 14px;background:linear-gradient(to bottom,transparent,var(--bg) 40%)}
+.nav{max-width:460px;height:var(--navh);margin:0 auto;display:flex;background:var(--surface);border-radius:999px;padding:5px;box-shadow:0 0 0 1px var(--line),0 12px 28px -16px rgba(0,0,0,.35)}
+.nav button{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;border-radius:999px;font-size:10px;font-weight:600;color:var(--muted)}
+.nav button .i{width:24px;height:24px}
+.nav button[aria-current="page"]{background:var(--primary);color:var(--on-primary);flex:1.3}
+.ai-orb span{width:44px;height:44px;flex:none;border-radius:50%;position:relative;background:radial-gradient(circle at 34% 28%,#bfdbfe 0,#3b82f6 26%,#1e3a8a 55%,#020617 80%);box-shadow:0 0 14px 1px rgba(59,130,246,.6),inset 0 0 5px rgba(191,219,254,.9)}
+.ai-orb span::after{content:"";position:absolute;inset:-1px;border-radius:50%;background:conic-gradient(from 0deg,transparent 0 62%,rgba(255,255,255,.95) 74%,transparent 86%);-webkit-mask:radial-gradient(circle,transparent 60%,#000 63%);mask:radial-gradient(circle,transparent 60%,#000 63%)}
+@media (prefers-reduced-motion:no-preference){.ai-orb span::after{animation:spin 3.2s linear infinite}}
+@keyframes spin{to{transform:rotate(360deg)}}
+.ai-orb small{display:none}
+.side-btn{display:flex;align-items:center;gap:10px;width:100%;padding:8px;border-radius:16px;text-align:left}
+.side-btn .av{width:42px;height:42px}
+.side-btn small{display:flex;align-items:center;gap:4px;font-size:12.5px;color:var(--muted)}
+.side-btn b{display:block;font-size:16px;font-weight:600}
+@container app (max-width:759px){.lp-only{display:none !important}}
+@container app (min-width:760px){
+  .ph-only{display:none !important}
+  .app{display:grid;grid-template-columns:248px minmax(0,1fr);background:linear-gradient(90deg,var(--surface) 247px,var(--line) 247px 248px,transparent 248px)}
+  .navwrap{grid-column:1;grid-row:1;align-self:start;position:sticky;top:0;bottom:auto;height:var(--sh);display:flex;flex-direction:column;gap:14px;padding:14px 12px 16px;background:none}
+  .body{grid-column:2;grid-row:1}
+  .nav{flex-direction:column;gap:2px;padding:0;margin:0;max-width:none;height:auto;background:none;box-shadow:none;border-radius:0}
+  .nav button,.nav button[aria-current="page"]{flex:none;flex-direction:row;gap:12px;padding:10px 12px;border-radius:12px;font-size:14.5px;font-weight:500;justify-content:flex-start}
+  .nav button .i{width:22px;height:22px}
+  .nav button:not([aria-current]){color:var(--ink-2)}
+  .ai-orb span{width:22px;height:22px}
+  .ai-orb small{display:inline;font-size:inherit}
+  .head{position:sticky;top:0;z-index:4;background:var(--bg);padding:16px 32px 12px}
+  .head h1{font-size:24px}
+  .head .rbtn{width:46px;height:46px}
+  main{padding:8px 32px 40px}
+}
+@media (hover:hover){.nav button:not([aria-current]):hover,.side-btn:hover{background:var(--field)}}
+
+/* ---------- Shared pieces (from the app) ---------- */
+.card{background:var(--surface);border-radius:28px;padding:16px 18px;box-shadow:var(--shadow)}
+.pcard{border-radius:28px;padding:18px;color:var(--on-pastel);position:relative;overflow:hidden}
+.pcard .soft,.pcard small{color:rgba(11,11,12,.68)}
+.pcard .neg{color:#B42318}
+.h2{font-size:17px;font-weight:600;display:flex;justify-content:space-between;align-items:center;gap:8px}
+.sec{display:flex;justify-content:space-between;align-items:center;padding:4px 4px 0;gap:8px}
+.see{font-size:13.5px;color:var(--muted);font-weight:500;white-space:nowrap}
+.big{font-size:38px;font-weight:600;letter-spacing:-.03em;line-height:1.05}
+.tv{font-size:24px;font-weight:600;letter-spacing:-.02em;line-height:1.15}
+.pill{display:inline-flex;align-items:center;gap:5px;padding:4px 11px;border-radius:999px;font-size:12.5px;font-weight:500;white-space:nowrap;background:var(--field);color:var(--ink)}
+.pill .i{width:14px;height:14px}
+.pill.white{background:#fff;color:#0B0B0C}
+.pill.ok{background:var(--mint);color:var(--on-pastel)}
+.pill.warn{background:var(--butter);color:var(--on-pastel)}
+.bar{display:block;height:10px;border-radius:999px;background:var(--field);overflow:hidden}
+.bar.thin{height:6px}
+.pcard .bar{background:rgba(255,255,255,.72)}
+.bar>i{display:block;height:100%;border-radius:inherit;background:var(--peri-d)}
+.disc{width:48px;height:48px;border-radius:999px;display:grid;place-items:center;flex:none}
+.disc.s{width:42px;height:42px}
+.disc.xs{width:36px;height:36px}
+.row{display:flex;gap:12px;align-items:center;padding:10px 0;min-width:0}
+.row+.row{border-top:1px solid var(--line)}
+.pcard .row+.row{border-top-color:rgba(11,11,12,.08)}
+.pcard .row .disc{background:rgba(255,255,255,.72)}
+.row .what{display:block;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.row small{display:block;font-size:12.5px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pcard .row small{color:rgba(11,11,12,.64)}
+.row>b{font-weight:600}
+.list{display:flex;flex-direction:column;gap:8px}
+.list .row,.list .row+.row{background:var(--surface);border:0;border-radius:22px;padding:9px 14px 9px 9px;box-shadow:var(--shadow)}
+.dayh{display:flex;justify-content:space-between;font-size:13px;color:var(--muted);padding:8px 4px 0;font-weight:500}
+.card .dayh{padding:10px 0 0}
+.card .dayh:first-child{padding-top:2px}
+.pay{padding:7px 13px;border-radius:99px;background:var(--primary);color:var(--on-primary);font-size:13px;font-weight:600;white-space:nowrap}
+.pay.soft{background:var(--field);color:var(--ink)}
+.pcard .pay{background:#0B0B0C;color:#fff}
+.pcard .pay.soft{background:rgba(255,255,255,.72);color:#0B0B0C}
+.more{display:flex;justify-content:space-between;align-items:center;width:100%;padding:11px 0 2px;border-top:1px solid var(--line);font-size:13.5px;color:var(--muted);font-weight:500}
+.more b{color:var(--ink);font-weight:600}
+.seg{display:flex;background:var(--field);border-radius:999px;padding:4px;gap:2px}
+.seg button{flex:1;padding:9px 8px;font-size:14px;font-weight:500;border-radius:999px;color:var(--muted);white-space:nowrap}
+.seg button[aria-pressed="true"]{background:var(--seg-on);color:var(--ink);box-shadow:var(--shadow)}
+.chips{display:flex;gap:8px;overflow-x:auto;padding:1px}
+.chip{flex:none;padding:7px 14px 7px 8px;border-radius:999px;background:var(--field);font-size:14px;font-weight:500;display:inline-flex;gap:6px;align-items:center;white-space:nowrap}
+.btn{display:flex;align-items:center;justify-content:center;gap:8px;border-radius:999px;padding:14px 22px;font-weight:600;font-size:16px;min-height:54px;background:var(--primary);color:var(--on-primary);width:100%}
+.lbl{font-size:13px;font-weight:500;color:var(--muted);margin:0 0 6px 6px;display:block}
+.field{background:var(--field);border:0;border-radius:18px;padding:14px 16px;width:100%;color:var(--ink);font-size:16px;outline:none}
+.field:focus{box-shadow:inset 0 0 0 2px var(--ink)}
+.field::placeholder{color:var(--muted)}
+.amount{position:relative;display:block;background:var(--field);border-radius:22px;padding:8px 44px;font-size:40px;font-weight:600;letter-spacing:-.03em;line-height:1.2}
+.amount span{position:absolute;left:18px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:28px}
+.amount input{width:100%;border:0;background:none;outline:none;font:inherit;letter-spacing:inherit;color:var(--ink);text-align:center;padding:0}
+.amount input::placeholder{color:var(--muted)}
+.amount:focus-within{box-shadow:inset 0 0 0 2px var(--ink)}
+.cgrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+.cg{display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 2px 7px;border-radius:16px;font-size:12.5px;font-weight:500;line-height:1.2}
+.cg .disc{width:44px;height:44px}
+.cg[aria-pressed="true"]{background:var(--field);box-shadow:inset 0 0 0 2px var(--ink)}
+.ring{position:relative;width:64px;height:64px;display:grid;place-items:center;flex:none}
+.ring svg{position:absolute;inset:0;transform:rotate(-90deg)}
+.ring circle{fill:none;stroke-width:6;stroke-linecap:round}
+.ring .rt{stroke:var(--field)}
+.pcard .ring .rt{stroke:rgba(255,255,255,.78)}
+.ring .rv{stroke:var(--c,#0B0B0C)}
+.ring b{font-size:14px;font-weight:600}
+.tt{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.fab{position:sticky;bottom:calc(var(--navh) + 34px);align-self:flex-end;z-index:6;height:56px;padding:0 22px 0 18px;border-radius:999px;background:var(--primary);color:var(--on-primary);
+  display:flex;align-items:center;gap:8px;font-weight:600;box-shadow:0 14px 30px -12px rgba(0,0,0,.5)}
+.fab em{font-style:normal}
+@container app (max-width:759px){.fab{width:56px;padding:0;justify-content:center}.fab em{display:none}}
+@container app (min-width:760px){.fab{bottom:24px}}
+/* Line chart: spent so far, the pace it is heading for, the budget line. Labels are HTML so they keep their size. */
+.chart .plot{position:relative;height:150px;border-bottom:1px solid rgba(11,11,12,.15)}
+.chart svg{display:block;width:100%;height:100%;overflow:visible}
+.chart .area{fill:var(--lavender-d);opacity:.6}
+.chart .ln{fill:none;stroke:#0B0B0C;stroke-width:2.2;stroke-linejoin:round;vector-effect:non-scaling-stroke}
+.chart .proj{stroke:#0B0B0C;stroke-width:2;stroke-dasharray:4 5;opacity:.5;vector-effect:non-scaling-stroke}
+.chart .gline{position:absolute;left:0;right:0;border-top:1.5px dashed rgba(11,11,12,.4)}
+.chart .gline b{position:absolute;left:0;bottom:3px;font-size:11.5px;font-weight:600}
+.chart .pend{position:absolute;right:0;top:-20px;font-size:11.5px;font-weight:600}
+.chart .dot{position:absolute;left:48.4%;top:54.3%;width:10px;height:10px;margin:-5px;border-radius:50%;background:#0B0B0C;box-shadow:0 0 0 3px var(--lavender)}
+.cticks{display:flex;justify-content:space-between;margin-top:6px;font-size:12px;color:rgba(11,11,12,.62)}
+/* Phone vs wide: rows and blocks that show only on one */
+@container main (max-width:699px){.wide{display:none !important}}
+@container main (min-width:700px){.narrow{display:none !important}}
+
+/* ---------- 1 Pulse ---------- */
+.v1-grid{display:grid;gap:14px;grid-template-columns:minmax(0,1fr);grid-template-areas:"hero" "adds" "due" "recent"}
+.v1 .hero{grid-area:hero;padding:20px}
+.v1 .adds{grid-area:adds;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.v1 .due{grid-area:due}.v1 .recent{grid-area:recent}
+.v1 .due,.v1 .recent{display:flex;flex-direction:column;gap:8px}
+.hero-in{display:grid;gap:18px}
+.hn{display:flex;flex-direction:column;gap:2px}
+.hero .big{font-size:46px;margin:4px 0 2px}
+.hn .pill{margin-top:14px;align-self:flex-start}
+.pace{position:relative;margin-top:30px}
+.pace .bar{height:12px}
+.pace .bar>i{background:var(--lavender-d)}
+.tick{position:absolute;top:-5px;width:2px;height:22px;border-radius:2px;background:#0B0B0C}
+.tick b{position:absolute;bottom:calc(100% + 3px);left:50%;transform:translateX(-50%);font-size:11.5px;font-weight:600;white-space:nowrap}
+.pace-l{display:flex;justify-content:space-between;font-size:12.5px;margin-top:8px}
+.pick{display:grid;grid-template-columns:1fr auto;grid-template-areas:"pic plus" "lbl lbl" "amt amt";text-align:left;border-radius:22px;padding:12px 12px 14px 14px;color:var(--on-pastel);box-shadow:var(--shadow);min-width:0}
+.pick img{grid-area:pic;margin-bottom:8px}
+.pick .plus{grid-area:plus;width:32px;height:32px;border-radius:999px;background:#0B0B0C;color:#fff;display:grid;place-items:center}
+.pick .plus .i{width:16px;height:16px}
+.pick small{grid-area:lbl;font-size:13.5px;color:rgba(11,11,12,.66)}
+.pick b{grid-area:amt;font-size:19px;font-weight:600;letter-spacing:-.01em}
+@container main (min-width:700px){
+  .v1-grid{grid-template-columns:repeat(2,minmax(0,1fr));grid-template-areas:"hero hero" "adds adds" "due recent";align-items:start}
+  .hero-in{grid-template-columns:minmax(0,.8fr) minmax(0,1.2fr);align-items:center;gap:32px}
+  .v1 .chart{padding-top:24px}
+}
+@container main (min-width:920px){
+  .v1-grid{grid-template-columns:repeat(3,minmax(0,1fr));grid-template-areas:"hero hero adds" "due recent recent"}
+  .v1 .adds{grid-template-columns:1fr;align-self:stretch}
+  .v1 .pick{grid-template-columns:auto 1fr auto;grid-template-areas:"pic lbl plus" "pic amt plus";column-gap:14px;align-items:center;padding:12px 16px}
+  .v1 .pick img{margin:0}
+  .v1 .recent .list{display:grid;grid-template-rows:repeat(3,auto);grid-auto-flow:column;grid-auto-columns:minmax(0,1fr)}
+}
+
+/* ---------- 2 Month ---------- */
+.v2-grid{display:grid;gap:14px;grid-template-columns:minmax(0,1fr)}
+.v2 .c{display:contents}
+.mh{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.mh .arrows{display:flex;gap:6px}
+.mh small{display:block}
+.mstats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:16px;align-items:end}
+.mstats>div>small{display:block;font-size:12.5px;color:var(--muted)}
+.mstats>div>b{display:block;font-size:20px;font-weight:600;letter-spacing:-.01em}
+.mfoot{display:flex;align-items:center;gap:10px;margin-top:14px;flex-wrap:wrap}
+.ringbox{display:flex;align-items:center;gap:10px}
+.split{display:flex;height:14px;gap:3px;margin:14px 0}
+.split i{display:block;border-radius:99px;min-width:4px}
+.leg{display:flex;flex-direction:column;gap:9px;font-size:14px}
+.leg div{display:grid;grid-template-columns:10px minmax(0,1fr) auto 38px;gap:10px;align-items:center}
+.leg i{width:10px;height:10px;border-radius:3px}
+.leg span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.leg b{font-weight:600}
+.leg em{font-style:normal;color:var(--muted);text-align:right;font-size:13px}
+.bud{display:flex;gap:12px;align-items:center;padding:12px 0 2px}
+.bud .bl{display:flex;justify-content:space-between;gap:8px;margin-bottom:6px;font-size:14px}
+.bud .bl b{font-weight:600}
+.bud small{display:block;font-size:12.5px;margin-top:4px}
+.okline{display:flex;align-items:center;gap:6px;margin-top:12px;padding-top:12px;border-top:1px solid var(--line)}
+.okline .i{width:16px;height:16px;color:var(--good)}
+.v2 .due,.v2 .recent{display:flex;flex-direction:column;gap:8px}
+@container main (min-width:700px){
+  .v2-grid{grid-template-columns:repeat(2,minmax(0,1fr));align-items:start}
+  .v2 .month{grid-column:1/-1;padding:20px 24px}
+  .mstats{grid-template-columns:repeat(3,minmax(0,1fr)) auto}
+  .mstats>div>b{font-size:30px;letter-spacing:-.02em}
+}
+@container main (min-width:920px){
+  .v2-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .v2 .c{display:flex;flex-direction:column;gap:14px}
+}
+
+/* ---------- 3 Bento ---------- */
+.bento{display:grid;gap:12px;grid-template-columns:repeat(2,minmax(0,1fr));grid-template-areas:"left left" "add add" "goal debt" "due due" "month saved" "recent recent"}
+.t-left{grid-area:left}.t-add{grid-area:add}.t-goal{grid-area:goal}.t-debt{grid-area:debt}.t-due{grid-area:due}.t-month{grid-area:month}.t-saved{grid-area:saved}.t-recent{grid-area:recent}
+.tile{display:flex;flex-direction:column;justify-content:space-between;gap:8px;min-height:150px;padding:16px}
+.t-left{display:flex;flex-direction:column;gap:6px;padding:20px}
+.t-left .big{font-size:44px;margin-top:4px}
+.t-left .bar{margin-top:10px}
+.t-left .bar>i{background:var(--lavender-d)}
+.t-left .chart{margin-top:auto;padding-top:24px}
+.t-goal .ring{width:74px;height:74px}
+.pic{position:absolute;top:14px;right:14px}
+.t-add{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.qa{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:12px 6px;border-radius:22px;background:var(--surface);box-shadow:var(--shadow);font-size:13.5px;font-weight:600}
+.t-due{padding:16px 16px 8px}
+.t-month p{display:flex;justify-content:space-between;align-items:baseline;gap:6px}
+.t-month p small{font-size:12.5px;color:var(--muted)}
+.t-recent{padding:16px 16px 6px}
+@container main (min-width:700px){
+  .bento{grid-template-columns:repeat(4,minmax(0,1fr));grid-template-areas:"left left goal debt" "left left due due" "add add due due" "month month recent recent" "saved saved recent recent"}
+  .qa{flex-direction:row;padding:8px 12px 8px 8px}
+}
+
+/* ---------- 4 Agenda ---------- */
+.v4-grid{display:grid;gap:14px;grid-template-columns:minmax(0,1fr)}
+.sum4{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.sum4 .pcard,.rail .pcard{border-radius:22px;padding:12px 14px}
+.sum4 small,.rail small{display:block;font-size:12.5px}
+.sum4 b{display:block;font-size:22px;font-weight:600;letter-spacing:-.02em}
+.tl{position:relative;display:flex;flex-direction:column}
+.tl::before{content:"";position:absolute;left:20px;top:30px;bottom:56px;width:2px;border-radius:2px;background:var(--line)}
+.tlh{display:flex;justify-content:space-between;padding:16px 4px 4px 56px;font-size:13px;font-weight:500;color:var(--muted)}
+.tlh:first-child{padding-top:4px}
+.it{display:flex;align-items:center;gap:14px;padding:7px 0;position:relative}
+.it .disc{position:relative;box-shadow:0 0 0 5px var(--bg)}
+.it .what{display:block;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.it small{display:block;font-size:12.5px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.it>b{font-weight:600}
+.it.soon .disc{background:var(--surface);border:2px dashed var(--muted)}
+.it.soon .what{font-weight:500}
+.it.soon>b{color:var(--ink-2);font-weight:500}
+.now{display:flex;align-items:center;gap:10px;margin:14px 0 6px}
+.now span{position:relative;z-index:1;background:var(--primary);color:var(--on-primary);padding:5px 12px;border-radius:99px;font-size:12.5px;font-weight:600}
+.now i{flex:1;height:2px;border-radius:2px;background:var(--ink)}
+.now b{font-size:13px;font-weight:600}
+.tlmore{margin:10px 0 0 56px;align-self:flex-start;font-size:13.5px;font-weight:600;padding:9px 16px;border-radius:999px;background:var(--surface);box-shadow:var(--shadow)}
+.rail{display:flex;flex-direction:column;gap:12px}
+.rail .tv{margin:2px 0 8px}
+.rail .row{padding:8px 0}
+@container main (min-width:700px){
+  .v4-grid{grid-template-columns:minmax(0,1fr) 280px;gap:40px;align-items:start}
+  .rail{position:sticky;top:84px}
+}
+@container main (min-width:920px){.v4-grid{grid-template-columns:minmax(0,600px) 300px;justify-content:space-between}}
+
+/* ---------- 5 Quick add ---------- */
+.v5-grid{display:grid;gap:14px;grid-template-columns:minmax(0,1fr);grid-template-areas:"compose" "kpis" "recent"}
+.compose{grid-area:compose;display:flex;flex-direction:column;gap:14px;padding:16px}
+.kpis{grid-area:kpis;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.kpi{border-radius:20px;padding:10px 12px;color:var(--on-pastel);min-width:0}
+.kpi small{display:block;font-size:12px;color:rgba(11,11,12,.68);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.kpi b{display:block;font-size:18px;font-weight:600;letter-spacing:-.01em}
+.v5 .recent{grid-area:recent;display:flex;flex-direction:column;gap:8px}
+@container main (min-width:700px){
+  .v5-grid{grid-template-columns:minmax(0,1.05fr) minmax(0,1fr);grid-template-areas:"compose kpis" "compose recent";align-items:start;gap:16px 24px}
+  .compose{padding:20px}
+  .kpi{padding:12px 14px}
+  .kpi b{font-size:22px}
+}
+
+/* ---------- 6 Health ---------- */
+.v6-grid{display:grid;gap:14px;grid-template-columns:minmax(0,1fr)}
+.v6 .c{display:contents}
+.today6{display:flex;align-items:center;gap:12px;padding:12px 16px 12px 12px;border-radius:24px}
+.today6 b{display:block;font-weight:600}
+.today6 small{display:block;font-size:12.5px;color:var(--muted)}
+.hr{display:flex;align-items:center;gap:12px;padding:10px 0}
+.hr+.hr{border-top:1px solid var(--line)}
+.hr .ring{width:52px;height:52px}
+.hr .ring b{font-size:13px}
+.hr .grow>b{display:block;font-weight:600}
+.hr small{display:block;font-size:12.5px;color:var(--muted);line-height:1.35}
+.step h3{font-size:21px;font-weight:600;letter-spacing:-.01em;margin:6px 0}
+.step p{font-size:14px}
+.acts{display:flex;gap:8px;margin-top:14px}
+.goal{display:flex;gap:12px;align-items:flex-start;padding:12px 0 4px}
+.goal+.goal{border-top:1px solid var(--line);margin-top:8px}
+.goal .gl{display:flex;justify-content:space-between;gap:8px;margin-bottom:7px}
+.goal .gl b{font-weight:600}
+.goal small{display:block;font-size:12.5px;color:var(--muted);margin-top:6px}
+.v6 .due,.v6 .recent{display:flex;flex-direction:column;gap:8px}
+@container main (min-width:700px){.v6-grid{grid-template-columns:repeat(2,minmax(0,1fr));align-items:start}}
+@container main (min-width:920px){
+  .v6-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .v6 .c{display:flex;flex-direction:column;gap:14px}
+}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-arrow-down-left" viewBox="0 0 256 256"><path d="M200.49,72.48,93,180h75a12,12,0,0,1,0,24H64a12,12,0,0,1-12-12V88a12,12,0,0,1,24,0v75L183.51,55.51a12,12,0,0,1,17,17Z"/></symbol>
+  <symbol id="i-arrow-up-right" viewBox="0 0 256 256"><path d="M204,64V168a12,12,0,0,1-24,0V93L72.49,200.49a12,12,0,0,1-17-17L163,76H88a12,12,0,0,1,0-24H192A12,12,0,0,1,204,64Z"/></symbol>
+  <symbol id="i-arrows-clockwise" viewBox="0 0 256 256"><path d="M228,48V96a12,12,0,0,1-12,12H168a12,12,0,0,1,0-24h19l-7.8-7.8a75.55,75.55,0,0,0-53.32-22.26h-.43A75.49,75.49,0,0,0,72.39,75.57,12,12,0,1,1,55.61,58.41a99.38,99.38,0,0,1,69.87-28.47H126A99.42,99.42,0,0,1,196.2,59.23L204,67V48a12,12,0,0,1,24,0ZM183.61,180.43a75.49,75.49,0,0,1-53.09,21.63h-.43A75.55,75.55,0,0,1,76.77,179.8L69,172H88a12,12,0,0,0,0-24H40a12,12,0,0,0-12,12v48a12,12,0,0,0,24,0V189l7.8,7.8A99.42,99.42,0,0,0,130,226.06h.56a99.38,99.38,0,0,0,69.87-28.47,12,12,0,0,0-16.78-17.16Z"/></symbol>
+  <symbol id="i-caret-left" viewBox="0 0 256 256"><path d="M168.49,199.51a12,12,0,0,1-17,17l-80-80a12,12,0,0,1,0-17l80-80a12,12,0,0,1,17,17L97,128Z"/></symbol>
+  <symbol id="i-caret-right" viewBox="0 0 256 256"><path d="M184.49,136.49l-80,80a12,12,0,0,1-17-17L159,128,87.51,56.49a12,12,0,1,1,17-17l80,80A12,12,0,0,1,184.49,136.49Z"/></symbol>
+  <symbol id="i-chart-bar" viewBox="0 0 256 256"><path d="M224,196h-4V40a12,12,0,0,0-12-12H152a12,12,0,0,0-12,12V76H96A12,12,0,0,0,84,88v36H48a12,12,0,0,0-12,12v60H32a12,12,0,0,0,0,24H224a12,12,0,0,0,0-24ZM164,52h32V196H164Zm-56,48h32v96H108ZM60,148H84v48H60Z"/></symbol>
+  <symbol id="i-check" viewBox="0 0 256 256"><path d="M232.49,80.49l-128,128a12,12,0,0,1-17,0l-56-56a12,12,0,1,1,17-17L96,183,215.51,63.51a12,12,0,0,1,17,17Z"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 256 256"><path d="M128,20A108,108,0,1,0,236,128,108.12,108.12,0,0,0,128,20Zm0,192a84,84,0,1,1,84-84A84.09,84.09,0,0,1,128,212Zm68-84a12,12,0,0,1-12,12H128a12,12,0,0,1-12-12V72a12,12,0,0,1,24,0v44h44A12,12,0,0,1,196,128Z"/></symbol>
+  <symbol id="i-house-fill" viewBox="0 0 256 256"><path d="M224,120v96a8,8,0,0,1-8,8H160a8,8,0,0,1-8-8V164a4,4,0,0,0-4-4H108a4,4,0,0,0-4,4v52a8,8,0,0,1-8,8H40a8,8,0,0,1-8-8V120a16,16,0,0,1,4.69-11.31l80-80a16,16,0,0,1,22.62,0l80,80A16,16,0,0,1,224,120Z"/></symbol>
+  <symbol id="i-x" viewBox="0 0 256 256"><path d="M208.49,191.51a12,12,0,0,1-17,17L128,145,64.49,208.49a12,12,0,0,1-17-17L111,128,47.51,64.49a12,12,0,0,1,17-17L128,111l63.51-63.52a12,12,0,0,1,17,17L145,128Z"/></symbol>
+  <symbol id="i-clock-counter-clockwise" viewBox="0 0 256 256"><path d="M140,80v41.21l34.17,20.5a12,12,0,1,1-12.34,20.58l-40-24A12,12,0,0,1,116,128V80a12,12,0,0,1,24,0ZM128,28A99.38,99.38,0,0,0,57.24,57.34c-4.69,4.74-9,9.37-13.24,14V64a12,12,0,0,0-24,0v40a12,12,0,0,0,12,12H72a12,12,0,0,0,0-24H57.77C63,86,68.37,80.22,74.26,74.26a76,76,0,1,1,1.58,109,12,12,0,0,0-16.48,17.46A100,100,0,1,0,128,28Z"/></symbol>
+  <symbol id="i-hand-arrow-down" viewBox="0 0 256 256"><path d="M232.76,137.88A28.39,28.39,0,0,0,208.13,133L172,141.26c0-.42,0-.84,0-1.26a32,32,0,0,0-32-32H89.94a35.76,35.76,0,0,0-25.45,10.54L43,140H20A20,20,0,0,0,0,160v40a20,20,0,0,0,20,20H120a11.89,11.89,0,0,0,2.91-.36l64-16a11.4,11.4,0,0,0,1.79-.6l38.82-16.54c.23-.09.45-.19.67-.3a28.61,28.61,0,0,0,4.57-48.32ZM24,164H36v32H24Zm193.68.61-37.51,16L118.52,196H60V157l21.46-21.46A11.93,11.93,0,0,1,89.94,132H140a8,8,0,0,1,0,16H112a12,12,0,0,0,0,24h32a12.19,12.19,0,0,0,2.69-.3l67-15.41.47-.12a4.61,4.61,0,0,1,5.82,4.44A4.58,4.58,0,0,1,217.68,164.61ZM151.51,80.49a12,12,0,0,1,17-17L180,75V24a12,12,0,0,1,24,0V75l11.51-11.52a12,12,0,0,1,17,17l-32,32a12,12,0,0,1-17,0Z"/></symbol>
+  <symbol id="i-hand-arrow-up" viewBox="0 0 256 256"><path d="M232.76,137.88A28.39,28.39,0,0,0,208.13,133L172,141.26c0-.42,0-.84,0-1.26a32,32,0,0,0-32-32H89.94a35.74,35.74,0,0,0-25.45,10.54L43,140H20A20,20,0,0,0,0,160v40a20,20,0,0,0,20,20H120a11.89,11.89,0,0,0,2.91-.36l64-16a11.4,11.4,0,0,0,1.79-.6l38.82-16.54c.23-.09.45-.19.67-.3a28.61,28.61,0,0,0,4.57-48.32ZM24,164H36v32H24Zm193.68.61-37.51,16L118.52,196H60V157l21.46-21.46A11.93,11.93,0,0,1,89.94,132H140a8,8,0,0,1,0,16H112a12,12,0,0,0,0,24h32a12.19,12.19,0,0,0,2.69-.3l67-15.41.47-.12a4.6,4.6,0,0,1,5.81,4.44A4.58,4.58,0,0,1,217.68,164.61ZM151.51,64.48a12,12,0,0,1,0-17l32-32a12,12,0,0,1,17,0l32,32a12,12,0,1,1-17,17L204,53v51a12,12,0,0,1-24,0V53L168.49,64.48A12,12,0,0,1,151.51,64.48Z"/></symbol>
+  <symbol id="i-hand-coins" viewBox="0 0 256 256"><path d="M232.76,137.88A28.39,28.39,0,0,0,208.13,133L172,141.26c0-.42,0-.84,0-1.26a32,32,0,0,0-32-32H89.94a35.76,35.76,0,0,0-25.45,10.54L43,140H20A20,20,0,0,0,0,160v40a20,20,0,0,0,20,20H120a11.89,11.89,0,0,0,2.91-.36l64-16a11.4,11.4,0,0,0,1.79-.6l38.82-16.54c.23-.09.45-.19.67-.3a28.61,28.61,0,0,0,4.57-48.32ZM36,196H24V164H36Zm181.68-31.39-37.51,16L118.52,196H60V157l21.46-21.46A11.93,11.93,0,0,1,89.94,132H140a8,8,0,0,1,0,16H112a12,12,0,0,0,0,24h32a12.19,12.19,0,0,0,2.69-.3l67-15.41.47-.12a4.61,4.61,0,0,1,5.82,4.44A4.58,4.58,0,0,1,217.68,164.61ZM164,100a40.36,40.36,0,0,0,5.18-.34,40,40,0,1,0,29.67-59.32A40,40,0,1,0,164,100Zm40-36a16,16,0,1,1-16,16A16,16,0,0,1,204,64ZM164,44a16,16,0,0,1,12.94,6.58A39.9,39.9,0,0,0,164.2,76H164a16,16,0,0,1,0-32Z"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 256 256"><path d="M228,128a12,12,0,0,1-12,12H140v76a12,12,0,0,1-24,0V140H40a12,12,0,0,1,0-24h76V40a12,12,0,0,1,24,0v76h76A12,12,0,0,1,228,128Z"/></symbol>
+  <symbol id="i-trend-up" viewBox="0 0 256 256"><path d="M244,56v64a12,12,0,0,1-24,0V85l-75.51,75.52a12,12,0,0,1-17,0L96,129,32.49,192.49a12,12,0,0,1-17-17l72-72a12,12,0,0,1,17,0L136,135l67-67H168a12,12,0,0,1,0-24h64A12,12,0,0,1,244,56Z"/></symbol>
+  <symbol id="i-gear-six" viewBox="0 0 256 256"><path fill-rule="evenodd" d="M208.2 103.2 L234.4 109.7 L234.4 146.3 L208.2 152.8 L202.3 167.2 L216.2 190.3 L190.3 216.2 L167.2 202.3 L152.8 208.2 L146.3 234.4 L109.7 234.4 L103.2 208.2 L88.8 202.3 L65.7 216.2 L39.8 190.3 L53.7 167.2 L47.8 152.8 L21.6 146.3 L21.6 109.7 L47.8 103.2 L53.7 88.8 L39.8 65.7 L65.7 39.8 L88.8 53.7 L103.2 47.8 L109.7 21.6 L146.3 21.6 L152.8 47.8 L167.2 53.7 L190.3 39.8 L216.2 65.7 L202.3 88.8Z M92 128A36 36 0 1 0 164 128A36 36 0 1 0 92 128Z"/></symbol>
+</svg>
+
+<div class="desk">
+<p class="cap" id="cap" aria-live="polite"></p>
+
+<div class="stage" id="stage">
+<div class="app">
+<div class="body">
+  <header class="head">
+    <div class="who ph-only">
+      <span class="av mint"><img class="e" src="src/assets/3d/home2.png" width="36" height="36" alt=""></span>
+      <div class="grow">
+        <div class="sub">Namaste Asha <img class="e" src="src/assets/3d/wave.png" width="14" height="14" alt=""></div>
+        <h1><span>Sharma Family</span><svg class="i sm dda"><use href="#i-caret-right"/></svg></h1>
+      </div>
+    </div>
+    <div class="who lp-only">
+      <div><div class="sub">Thursday, 15 October</div><h1>Home</h1></div>
+    </div>
+    <button class="rbtn" type="button" aria-label="Settings"><svg class="i"><use href="#i-gear-six"/></svg></button>
+    <button class="rbtn" type="button" aria-label="Sync now"><svg class="i"><use href="#i-arrows-clockwise"/></svg></button>
+  </header>
+
+  <main>
+
+  <!-- 1 PULSE: one hero number, everything else secondary -->
+  <section class="v v1" data-name="Pulse" data-note="One number that matters: what is left to spend this month, and whether you are on pace.">
+    <div class="v1-grid">
+      <div class="pcard lavender hero">
+        <div class="hero-in">
+          <div class="hn">
+            <p class="soft t-sm">Left to spend in October</p>
+            <p class="big num">₹8,400</p>
+            <p class="soft t-sm">About ₹490 a day for 17 days</p>
+            <div class="narrow">
+              <div class="pace"><span class="bar"><i style="width:53%"></i></span><span class="tick" style="left:48%"><b>Today</b></span></div>
+              <div class="pace-l"><span>₹9,600 spent</span><span>₹18,000 budget</span></div>
+            </div>
+            <span class="pill warn">On pace for ₹19.8K, ₹1.8K over</span>
+          </div>
+          <div class="chart wide">
+            <div class="plot">
+              <svg viewBox="0 0 310 120" preserveAspectRatio="none" aria-hidden="true">
+                <path class="area" d="M0,118 L10,114.4 L20,111.4 L30,108.4 L40,101 L50,98.8 L60,95.7 L70,92.7 L80,88.9 L90,86.7 L100,83.1 L110,80 L120,77.3 L130,74.6 L140,72.4 L150,65.2 L150,118 Z"/>
+                <polyline class="ln" points="0,118 10,114.4 20,111.4 30,108.4 40,101 50,98.8 60,95.7 70,92.7 80,88.9 90,86.7 100,83.1 110,80 120,77.3 130,74.6 140,72.4 150,65.2"/>
+                <line class="proj" x1="150" y1="65.2" x2="310" y2="8.9"/>
+              </svg>
+              <div class="gline" style="top:15.8%"><b>Budget ₹18K</b></div>
+              <span class="pend">On pace ₹19.8K</span>
+              <span class="dot"></span>
+            </div>
+            <div class="cticks"><span>1 Oct</span><span>Today</span><span>31 Oct</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="adds">
+        <button class="pick mint" type="button"><img class="e" src="src/assets/3d/up.png" width="34" height="34" alt=""><span class="plus"><svg class="i"><use href="#i-plus"/></svg></span><small>Income</small><b class="num">₹48.5K</b></button>
+        <button class="pick blush" type="button"><img class="e" src="src/assets/3d/wings.png" width="34" height="34" alt=""><span class="plus"><svg class="i"><use href="#i-plus"/></svg></span><small>Expenses</small><b class="num">₹31.6K</b></button>
+        <button class="pick butter" type="button"><img class="e" src="src/assets/3d/bank.png" width="34" height="34" alt=""><span class="plus"><svg class="i"><use href="#i-plus"/></svg></span><small>Pending</small><b class="num">₹1.5L</b></button>
+      </div>
+
+      <div class="due">
+        <div class="sec"><h2 class="h2">Due soon</h2><button class="see" type="button">See all</button></div>
+        <div class="card"><div data-due="4" data-phone="1"></div><button class="more narrow" type="button"><span>3 more this week</span><b class="num">₹7,640</b></button></div>
+      </div>
+
+      <div class="recent">
+        <div class="sec"><h2 class="h2">Recent</h2><button class="see" type="button">See all</button></div>
+        <div class="list" data-recent="6" data-phone="3"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2 MONTH: in, out, saved; where it went; only budgets that need a look -->
+  <section class="v v2" data-name="Month" data-note="The month in three numbers, where the money went, and only the budgets that need a look." hidden>
+    <div class="v2-grid">
+      <div class="card month">
+        <div class="mh">
+          <div><h2 class="h2">October</h2><small class="muted t-sm">1 to 15 Oct, so far</small></div>
+          <div class="arrows">
+            <button class="rbtn xs" type="button" aria-label="Previous month"><svg class="i sm"><use href="#i-caret-left"/></svg></button>
+            <button class="rbtn xs" type="button" aria-label="Next month" disabled><svg class="i sm"><use href="#i-caret-right"/></svg></button>
+          </div>
+        </div>
+        <div class="mstats">
+          <div><small>Came in</small><b class="num pos">₹48,500</b></div>
+          <div><small>Went out</small><b class="num">₹31,600</b></div>
+          <div><small>Saved</small><b class="num">₹16,900</b></div>
+          <div class="ringbox wide">
+            <div class="ring" style="--c:var(--mint-d)"><svg viewBox="0 0 64 64"><circle class="rt" cx="32" cy="32" r="28"/><circle class="rv" cx="32" cy="32" r="28" stroke-dasharray="61.6 176"/></svg><b>35%</b></div>
+          </div>
+        </div>
+        <div class="mfoot"><span class="pill ok"><svg class="i"><use href="#i-check"/></svg>35% saved</span><span class="t-sm muted">Your target is 20%</span></div>
+      </div>
+
+      <div class="c">
+        <div class="card where">
+          <h2 class="h2">Where it went</h2>
+          <div class="split" aria-hidden="true">
+            <i style="flex:8000;background:var(--sky-d)"></i><i style="flex:7500;background:var(--peri-d)"></i><i style="flex:4800;background:var(--butter-d)"></i><i style="flex:3200;background:var(--mint-d)"></i><i style="flex:8100;background:var(--lavender-d)"></i>
+          </div>
+          <div class="leg">
+            <div><i style="background:var(--sky-d)"></i><span>School</span><b class="num">₹8,000</b><em>25%</em></div>
+            <div><i style="background:var(--peri-d)"></i><span>Rent</span><b class="num">₹7,500</b><em>24%</em></div>
+            <div><i style="background:var(--butter-d)"></i><span>Kirana</span><b class="num">₹4,800</b><em>15%</em></div>
+            <div><i style="background:var(--mint-d)"></i><span>Bills</span><b class="num">₹3,200</b><em>10%</em></div>
+            <div><i style="background:var(--lavender-d)"></i><span>Milk, petrol and 4 more</span><b class="num">₹8,100</b><em>26%</em></div>
+          </div>
+        </div>
+        <div class="card watch">
+          <h2 class="h2">Budgets to watch <button class="see" type="button">All budgets</button></h2>
+          <div class="bud">
+            <span class="disc s blush"><img class="e" src="src/assets/3d/food.png" width="26" height="26" alt=""></span>
+            <div class="grow">
+              <div class="bl"><b>Eating out</b><span class="num">₹1,200 <span class="muted">of ₹1,000</span></span></div>
+              <span class="bar thin"><i style="width:100%;background:var(--blush-d)"></i></span>
+              <small class="neg">₹200 over</small>
+            </div>
+          </div>
+          <div class="bud">
+            <span class="disc s sky"><img class="e" src="src/assets/3d/milk.png" width="26" height="26" alt=""></span>
+            <div class="grow">
+              <div class="bl"><b>Milk</b><span class="num">₹1,980 <span class="muted">of ₹2,100</span></span></div>
+              <span class="bar thin"><i style="width:94%;background:var(--butter-d)"></i></span>
+              <small class="muted">₹120 left for 17 days</small>
+            </div>
+          </div>
+          <p class="t-sm muted okline"><svg class="i"><use href="#i-check"/></svg>Kirana, Petrol and 5 more are on track</p>
+        </div>
+      </div>
+
+      <div class="c">
+        <div class="due">
+          <div class="sec"><h2 class="h2">Due soon</h2><button class="see" type="button">See all</button></div>
+          <div class="card"><div data-due="4" data-phone="2"></div></div>
+        </div>
+      </div>
+
+      <div class="c">
+        <div class="recent">
+          <div class="sec"><h2 class="h2">Recent</h2><button class="see" type="button">See all</button></div>
+          <div class="card"><div data-recent="6" data-phone="4" data-days></div></div>
+        </div>
+      </div>
+    </div>
+    <button class="fab" type="button" aria-label="Add an entry"><svg class="i"><use href="#i-plus"/></svg><em>Add</em></button>
+  </section>
+
+  <!-- 3 BENTO: pastel tiles, one question each -->
+  <section class="v v3" data-name="Bento" data-note="Pastel tiles, each answering one question. Readable in two seconds." hidden>
+    <div class="bento">
+      <div class="pcard lavender t-left">
+        <div class="tt"><span class="soft t-sm">Left to spend</span><span class="pill white">17 days left</span></div>
+        <p class="big num">₹8,400</p>
+        <p class="soft t-sm">About ₹490 a day. On pace for ₹1.8K over.</p>
+        <span class="bar narrow"><i style="width:53%"></i></span>
+        <div class="chart wide">
+          <div class="plot">
+            <svg viewBox="0 0 310 120" preserveAspectRatio="none" aria-hidden="true">
+              <path class="area" d="M0,118 L10,114.4 L20,111.4 L30,108.4 L40,101 L50,98.8 L60,95.7 L70,92.7 L80,88.9 L90,86.7 L100,83.1 L110,80 L120,77.3 L130,74.6 L140,72.4 L150,65.2 L150,118 Z"/>
+              <polyline class="ln" points="0,118 10,114.4 20,111.4 30,108.4 40,101 50,98.8 60,95.7 70,92.7 80,88.9 90,86.7 100,83.1 110,80 120,77.3 130,74.6 140,72.4 150,65.2"/>
+              <line class="proj" x1="150" y1="65.2" x2="310" y2="8.9"/>
+            </svg>
+            <div class="gline" style="top:15.8%"><b>Budget ₹18K</b></div>
+            <span class="dot"></span>
+          </div>
+          <div class="cticks"><span>1 Oct</span><span>Today</span><span>31 Oct</span></div>
+        </div>
+      </div>
+
+      <div class="t-add">
+        <button class="qa" type="button"><span class="disc xs blush"><img class="e" src="src/assets/3d/wings.png" width="22" height="22" alt=""></span>Expense</button>
+        <button class="qa" type="button"><span class="disc xs mint"><img class="e" src="src/assets/3d/up.png" width="22" height="22" alt=""></span>Income</button>
+        <button class="qa" type="button"><span class="disc xs butter"><img class="e" src="src/assets/3d/bank.png" width="22" height="22" alt=""></span>Pending</button>
+      </div>
+
+      <div class="pcard mint tile t-goal">
+        <img class="e pic" src="src/assets/3d/diya.png" width="34" height="34" alt="">
+        <span class="soft t-sm">Diwali goal</span>
+        <div class="ring"><svg viewBox="0 0 64 64"><circle class="rt" cx="32" cy="32" r="28"/><circle class="rv" cx="32" cy="32" r="28" stroke-dasharray="109.1 176"/></svg><b>62%</b></div>
+        <p><b class="num">₹31K</b> <span class="soft t-sm">of ₹50K</span></p>
+      </div>
+
+      <div class="pcard butter tile t-debt">
+        <img class="e pic" src="src/assets/3d/bank.png" width="34" height="34" alt="">
+        <span class="soft t-sm">Debt-free by</span>
+        <p class="tv">Mar 2028</p>
+        <span class="soft t-sm">₹1.5L left on 2 loans</span>
+      </div>
+
+      <div class="pcard blush t-due">
+        <div class="tt"><b>Due this week</b><b class="num">₹7,939</b></div>
+        <div data-due="3" data-phone="2"></div>
+      </div>
+
+      <div class="card tile t-month">
+        <span class="muted t-sm">October so far</span>
+        <div>
+          <p><small>In</small><b class="tv num pos">₹48.5K</b></p>
+          <p><small>Out</small><b class="tv num">₹31.6K</b></p>
+        </div>
+      </div>
+
+      <div class="pcard sky tile t-saved">
+        <span class="soft t-sm">Saved this month</span>
+        <p class="big num">35%</p>
+        <span class="soft t-sm">Target 20%</span>
+      </div>
+
+      <div class="card t-recent">
+        <div class="tt"><b>Recent</b><button class="see" type="button">See all</button></div>
+        <div data-recent="4" data-phone="3"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4 AGENDA: upcoming and done on one line, today in the middle -->
+  <section class="v v4" data-name="Agenda" data-note="Bills coming up and money already spent on one timeline, with today in the middle." hidden>
+    <div class="v4-grid">
+      <div>
+        <div class="sum4 narrow">
+          <div class="pcard lavender"><small>Left to spend</small><b class="num">₹8,400</b><small>₹490 a day</small></div>
+          <div class="pcard blush"><small>Due in 7 days</small><b class="num">₹7,939</b><small>1 is late</small></div>
+        </div>
+        <div class="tl" style="margin-top:16px">
+          <div class="tlh"><span>Next 7 days</span><span class="num">₹7,939</span></div>
+          <div class="it"><span class="disc s blush"><img class="e" src="src/assets/3d/mobile.png" width="26" height="26" alt=""></span><div class="grow"><b class="what">Jio recharge</b><small class="neg">Was due Tue 13 Oct</small></div><button class="pay" type="button">Pay ₹299</button></div>
+          <div class="it soon"><span class="disc s"><img class="e" src="src/assets/3d/volt.png" width="24" height="24" alt=""></span><div class="grow"><b class="what">Electricity bill</b><small>Sat 17 Oct, in 2 days</small></div><b class="num">₹1,140</b></div>
+          <div class="it soon"><span class="disc s"><img class="e" src="src/assets/3d/bank.png" width="24" height="24" alt=""></span><div class="grow"><b class="what">SBI Kisan card EMI</b><small>Mon 19 Oct, in 4 days</small></div><b class="num">₹4,500</b></div>
+          <div class="it soon"><span class="disc s"><img class="e" src="src/assets/3d/up.png" width="24" height="24" alt=""></span><div class="grow"><b class="what">SIP</b><small>Wed 21 Oct, in 6 days</small></div><b class="num">₹2,000</b></div>
+          <div class="now"><span>Today</span><i></i><b class="num">−₹1,306</b></div>
+          <div class="it"><span class="disc s butter"><img class="e" src="src/assets/3d/cart.png" width="26" height="26" alt=""></span><div class="grow"><b class="what">Ration from kirana</b><small>Kirana · Ravi, 11:15 am</small></div><b class="num">−₹1,240</b></div>
+          <div class="it"><span class="disc s sky"><img class="e" src="src/assets/3d/milk.png" width="26" height="26" alt=""></span><div class="grow"><b class="what">Milk</b><small>Milk · Asha, 7:40 am</small></div><b class="num">−₹66</b></div>
+          <div class="tlh"><span>Yesterday</span><span class="num">+₹34,500</span></div>
+          <div class="it"><span class="disc s sky"><img class="e" src="src/assets/3d/job.png" width="26" height="26" alt=""></span><div class="grow"><b class="what">Salary</b><small>Job · Ravi, 6:02 pm</small></div><b class="num pos">+₹35,000</b></div>
+          <div class="it"><span class="disc s butter"><img class="e" src="src/assets/3d/fuel.png" width="26" height="26" alt=""></span><div class="grow"><b class="what">Petrol</b><small>Petrol · Ravi, 9:30 am</small></div><b class="num">−₹500</b></div>
+          <div class="tlh"><span>Tue 13 Oct</span><span class="num">−₹2,500</span></div>
+          <div class="it"><span class="disc s sky"><img class="e" src="src/assets/3d/school.png" width="26" height="26" alt=""></span><div class="grow"><b class="what">School fees, term 2</b><small>School · Asha, 4:10 pm</small></div><b class="num">−₹8,000</b></div>
+          <div class="it"><span class="disc s blush"><img class="e" src="src/assets/3d/dairy.png" width="26" height="26" alt=""></span><div class="grow"><b class="what">Milk payment</b><small>Dairy · Asha, 8:05 am</small></div><b class="num pos">+₹5,500</b></div>
+          <button class="tlmore" type="button">See all in History</button>
+        </div>
+      </div>
+
+      <aside class="rail wide">
+        <button class="btn" type="button"><svg class="i"><use href="#i-plus"/></svg>Add entry</button>
+        <div class="pcard lavender">
+          <small>Left to spend</small>
+          <p class="tv num">₹8,400</p>
+          <span class="bar"><i style="width:53%;background:var(--lavender-d)"></i></span>
+          <small style="margin-top:8px">About ₹490 a day. On pace for ₹1.8K over.</small>
+        </div>
+        <div class="card">
+          <h2 class="h2" style="margin-bottom:4px">October so far</h2>
+          <div class="row"><span class="grow muted t-sm">Came in</span><b class="num pos">₹48,500</b></div>
+          <div class="row"><span class="grow muted t-sm">Went out</span><b class="num">₹31,600</b></div>
+          <div class="row"><span class="grow muted t-sm">Saved</span><b class="num">₹16,900 <span class="pill ok">35%</span></b></div>
+        </div>
+        <div class="pcard mint">
+          <div class="tt"><small>Diwali goal</small><img class="e" src="src/assets/3d/diya.png" width="26" height="26" alt=""></div>
+          <p class="tv num">₹31,000 <span class="soft t-sm">of ₹50,000</span></p>
+          <span class="bar"><i style="width:62%;background:var(--mint-d)"></i></span>
+          <small style="margin-top:8px">24 days left</small>
+        </div>
+      </aside>
+    </div>
+    <button class="fab narrow" type="button" aria-label="Add an entry"><svg class="i"><use href="#i-plus"/></svg><em>Add</em></button>
+  </section>
+
+  <!-- 5 QUICK ADD: the form is the home screen -->
+  <section class="v v5" data-name="Quick add" data-note="Adding an entry is the most common job, so the form sits right on Home." hidden>
+    <div class="v5-grid">
+      <div class="card compose">
+        <div class="seg" id="kind"><button type="button" aria-pressed="true">Expense</button><button type="button" aria-pressed="false">Income</button><button type="button" aria-pressed="false">Pending</button></div>
+        <label class="amount"><span>₹</span><input id="amt" inputmode="decimal" autocomplete="off" placeholder="0" aria-label="Amount"></label>
+        <div>
+          <p class="lbl">Add again</p>
+          <div class="chips">
+            <button class="chip" type="button" data-a="66" data-c="Milk"><img class="e" src="src/assets/3d/milk.png" width="20" height="20" alt="">Milk ₹66</button>
+            <button class="chip" type="button" data-a="1240" data-c="Kirana"><img class="e" src="src/assets/3d/cart.png" width="20" height="20" alt="">Kirana ₹1,240</button>
+            <button class="chip" type="button" data-a="500" data-c="Petrol"><img class="e" src="src/assets/3d/fuel.png" width="20" height="20" alt="">Petrol ₹500</button>
+            <button class="chip" type="button" data-a="299" data-c="Bills"><img class="e" src="src/assets/3d/mobile.png" width="20" height="20" alt="">Jio ₹299</button>
+            <button class="chip" type="button" data-a="120" data-c="Others"><img class="e" src="src/assets/3d/tea.png" width="20" height="20" alt="">Chai ₹120</button>
+          </div>
+        </div>
+        <div class="wide">
+          <p class="lbl">Category</p>
+          <div class="cgrid">
+            <button class="cg" type="button"><span class="disc butter"><img class="e" src="src/assets/3d/cart.png" width="26" height="26" alt=""></span>Kirana</button>
+            <button class="cg" type="button"><span class="disc sky"><img class="e" src="src/assets/3d/milk.png" width="26" height="26" alt=""></span>Milk</button>
+            <button class="cg" type="button"><span class="disc mint"><img class="e" src="src/assets/3d/volt.png" width="26" height="26" alt=""></span>Bills</button>
+            <button class="cg" type="button"><span class="disc sky"><img class="e" src="src/assets/3d/school.png" width="26" height="26" alt=""></span>School</button>
+            <button class="cg" type="button"><span class="disc butter"><img class="e" src="src/assets/3d/fuel.png" width="26" height="26" alt=""></span>Petrol</button>
+            <button class="cg" type="button"><span class="disc blush"><img class="e" src="src/assets/3d/pill.png" width="26" height="26" alt=""></span>Medical</button>
+            <button class="cg" type="button"><span class="disc blush"><img class="e" src="src/assets/3d/food.png" width="26" height="26" alt=""></span>Eating out</button>
+            <button class="cg" type="button"><span class="disc sky"><img class="e" src="src/assets/3d/others.png" width="26" height="26" alt=""></span>Others</button>
+          </div>
+        </div>
+        <label class="wide"><span class="lbl">What for? (optional)</span><input class="field" autocomplete="off" placeholder="Ration for the week"></label>
+        <button class="btn" type="button" id="addBtn">Add expense</button>
+      </div>
+
+      <div class="kpis">
+        <div class="kpi lavender"><small>Left to spend</small><b class="num">₹8,400</b><small>₹490 a day</small></div>
+        <div class="kpi blush"><small>Due in 7 days</small><b class="num">₹7,939</b><small>1 is late</small></div>
+        <div class="kpi mint"><small>Diwali goal</small><b class="num">62%</b><small>24 days left</small></div>
+      </div>
+
+      <div class="recent">
+        <div class="sec"><h2 class="h2">Recent</h2><button class="see" type="button">See all</button></div>
+        <div class="list" data-recent="6" data-phone="4" data-days></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 6 HEALTH: how the family is doing, and the one step that helps most -->
+  <section class="v v6" data-name="Health" data-note="A coach, not a ledger: how the family is doing, and the one step that helps most." hidden>
+    <div class="v6-grid">
+      <div class="c">
+        <div class="card today6">
+          <span class="disc s butter"><img class="e" src="src/assets/3d/coin.png" width="26" height="26" alt=""></span>
+          <div class="grow"><b class="num">₹8,400 left to spend</b><small>About ₹490 a day. On pace for ₹1.8K over.</small></div>
+        </div>
+        <div class="card health">
+          <h2 class="h2">Money health</h2>
+          <div class="hr"><div class="ring" style="--c:var(--mint-d)"><svg viewBox="0 0 64 64"><circle class="rt" cx="32" cy="32" r="28"/><circle class="rv" cx="32" cy="32" r="28" stroke-dasharray="61.6 176"/></svg><b>35%</b></div><div class="grow"><b>Savings</b><small>Of income kept. Target 20%</small></div><span class="pill ok">Good</span></div>
+          <div class="hr"><div class="ring" style="--c:var(--butter-d)"><svg viewBox="0 0 64 64"><circle class="rt" cx="32" cy="32" r="28"/><circle class="rv" cx="32" cy="32" r="28" stroke-dasharray="70.4 176"/></svg><b>2.4</b></div><div class="grow"><b>Safety net</b><small>Months of spending saved. Aim for 6</small></div><span class="pill warn">Low</span></div>
+          <div class="hr"><div class="ring" style="--c:var(--mint-d)"><svg viewBox="0 0 64 64"><circle class="rt" cx="32" cy="32" r="28"/><circle class="rv" cx="32" cy="32" r="28" stroke-dasharray="19.4 176"/></svg><b>11%</b></div><div class="grow"><b>EMI load</b><small>Of income on EMIs. Keep under 30%</small></div><span class="pill ok">Good</span></div>
+        </div>
+      </div>
+
+      <div class="c">
+        <div class="pcard sky step">
+          <div class="tt"><span class="soft t-sm">Next best step</span><img class="e" src="src/assets/3d/rocket.png" width="28" height="28" alt=""></div>
+          <h3>Pay Ramesh first</h3>
+          <p class="soft">Ramesh's loan costs 2% a month. SBI's costs 7% a year. Paying ₹2,000 extra to Ramesh each month makes you debt-free by Oct 2027, 5 months sooner.</p>
+          <div class="acts"><button class="pay" type="button">Do this</button><button class="pay soft" type="button">Not now</button></div>
+        </div>
+        <div class="card goals">
+          <h2 class="h2">Goals</h2>
+          <div class="goal">
+            <span class="disc s butter"><img class="e" src="src/assets/3d/diya.png" width="26" height="26" alt=""></span>
+            <div class="grow">
+              <div class="gl"><b>Diwali</b><b class="num">62%</b></div>
+              <span class="bar"><i style="width:62%;background:var(--mint-d)"></i></span>
+              <small>₹31,000 of ₹50,000. 24 days left.</small>
+            </div>
+          </div>
+          <div class="goal">
+            <span class="disc s blush"><img class="e" src="src/assets/3d/bank.png" width="26" height="26" alt=""></span>
+            <div class="grow">
+              <div class="gl"><b>Debt-free</b><b class="num">Mar 2028</b></div>
+              <span class="bar"><i style="width:40%"></i></span>
+              <small>₹1.5L left on 2 loans</small>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="c">
+        <div class="due">
+          <div class="sec"><h2 class="h2">Due soon</h2><button class="see" type="button">See all</button></div>
+          <div class="card"><div data-due="4" data-phone="2"></div></div>
+        </div>
+        <div class="recent">
+          <div class="sec"><h2 class="h2">Recent</h2><button class="see" type="button">See all</button></div>
+          <div class="card"><div data-recent="4" data-phone="2"></div></div>
+        </div>
+      </div>
+    </div>
+    <button class="fab" type="button" aria-label="Add an entry"><svg class="i"><use href="#i-plus"/></svg><em>Add</em></button>
+  </section>
+
+  </main>
+</div>
+
+<nav class="navwrap" aria-label="Tabs">
+  <button class="side-btn lp-only" type="button">
+    <span class="av mint"><img class="e" src="src/assets/3d/home2.png" width="30" height="30" alt=""></span>
+    <span class="grow"><small>Namaste <img class="e" src="src/assets/3d/wave.png" width="14" height="14" alt=""></small><b>Sharma Family</b></span>
+    <svg class="i sm dda"><use href="#i-caret-right"/></svg>
+  </button>
+  <div class="nav">
+    <button type="button" aria-current="page"><svg class="i"><use href="#i-house-fill"/></svg>Home</button>
+    <button type="button"><svg class="i"><use href="#i-clock-counter-clockwise"/></svg>History</button>
+    <button type="button" class="ai-orb" aria-label="Ask the assistant"><span></span><small>Ask</small></button>
+    <button type="button"><svg class="i"><use href="#i-chart-bar"/></svg>Insights</button>
+    <button type="button"><svg class="i"><use href="#i-hand-coins"/></svg>Money</button>
+  </div>
+</nav>
+</div>
+</div>
+</div>
+
+<nav class="dock" aria-label="Home concepts">
+  <div class="picks" id="picks"></div>
+  <span class="sep"></span>
+  <div class="dev" role="group" aria-label="Screen size"><button type="button" data-d="phone">Phone</button><button type="button" data-d="laptop">Laptop</button></div>
+  <button type="button" class="tbtn" id="themeBtn" aria-label="Theme">Auto</button>
+</nav>
+
+<script>
+(function () {
+  var $ = function (s, r) { return (r || document).querySelector(s); };
+  var $$ = function (s, r) { return [].slice.call((r || document).querySelectorAll(s)); };
+  var root = document.documentElement, stage = $('#stage'), picks = $('#picks'), vs = $$('.v'), cur = 1;
+
+  // Sample data shared by the concepts: [picture, pastel, what, detail, amount]
+  var RECENT = [
+    ['Today', -1306, [['cart', 'butter', 'Ration from kirana', 'Kirana · Ravi, 11:15 am', -1240], ['milk', 'sky', 'Milk', 'Milk · Asha, 7:40 am', -66]]],
+    ['Yesterday', 34500, [['job', 'sky', 'Salary', 'Job · Ravi, 6:02 pm', 35000], ['fuel', 'butter', 'Petrol', 'Petrol · Ravi, 9:30 am', -500]]],
+    ['Tue 13 Oct', -2500, [['school', 'sky', 'School fees, term 2', 'School · Asha, 4:10 pm', -8000], ['dairy', 'blush', 'Milk payment', 'Dairy · Asha, 8:05 am', 5500]]]
+  ];
+  // [picture, pastel, what, when, amount, late]
+  var DUE = [
+    ['mobile', 'blush', 'Jio recharge', 'Bill, 2 days late', 299, 1],
+    ['volt', 'mint', 'Electricity bill', 'Sat 17 Oct, in 2 days', 1140],
+    ['bank', 'blush', 'SBI Kisan card EMI', 'Mon 19 Oct, in 4 days', 4500],
+    ['up', 'lavender', 'SIP', 'Wed 21 Oct, in 6 days', 2000]
+  ];
+  function inr(n, sign) { return (n < 0 ? '−' : sign && n > 0 ? '+' : '') + '₹' + Math.abs(n).toLocaleString('en-IN'); }
+  function row(cls, p, bg, what, sub, right) {
+    return '<div class="row' + cls + '"><span class="disc s ' + bg + '"><img class="e" src="src/assets/3d/' + p + '.png" width="26" height="26" alt=""></span>' +
+      '<div class="grow"><b class="what">' + what + '</b><small>' + sub + '</small></div>' + right + '</div>';
+  }
+  // data-recent / data-due = rows on a wide screen, data-phone = rows on a phone (the rest get .wide)
+  $$('[data-recent]').forEach(function (el) {
+    var n = +el.dataset.recent, ph = +el.dataset.phone || n, i = 0, h = '';
+    RECENT.forEach(function (d) {
+      if (i >= n) return;
+      if ('days' in el.dataset) h += '<div class="dayh' + (i >= ph ? ' wide' : '') + '"><span>' + d[0] + '</span><span class="num">' + inr(d[1], 1) + '</span></div>';
+      d[2].forEach(function (e) {
+        if (i < n) h += row(i++ >= ph ? ' wide' : '', e[0], e[1], e[2], e[3], '<b class="num' + (e[4] > 0 ? ' pos' : '') + '">' + inr(e[4], 1) + '</b>');
+      });
+    });
+    el.innerHTML = h;
+  });
+  $$('[data-due]').forEach(function (el) {
+    var ph = +el.dataset.phone || 9;
+    el.innerHTML = DUE.slice(0, +el.dataset.due).map(function (d, i) {
+      return row(i >= ph ? ' wide' : '', d[0], d[1], d[2], d[5] ? '<span class="neg">' + d[3] + '</span>' : d[3],
+        d[5] ? '<button class="pay" type="button">Pay ' + inr(d[4]) + '</button>' : '<b class="num">' + inr(d[4]) + '</b>');
+    }).join('');
+  });
+
+  // The dock: concept, screen size, theme (the app's own data-theme switch)
+  picks.innerHTML = vs.map(function (v, i) { return '<button type="button" data-n="' + (i + 1) + '"><span>' + (i + 1) + '</span><em>' + v.dataset.name + '</em></button>'; }).join('');
+  function show(n) {
+    cur = n = Math.min(Math.max(n | 0, 1), vs.length);
+    vs.forEach(function (v, i) { v.hidden = i !== n - 1; });
+    $$('button', picks).forEach(function (b) { b.setAttribute('aria-pressed', b.dataset.n == n); });
+    $('#cap').innerHTML = '<b>' + n + ' ' + vs[n - 1].dataset.name + '</b>' + vs[n - 1].dataset.note;
+    stage.scrollTop = 0;
+    if (location.hash !== '#' + n) history.replaceState(null, '', '#' + n);
+  }
+  function store(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+  function load(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  function device(d) {
+    root.dataset.device = d;
+    $$('.dock .dev button').forEach(function (b) { b.setAttribute('aria-pressed', b.dataset.d === d); });
+    store('hm.device', d);
+  }
+  var THEMES = ['Auto', 'Light', 'Dark'];
+  function theme(t) {
+    if (t === 'Auto') delete root.dataset.theme; else root.dataset.theme = t.toLowerCase();
+    $('#themeBtn').textContent = t;
+    store('hm.theme', t);
+  }
+  picks.onclick = function (e) { var b = e.target.closest('button'); if (b) show(+b.dataset.n); };
+  $('.dock .dev').onclick = function (e) { var b = e.target.closest('button'); if (b) device(b.dataset.d); };
+  $('#themeBtn').onclick = function () { theme(THEMES[(THEMES.indexOf(this.textContent) + 1) % 3]); };
+  addEventListener('keydown', function (e) {
+    if (/INPUT|TEXTAREA/.test(e.target.tagName) || e.metaKey || e.ctrlKey || e.altKey) return;
+    if (e.key >= '1' && e.key <= String(vs.length)) show(+e.key);
+    else if (e.key === 'ArrowRight') show(cur % vs.length + 1);
+    else if (e.key === 'ArrowLeft') show((cur + vs.length - 2) % vs.length + 1);
+  });
+  addEventListener('hashchange', function () { show(+location.hash.slice(1)); });
+  device(load('hm.device') || (innerWidth >= 1100 ? 'laptop' : 'phone'));
+  theme(THEMES.indexOf(load('hm.theme')) >= 0 ? load('hm.theme') : 'Auto');
+  show(+location.hash.slice(1) || 1);
+
+  // Concept 5: the composer reacts, so it can be tried
+  var amt = $('#amt'), addBtn = $('#addBtn');
+  function pick(c) { $$('.v5 .cg').forEach(function (g) { g.setAttribute('aria-pressed', g.textContent.trim() === c); }); }
+  $('#kind').onclick = function (e) {
+    var b = e.target.closest('button'); if (!b) return;
+    $$('button', this).forEach(function (x) { x.setAttribute('aria-pressed', x === b); });
+    addBtn.textContent = 'Add ' + b.textContent.toLowerCase();
+  };
+  $('.v5 .chips').onclick = function (e) { var c = e.target.closest('.chip'); if (c) { amt.value = (+c.dataset.a).toLocaleString('en-IN'); pick(c.dataset.c); } };
+  $('.v5 .cgrid').onclick = function (e) { var g = e.target.closest('.cg'); if (g) pick(g.textContent.trim()); };
+})();
+</script>
+</body>
+</html>

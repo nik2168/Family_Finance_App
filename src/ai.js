@@ -23,12 +23,11 @@
     { name: 'add_loan', description: 'Prepare money borrowed or owed (pending), given (lent to someone), or invested (FD, RD, SIP, gold...). The user must tap Save.',
       parameters: { type: 'OBJECT', properties: { dir: { type: 'STRING', enum: DIRS }, reason: { type: 'STRING', description: 'Who or what, e.g. "Ramesh" or "SBI FD"' }, amount: { type: 'NUMBER' },
         interest: { type: 'NUMBER', description: 'Percent' }, per: { type: 'STRING', enum: ['month', 'year'] } }, required: ['dir', 'reason', 'amount'] } },
-    { name: 'add_entries', description: 'Prepare several incomes and expenses at once, when the user names more than one. They see a short list and save them all with one tap or by saying save.',
+    { name: 'add_entries', description: 'Prepare several incomes and expenses at once, when the user names more than one. They see a short list and save them all with one tap.',
       parameters: { type: 'OBJECT', properties: { items: { type: 'ARRAY', items: { type: 'OBJECT', properties: { type: { type: 'STRING', enum: ['Income', 'Expense'] },
         category: { type: 'STRING', description: 'One of the existing categories for that type' }, amount: { type: 'NUMBER', description: 'Rupees' }, note: { type: 'STRING', description: 'Short, in the user\'s words' },
         date: { type: 'STRING', description: 'YYYY-MM-DD, default today' } }, required: ['type', 'amount'] } } }, required: ['items'] } },
-    { name: 'confirm', description: 'Save or cancel the card the user is looking at, when they say so ("save", "haan", "cancel", "rehne do").',
-      parameters: { type: 'OBJECT', properties: { action: { type: 'STRING', enum: ['save', 'cancel'] } }, required: ['action'] } },
+    { name: 'cancel', description: 'Close the card the user is looking at without saving, when they say cancel ("no", "rehne do"). Only the user can save, with a tap.' },
     { name: 'save_note', description: 'Save a note or checklist on this phone (groceries, things to do or bring, plans), or add to or tick items on the one with the same title. Saved at once; it shows on Home.',
       parameters: { type: 'OBJECT', properties: { title: { type: 'STRING', description: 'Short, e.g. "Groceries", "To do"' }, items: { type: 'ARRAY', items: { type: 'STRING' }, description: 'Items to add' },
         done: { type: 'ARRAY', items: { type: 'STRING' }, description: 'Items to tick off' }, text: { type: 'STRING', description: 'A summary or free text' },
@@ -37,11 +36,14 @@
     { name: 'listen', description: 'Listen quietly to a conversation around the user (a call, a meeting, the shopkeeper) and turn it into a note when they tap to finish. Call it when they ask you to listen.' },
     { name: 'query_entries', description: 'Totals and the latest matching entries from the history. Use for any question about past income or spending.',
       parameters: { type: 'OBJECT', properties: { type: { type: 'STRING', enum: ['Income', 'Expense'] }, category: { type: 'STRING' },
-        from: { type: 'STRING', description: 'YYYY-MM-DD, inclusive' }, to: { type: 'STRING', description: 'YYYY-MM-DD, inclusive' }, text: { type: 'STRING', description: 'Words to find in notes' } } } },
-    { name: 'overview', description: 'This month vs last month, spending by category, budgets and money left to spend, bills, loans, investments, net worth, average monthly saving.' }
+        from: { type: 'STRING', description: 'YYYY-MM-DD, inclusive' }, to: { type: 'STRING', description: 'YYYY-MM-DD, inclusive' }, text: { type: 'STRING', description: 'Words to find in notes' },
+        show: { type: 'ARRAY', items: { type: 'STRING', enum: ['totals', 'categories', 'latest'] }, description: 'Only the parts of the answer to show on screen, e.g. ["categories"] for top categories. Leave out to show all.' }, top: { type: 'INTEGER', description: 'How many categories or entries to show, e.g. 3 for "top 3"' } } } },
+    { name: 'overview', description: 'This month vs last month, spending by category, budgets and money left to spend, bills, loans, investments, net worth, average monthly saving.',
+      parameters: { type: 'OBJECT', properties: { show: { type: 'ARRAY', items: { type: 'STRING', enum: ['month', 'categories', 'budget', 'loans', 'networth'] }, description: 'Only the parts of the answer to show on screen. Leave out to show all.' },
+        top: { type: 'INTEGER', description: 'How many categories to show' } } } }
   ];
   var BUSY = { query_entries: 'Checking your history…', overview: 'Looking at your month…', add_entry: 'Preparing it…', add_bill: 'Preparing it…', add_loan: 'Preparing it…',
-    add_entries: 'Preparing them…', confirm: 'Saving…', save_note: 'Saving the note…', notes: 'Checking your notes…', listen: 'Getting ready…' };
+    add_entries: 'Preparing them…', save_note: 'Saving the note…', notes: 'Checking your notes…', listen: 'Getting ready…' };
   var TOOLS = {
     query_entries: function (a) {
       var v = data(), cats = v.cats;
@@ -65,7 +67,7 @@
     add_bill: function (a) { return confirmCard('add_bill', a); },
     add_loan: function (a) { return confirmCard('add_loan', a); },
     add_entries: function (a) { return confirmCard('add_entries', a); },
-    confirm: function (a) { return !pending ? { error: 'No card is open' } : a.action === 'save' ? saveConfirm() : (closeCard(), { saved: false, reason: 'The user cancelled' }); },
+    cancel: function () { return !pending ? { error: 'No card is open' } : (closeCard(), { saved: false, reason: 'The user cancelled' }); }, // saving is only the user's tap
     // Notes harm nothing, so they save at once (money waits for the user's Save), as note ops that sync like entries. Same title: added to.
     save_note: function (a) {
       var low = function (x) { return String(x == null ? '' : x).trim().toLowerCase(); }, line = function (x, n) { return String(x == null ? '' : x).replace(/\s+/g, ' ').trim().slice(0, n); };
@@ -114,6 +116,14 @@
 
   // ---- Screen state
   var lastAsk = '', userNew = true, aiText = '', aiOn = null, newTurn = true, lastRead = null, readTimer = 0, pending = null, noteTimer;
+  // The last 10 messages, given to each new Live session so it carries on; in memory only, so they go when the app closes.
+  var past = [], askKept = true;
+  function remember(who, text) { text = String(text || '').trim(); if (text) past = past.concat(who + ': ' + text.slice(0, 400)).slice(-10); }
+  // A finished turn, or one cut off by hanging up, goes into it (listening to a conversation is not talking with the assistant).
+  function keepTurn() {
+    if (kind !== 'listen') { if (!askKept) remember('User', lastAsk); if (aiText) remember('You', aiText); }
+    askKept = true; aiText = '';
+  }
   function greet() {
     fadeTo($('#aiHi'), 'Hello' + (me() ? ' ' + me() : ''));
     fadeTo($('#aiBig'), 'How can I help you today?');
@@ -127,6 +137,7 @@
   function userSaid(text, fresh) {
     if (fresh) {
       lastAsk = '';
+      askKept = false;
       if (cardOn() && !pending) closeCard(true);
       fadeTo($('#aiBig'), '');
       aiOn = null;
@@ -144,20 +155,18 @@
     if (el !== aiOn) { aiOn = el; fadeTo(el, aiText); } else setWords(el, aiText);
   }
 
-  // ---- The glass card: rises out of the pill
+  // ---- The glass card: pops up above the pill, as tall as what it shows
   function openCard() {
     if (!cardOn()) { $('#aiAns')._w = []; $('#aiAns').textContent = ''; aiOn = null; }
     $('#aiAsk').textContent = lastAsk;
     $('#aiAsk').hidden = !lastAsk;
     $('#aiCard').classList.add('ai-on');
-    $('#aiPill').classList.add('ai-hide');
     unbusy();
   }
   function closeCard(quiet) {
     if (pending) pending.done({ saved: false, reason: 'The user cancelled' });
     clearTimeout(readTimer); readTimer = 0;
     $('#aiCard').classList.remove('ai-on');
-    $('#aiPill').classList.remove('ai-hide');
     setTimeout(function () { if (!cardOn()) { $('#aiMain').innerHTML = ''; $('#aiFoot').innerHTML = ''; } }, 600);
     if (quiet) return;
     aiOn = null;
@@ -183,25 +192,33 @@
   // A read tool's answer, drawn from its result: the numbers on screen are the app's, not the model's.
   function openRead() {
     clearTimeout(readTimer); readTimer = 0;
-    var x = lastRead, r = x.res, h = '';
+    // Only the parts the model asked for (show), so a small question gets a small card
+    var x = lastRead, r = x.res, h = '', show = x.args.show, top = Math.min(10, Math.max(1, parseInt(x.args.top, 10) || 5));
+    var has = function (part) { return !(show && show.length) || show.indexOf(part) >= 0; };
+    var cats = function (spent, title) {
+      var cs = Object.keys(spent).sort(function (a, b) { return spent[b] - spent[a]; }).slice(0, top);
+      return cs.length > (show ? 0 : 1) ? '<p class="ai-h">' + title + '</p>' + cs.map(function (c) { return bar(c, spent[c], spent[cs[0]]); }).join('') : '';
+    };
     if (r.error) h = '<p class="ai-muted">' + esc(r.error) + '</p>';
     else if (x.name === 'query_entries') {
-      h += '<p class="ai-h">' + esc(describe(x.args, r.category)) + '</p>' + tiles([['Spent', r.expense], ['Got', r.income], ['Entries', String(r.count)]]);
-      var cs = Object.keys(r.spentByCategory).sort(function (a, b) { return r.spentByCategory[b] - r.spentByCategory[a]; }).slice(0, 5);
-      if (cs.length > 1) h += '<p class="ai-h">Where it went</p>' + cs.map(function (c) { return bar(c, r.spentByCategory[c], r.spentByCategory[cs[0]]); }).join('');
-      if (r.latest.length) h += '<p class="ai-h">Latest</p>' + entryRows(r.latest.slice(0, 5));
+      h += '<p class="ai-h">' + esc(describe(x.args, r.category)) + '</p>';
+      if (has('totals')) h += tiles([['Spent', r.expense], ['Got', r.income], ['Entries', String(r.count)]]);
+      if (has('categories')) h += cats(r.spentByCategory, 'Where it went');
+      if (has('latest') && r.latest.length) h += '<p class="ai-h">Latest</p>' + entryRows(r.latest.slice(0, top));
     } else {
       var m = r.thisMonth, L = r.leftToSpend;
-      h += '<p class="ai-h">This month</p>' + tiles([['Got', m.income], ['Spent', m.expense], ['Saved', m.savings]]);
-      if (L) h += '<p class="ai-h">Left to spend</p>' + bar(money.format(Math.max(0, L.left)) + ' left of ' + money.format(L.limit), L.spent, L.limit, L.left < 0) +
+      if (has('month')) h += '<p class="ai-h">This month</p>' + tiles([['Got', m.income], ['Spent', m.expense], ['Saved', m.savings]]);
+      if (has('categories')) h += cats(m.spent, 'Where it went this month');
+      if (has('budget') && L) h += '<p class="ai-h">Left to spend</p>' + bar(money.format(Math.max(0, L.left)) + ' left of ' + money.format(L.limit), L.spent, L.limit, L.left < 0) +
         '<p class="ai-muted">' + (L.left > 0 ? 'About ' + money.format(L.perDay) + ' a day for ' + L.days + ' days' : 'Over the monthly budget') + '</p>';
-      if (r.overBudget.length) h += '<div class="ai-pills">' + r.overBudget.map(function (o) { return '<span class="ai-tag ai-bad">' + esc(o.cat) + ' ' + money.format(o.over) + ' over</span>'; }).join('') + '</div>';
+      if (has('budget') && r.overBudget.length) h += '<div class="ai-pills">' + r.overBudget.map(function (o) { return '<span class="ai-tag ai-bad">' + esc(o.cat) + ' ' + money.format(o.over) + ' over</span>'; }).join('') + '</div>';
       var ls = r.loansAndInvestments.filter(function (l) { return !l.done; });
-      if (ls.length) h += '<p class="ai-h">Loans and savings</p><div class="ai-rows">' + ls.map(function (l) {
+      if (has('loans') && ls.length) h += '<p class="ai-h">Loans and savings</p><div class="ai-rows">' + ls.map(function (l) {
         return '<div class="ai-r">' + disc(LOAN_TEXT[l.kind].pic) + '<div class="ai-g"><b>' + esc(l.name) + '</b><small>' + KINDS[l.kind] + ' · ' + esc(l.interest) + '</small></div><span class="ai-a">' + money.format(l.owedOrWorthNow) + '</span></div>';
       }).join('') + '</div>';
-      h += '<p class="ai-h">Net worth</p>' + tiles([['Today', r.netWorth], ['Saves a month', r.avgMonthlySavingLast3Months], ['Saved last month', r.lastMonth.savings]]);
+      if (has('networth')) h += '<p class="ai-h">Net worth</p>' + tiles([['Today', r.netWorth], ['Saves a month', r.avgMonthlySavingLast3Months], ['Saved last month', r.lastMonth.savings]]);
     }
+    if (!h) h = '<p class="ai-muted">Nothing to show for this yet.</p>';
     $('#aiMain').innerHTML = h;
     $('#aiFoot').innerHTML = '';
     openCard();
@@ -227,7 +244,7 @@
       if (!many) { $('#aiAmt').value = grouped(x.amount); fitAmount(); }
       drawConfirm();
       openCard();
-      fadeTo($('#aiAns'), 'Check it, change anything, then tap Save or say “save”.'); // the model waits for the tap, so it says nothing yet
+      fadeTo($('#aiAns'), 'Check it, change anything, then tap Save.'); // the model waits for the tap, so it says nothing yet
     });
   }
   function grouped(v) { var n = num(v); return n > 0 ? n.toLocaleString('en-IN', { maximumFractionDigits: 2 }) : String(v || ''); }
@@ -335,7 +352,7 @@
   var WORKLET = 'class P extends AudioWorkletProcessor{constructor(){super();this.b=new Int16Array(1600);this.n=0}' +
     'process(i){var c=i[0]&&i[0][0];if(c)for(var k=0;k<c.length;k++){var s=Math.max(-1,Math.min(1,c[k]));this.b[this.n++]=s<0?s*32768:s*32767;' +
     'if(this.n===this.b.length){this.port.postMessage(this.b.slice().buffer);this.n=0}}return true}}registerProcessor("pcm",P)';
-  var ws = null, ready = null, kind = '', inCtx, outCtx, outGain, outAn, micAn, workletLoaded = false, mic = null, micNode = null, micSrc = null, stream = null, releaseTimer, wantMic = false;
+  var ws = null, ready = null, kind = '', inCtx, outCtx, outGain, outAn, micAn, workletLoaded = false, mic = null, micNode = null, micSrc = null, stream = null, wantMic = false;
   var playing = [], playAt = 0, voiceTurn = false, idleTimer;
 
   function systemPrompt() {
@@ -348,9 +365,11 @@
       'For any question about the user\'s money, call query_entries or overview first. Never guess numbers and never add them up yourself; use the totals the tools return.',
       'Amounts: 30k = 30000, 1.5 lakh = 150000. Pick the closest existing category, or Others when nothing fits.',
       'When the user names several incomes or expenses at once, call add_entries once with all of them (you pick the categories and dates). For one, call add_entry.',
-      'While a card is open: when the user says save (or yes, haan, theek hai) or cancel (no, rehne do), call confirm. For a change, call the same add_ tool again with everything corrected.',
+      'While a card is open: when the user says cancel (no, rehne do), call cancel. Only the user saves, by tapping Save; when they say save, ask them to tap Save. For a change, call the same add_ tool again with everything corrected.',
       'For lists, notes and things to remember (groceries, things to bring or do), call save_note; it saves at once. To add to or tick items on a list, call save_note with its title. Call notes to read them.',
-      'When the user asks you to listen to a conversation, call listen and say nothing more.'].join('\n');
+      'When the user asks you to listen to a conversation, call listen and say nothing more.',
+      'For a question about money, pass show (and top) so the screen shows only what answers it: "top 3 categories" is query_entries with show ["categories"] and top 3.'].join('\n') +
+      (past.length ? '\nThe conversation so far (carry on from it):\n' + past.join('\n') : '');
   }
   var LISTEN = 'You will hear a conversation (a call, a meeting, a talk at a shop) in English, Hindi or Hinglish. Do not reply while it goes on. ' +
     'When it ends, call save_note once: a short title, the to-dos, decisions, amounts and dates as items, and a summary of two or three lines as text, ' +
@@ -382,12 +401,12 @@
         no(new Error(why || 'Closed'));
         if (ws !== s) return;
         if (why) note(/api key/i.test(why) ? 'That Gemini key did not work. Check it in Settings.' : 'Assistant: ' + why);
-        ws = null; ready = null; stopMic(); stopPlayback(); unbusy();
+        keepTurn(); ws = null; ready = null; stopMic(); stopPlayback(); unbusy();
       };
     });
     return ready;
   }
-  function hangUp() { stopMic(); stopPlayback(); if (ws) { var s = ws; ws = null; s.close(1000); } ready = null; unbusy(); }
+  function hangUp() { keepTurn(); stopMic(); stopPlayback(); if (ws) { var s = ws; ws = null; s.close(1000); } ready = null; unbusy(); }
 
   function onMessage(m, ok) {
     touch();
@@ -399,7 +418,7 @@
     if (s.inputTranscription && s.inputTranscription.text) { voiceTurn = true; userSaid(s.inputTranscription.text, userNew); userNew = false; }
     if (s.outputTranscription && s.outputTranscription.text) aiSaid(s.outputTranscription.text);
     ((s.modelTurn && s.modelTurn.parts) || []).forEach(function (p) { if (p.inlineData && voiceTurn) play(p.inlineData.data); }); // typed turns stay silent
-    if (s.turnComplete) { newTurn = true; userNew = true; unbusy(); }
+    if (s.turnComplete) { keepTurn(); newTurn = true; userNew = true; unbusy(); }
   }
   // Calls run one after another (a confirm card waits for the user), then all answers go back together.
   function runTools(calls) {
@@ -436,13 +455,23 @@
     }
     outCtx.resume(); inCtx.resume();
   }
-  // The mic is asked for once and kept (muted between uses): some browsers ask again on every getUserMedia. releaseMic lets it go.
+  // The mic is asked for each time the assistant opens and kept while it is open (muted between uses). releaseMic lets it go.
+  // One request at a time (opening and "listen" can both ask); one that comes back after releaseMic (micGen moved on) is let go at once.
+  var asking = null, micGen = 0;
   function startMic() {
     if (!inCtx || !navigator.mediaDevices) return Promise.reject(new Error('This browser cannot use the microphone here. Type instead.'));
-    return (stream && stream.active ? Promise.resolve(stream) : navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, channelCount: 1 } })).then(function (s) {
-      stream = s;
+    if (!(stream && stream.active) && !asking) {
+      var gen = micGen;
+      asking = navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, channelCount: 1 } }).then(function (s) {
+        if (gen !== micGen) { s.getTracks().forEach(function (t) { t.stop(); }); return null; }
+        asking = null;
+        return (stream = s);
+      }, function () { if (gen === micGen) asking = null; throw new Error('Allow the microphone to talk, or type instead'); });
+    }
+    return (asking || Promise.resolve(stream)).then(function (s) {
+      if (!s) return;
       s.getTracks().forEach(function (t) { t.enabled = wantMic; });
-      if (!wantMic) return; // the text box was tapped (or the assistant closed) while the mic was being asked for
+      if (!wantMic || mic === s) return; // the text box was tapped while the mic was being asked for, or it is on already
       mic = s;
       return (workletLoaded ? Promise.resolve() : inCtx.audioWorklet.addModule(URL.createObjectURL(new Blob([WORKLET], { type: 'text/javascript' })))).then(function () {
         workletLoaded = true;
@@ -458,7 +487,7 @@
         $('#aiText').placeholder = 'Listening…';
         sfx('start');
       });
-    }, function () { throw new Error('Allow the microphone to talk, or type instead'); });
+    });
   }
   function stopMic() {
     if (!mic) return;
@@ -469,12 +498,11 @@
     send({ realtimeInput: kind === 'listen' ? { activityEnd: {} } : { audioStreamEnd: true } }); // listening: the conversation is over, now the note
     $('#aiPill').classList.remove('ai-live');
     $('#aiText').placeholder = 'Ask anything…';
-    sfx('stop');
   }
-  // Really let go of the mic: when the app is hidden, or 2 minutes after the assistant closes.
-  function releaseMic() { stopMic(); if (stream) stream.getTracks().forEach(function (t) { t.stop(); }); stream = null; }
+  // Really let go of the mic (the browser's mic light goes off): when the assistant closes or the app is hidden.
+  function releaseMic() { micGen++; asking = null; stopMic(); if (stream) stream.getTracks().forEach(function (t) { t.stop(); }); stream = null; }
   function toggleMic() {
-    if (mic) { if (kind === 'listen') busy('Writing the note…'); return stopMic(); }
+    if (mic) { if (kind === 'listen') busy('Writing the note…'); stopMic(); return sfx('stop'); } // the only stop with a sound: the user's own tap
     wantMic = true;
     audioOn();
     connect().then(startMic).catch(fail);
@@ -485,12 +513,25 @@
       fadeTo($('#aiHi'), ''); fadeTo($('#aiBig'), 'Listening… tap the orb when it is over'); aiOn = null;
     }).catch(fail);
   }
-  // Sounds: Kenney's Interface Sounds (CC0), played through the voice's audio context (iOS lets it play once a tap made it).
-  var SFX = {};
+  // Sounds: soft glassy chimes made here (no files), through the voice's audio context (iOS lets it play once a tap made it).
+  // Each tone: [from Hz, to Hz (a quick glide), start s, length s, volume]. ponytail: tuned by ear; these numbers are the sounds.
+  var SOUNDS = {
+    start: [[659, 988, 0, .55, .11], [1319, 1319, .07, .6, .045], [1976, 1976, .13, .5, .018]], // listening: rises, with a shimmer
+    stop: [[988, 659, 0, .45, .08], [1319, 1319, .04, .3, .02]] // done listening: softer, falling
+  };
   function sfx(name) {
     if (!outCtx || !load('fm.sfx', true)) return; // Settings > Assistant > Sounds
-    (SFX[name] = SFX[name] || fetch('assets/sounds/' + name + '.mp3').then(function (r) { return r.arrayBuffer(); }).then(function (b) { return outCtx.decodeAudioData(b); }))
-      .then(function (buf) { var s = outCtx.createBufferSource(); s.buffer = buf; s.connect(outCtx.destination); s.start(); }).catch(function () { SFX[name] = null; });
+    var now = outCtx.currentTime;
+    SOUNDS[name].forEach(function (n) {
+      var o = outCtx.createOscillator(), g = outCtx.createGain(), t = now + n[2];
+      o.frequency.setValueAtTime(n[0], t);
+      o.frequency.exponentialRampToValueAtTime(n[1], t + .12);
+      g.gain.setValueAtTime(0, t);
+      g.gain.linearRampToValueAtTime(n[4], t + .02);
+      g.gain.exponentialRampToValueAtTime(.0001, t + n[3]);
+      o.connect(g); g.connect(outCtx.destination);
+      o.start(t); o.stop(t + n[3] + .05);
+    });
   }
   function b64(buf) { var s = '', u = new Uint8Array(buf); for (var i = 0; i < u.length; i += 0x8000) s += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000)); return btoa(s); }
   // Gemini sends 24 kHz 16-bit PCM chunks; play them back to back.
@@ -513,10 +554,11 @@
   function rms(an) { if (!an) return 0; an.getFloatTimeDomainData(tbuf); for (var s = 0, i = 0; i < tbuf.length; i++) s += tbuf[i] * tbuf[i]; return Math.sqrt(s / tbuf.length); }
 
   // ---- The orb: glass sphere with a sloshing liquid of light, a bright crest where it ends, silk sheets, a rim that glows where the
-  // liquid touches it, and a halo. uLevel: voice level 0-1 (swells and brightens); uThink: 0-1 while working (fills with light).
+  // liquid touches it, and a halo. uLevel: voice level 0-1 (swells and brightens); uThink: 0-1 while working (fills with light);
+  // uMic: 0-1 while listening (a brighter rim and halo, so it shows it is listening even in silence).
   var FRAG = [
     'precision highp float;',
-    'uniform vec2 uRes; uniform float uTime, uLevel, uThink;',
+    'uniform vec2 uRes; uniform float uTime, uLevel, uThink, uMic;',
     'float hash(vec3 p){p=fract(p*.3183099+.1);p*=17.;return fract(p.x*p.y*p.z*(p.x+p.y+p.z));}',
     'float noise(vec3 x){vec3 i=floor(x),f=fract(x);f=f*f*(3.-2.*f);',
     ' return mix(mix(mix(hash(i),hash(i+vec3(1,0,0)),f.x),mix(hash(i+vec3(0,1,0)),hash(i+vec3(1,1,0)),f.x),f.y),',
@@ -527,10 +569,10 @@
     'float sheet(vec3 q,vec3 n,vec3 b,float t,float w){float s=dot(q,n)+.28*sin(dot(q,b)*2.2+t);return exp(-abs(s)*w)*smoothstep(-.35,.75,dot(q,cross(n,b)));}',
     'void main(){',
     ' vec2 p=(gl_FragCoord.xy-.5*uRes)/(.5*min(uRes.x,uRes.y))/.6;', // the sphere is 60% of the canvas; the rest is halo
-    ' float r=length(p), e=uLevel, k=uThink, t=uTime;',
+    ' float r=length(p), e=uLevel, k=uThink, m=uMic, t=uTime;',
     ' float side=dot(normalize(p+1e-5),normalize(vec2(.55,-.45)));', // light from the lower right
     ' float o=max(r-1.,0.);',
-    ' vec3 halo=vec3(.08,.3,1.)*(.26+.45*e+.25*k)*(.75+.6*side)*exp(-o*2.8)/(1.+o*3.);',
+    ' vec3 halo=vec3(.08,.3,1.)*(.16+.16*m+.9*e+.25*k)*(.75+.6*side)*exp(-o*2.8)/(1.+o*3.);',
     ' vec3 col=halo;',
     ' if(r<1.){',
     '  float z=sqrt(1.-r*r); vec3 n=vec3(p,z);',
@@ -538,7 +580,7 @@
     '  vec3 q=M*n, qi=M*vec3(p,z*.85);',
     '  float warp=noise(qi*1.1+vec3(0.,t*.18,0.))-.5+.5*(noise(qi*2.2-vec3(t*.12))-.5);', // the liquid: one smooth, slowly sloshing surface
     '  float d=dot(qi,normalize(vec3(.5,.75,.3)))+.6*warp;',
-    '  float th=.22-.9*k-.3*e;',
+    '  float th=.22-.9*k-.55*e;',
     '  float inside=smoothstep(th-.03,th+.06,d);',
     '  float rimness=pow(1.-z,1.3);',
     '  float fold=pow(1.-abs(sin((noise(qi*1.3+vec3(t*.1,0.,0.))*1.5+d)*2.2+t*.35)),4.);', // silky streaks inside the liquid
@@ -550,17 +592,17 @@
     '  float s2=sheet(q,normalize(vec3(-.8,.3,.5)),normalize(vec3(.2,.9,-.3)),t*.4+2.,56.);',
     '  col+=(s1+.8*s2)*vec3(.5,.72,1.)*(.35+1.6*rimness)*(.6+.8*inside)*(1.+.8*e);',
     '  float fr=pow(1.-z,4.)+.8*exp(-(1.-r)*70.);', // rim: bright where the liquid touches it, a thin violet-blue line on the dark side
-    '  col+=fr*mix(mix(vec3(.45,.25,.95),vec3(.25,.45,1.),smoothstep(-.5,.5,p.x-p.y)),vec3(.4,.68,1.)*1.6,inside)*(.9+.6*e+.4*k);',
+    '  col+=fr*mix(mix(vec3(.45,.25,.95),vec3(.25,.45,1.),smoothstep(-.5,.5,p.x-p.y)),vec3(.4,.68,1.)*1.6,inside)*(.65+.45*m+1.2*e+.4*k);',
     '  col=mix(halo,col,smoothstep(1.,.985,r));',
     ' }',
     ' col=1.-exp(-col*1.9);',
-    ' gl_FragColor=vec4(col,1.);',
+    ' gl_FragColor=vec4(col,max(col.r,max(col.g,col.b)));', // dark parts see-through: it glows on the black screen and on the light one
     '}'].join('\n');
-  var orbEl = $('#aiOrb'), gl = null, uni = {}, raf = 0, lastTs = 0, T = 0, lvl = 0, thk = 0, reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var orbEl = $('#aiOrb'), gl = null, uni = {}, raf = 0, lastTs = 0, T = 0, lvl = 0, thk = 0, mon = 0, kick = 0, reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
   function setupGL() {
     if (gl || orbEl.tagName !== 'CANVAS') return;
     try {
-      gl = orbEl.getContext('webgl', { alpha: false, antialias: false, premultipliedAlpha: false });
+      gl = orbEl.getContext('webgl', { antialias: false });
       var sh = function (type, src) { var s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s); if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s)); return s; };
       var prog = gl.createProgram();
       gl.attachShader(prog, sh(gl.VERTEX_SHADER, 'attribute vec2 a;void main(){gl_Position=vec4(a,0.,1.);}'));
@@ -571,7 +613,7 @@
       gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
       gl.enableVertexAttribArray(0);
       gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
-      ['uRes', 'uTime', 'uLevel', 'uThink'].forEach(function (u) { uni[u] = gl.getUniformLocation(prog, u); });
+      ['uRes', 'uTime', 'uLevel', 'uThink', 'uMic'].forEach(function (u) { uni[u] = gl.getUniformLocation(prog, u); });
     } catch (e) { // no WebGL: a CSS sphere instead
       gl = null;
       var d = document.createElement('div');
@@ -587,11 +629,16 @@
     raf = requestAnimationFrame(tick);
     var dt = lastTs ? Math.min(.05, (ts - lastTs) / 1000) : 0;
     lastTs = ts;
-    var target = Math.max(mic ? rms(micAn) : 0, playing.length ? rms(outAn) : 0);
-    lvl += (Math.min(1, target * 4) - lvl) * .2;
+    // The voice (the user's or its own) as 0-1: speech is quiet after echo cancelling, so it is lifted; a tap adds a pulse (kick).
+    // ponytail: 2.4 and .1 were tuned on one phone (lift, and the room's noise floor); change them if a mic reads hot or quiet.
+    var raw = Math.max(mic ? rms(micAn) : 0, playing.length ? rms(outAn) : 0);
+    kick *= .9;
+    var target = Math.max(Math.min(1, Math.max(0, Math.sqrt(raw) * 2.4 - .1)), kick * .8);
+    lvl += (target - lvl) * (target > lvl ? .35 : .12); // rises fast, settles slower
     thk += (($('#aiPill').classList.contains('ai-busy') ? 1 : 0) - thk) * .04;
+    mon += ((mic ? 1 : 0) - mon) * .08;
     T += dt * (reduce ? .3 : 1) * (1 + thk * 1.6 + lvl * 1.2);
-    orbEl.style.setProperty('--s', 1 + lvl * .07);
+    orbEl.style.setProperty('--s', 1 + lvl * .16);
     $('#aiWave').style.setProperty('--l', mic ? lvl : 0);
     if (!gl) return;
     var px = Math.round(orbEl.clientWidth * Math.min(window.devicePixelRatio || 1, 2));
@@ -600,12 +647,13 @@
     gl.uniform1f(uni.uTime, T);
     gl.uniform1f(uni.uLevel, lvl);
     gl.uniform1f(uni.uThink, thk);
+    gl.uniform1f(uni.uMic, mon);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
 
   // ---- Open, close, ask. The assistant is a modal dialog: the app behind is inert, Esc closes the card first, then it.
-  // iOS: the keyboard shrinks the visible area but not the dialog, so it is fitted to what is visible.
-  function fitAI() { var vv = window.visualViewport; if (vv && $('#ai').open) $('#ai').style.height = vv.height + 'px'; }
+  // iOS: the keyboard shrinks the visible area and pans it down, but not the dialog, so it is fitted to what is visible (like fitSheet).
+  function fitAI() { var vv = window.visualViewport, s = $('#ai').style; if (vv && $('#ai').open) { s.top = vv.offsetTop + 'px'; s.height = vv.height + 'px'; } }
   function openAI() {
     var ai = $('#ai'), b = $('#aiBtn').getBoundingClientRect();
     ai.style.setProperty('--ox', (b.left + b.width / 2) + 'px');
@@ -618,8 +666,6 @@
     greet();
     startOrb();
     audioOn(); // inside the tap (iOS)
-    sfx('open');
-    clearTimeout(releaseTimer);
     wantMic = true;
     connect().then(startMic).catch(fail); // voice first; typing stops it
   }
@@ -628,7 +674,7 @@
     if (cardOn()) closeCard(true);
     wantMic = false;
     hangUp();
-    releaseTimer = setTimeout(releaseMic, 120000);
+    releaseMic();
     ai.classList.remove('ai-on');
     setTimeout(function () { if (!ai.classList.contains('ai-on')) { ai.close(); lockPage(false); } }, 350);
   }
@@ -662,10 +708,11 @@
   $('#aiBtn').addEventListener('click', openAI);
   $('#aiClose').addEventListener('click', closeAI);
   $('#ai').addEventListener('cancel', function (e) { e.preventDefault(); if (cardOn()) closeCard(); else closeAI(); });
+  $('#ai').addEventListener('close', function () { if (this.classList.contains('ai-on')) closeAI(); }); // closed by the browser itself (a second Esc or back skips cancel)
   $('#aiPill').addEventListener('submit', function (e) { e.preventDefault(); var t = $('#aiText').value; $('#aiText').value = ''; askAI(t); });
   $('#aiWave').addEventListener('click', toggleMic);
-  $('#aiText').addEventListener('focus', function () { wantMic = false; if (mic) toggleMic(); }); // typing instead
-  $('#ai').addEventListener('click', function (e) { if (e.target.closest('#aiOrb')) toggleMic(); }); // the orb is a big talk button too
+  $('#ai').addEventListener('focusin', function (e) { if (e.target.matches('#aiText, #aiCard input')) { wantMic = false; if (mic) toggleMic(); } }); // typing instead (the text box, or the card's fields)
+  $('#ai').addEventListener('click', function (e) { if (e.target.closest('#aiOrb')) { kick = 1; toggleMic(); } }); // the orb is a big talk button too, and pulses when tapped
   $('#aiCard').addEventListener('click', function (e) {
     var b = e.target.closest('[data-k]'), rm = e.target.closest('[data-rm]');
     if (rm && pending) { pending.v.items.splice(Number(rm.dataset.rm), 1); if (pending.v.items.length) drawConfirm(); else closeCard(); }
@@ -692,5 +739,5 @@
   $('#aiCard').addEventListener('change', function (e) { if (pending && e.target.dataset.in === 'date' && e.target.value) { pending.v.date = e.target.value; drawConfirm(); } });
   document.addEventListener('visibilitychange', function () { if (document.hidden) releaseMic(); else if ($('#ai').open) startOrb(); });
   window.addEventListener('offline', hangUp);
-  if (window.visualViewport) visualViewport.addEventListener('resize', fitAI);
+  if (window.visualViewport) ['resize', 'scroll'].forEach(function (e) { visualViewport.addEventListener(e, fitAI); });
 })();

@@ -91,8 +91,10 @@ section{display:flex;flex-direction:column;gap:14px}
 .pcard{border-radius:28px;padding:18px;color:var(--on-pastel);position:relative;overflow:hidden}
 .pcard .muted,.inlist .muted,.pcard .soft{color:rgba(11,11,12,.68)}
 .card{background:var(--surface);border-radius:28px;padding:16px 18px;box-shadow:var(--shadow)}
-.card h2,.sec h2{font-size:17px;font-weight:600;display:flex;justify-content:space-between;align-items:center;gap:8px}
-.card h2{margin-bottom:6px}
+.card h2,.pcard h2,.sec h2{font-size:17px;font-weight:600;display:flex;justify-content:space-between;align-items:center;gap:8px}
+.card h2,.pcard h2{margin-bottom:6px}
+.pcard .see{color:rgba(11,11,12,.68)}
+.pcard .neg{color:#B42318}
 .sec{display:flex;justify-content:space-between;align-items:center;padding:4px 4px 0;gap:8px}
 .see{font-size:13.5px;color:var(--muted);font-weight:500;white-space:nowrap}
 .secr{display:flex;align-items:center;gap:8px;min-width:0}
@@ -107,18 +109,27 @@ section{display:flex;flex-direction:column;gap:14px}
 .ring .rt{fill:none;stroke:rgba(255,255,255,.8);stroke-width:4}
 .ring .rv{fill:none;stroke:#0B0B0C;stroke-width:4;stroke-linecap:round}
 .ring b{font-size:14px;font-weight:600}
-/* Home's glance: two rows, a number on the left and a little forecast line (lineSvg, shrunk) on the right */
-.glance{padding:6px 18px}
-.gl{display:flex;align-items:center;gap:12px;width:100%;text-align:left;padding:10px 0;color:var(--ink)}
-.gl+.gl{border-top:1px solid var(--line)}
-.gt small{display:block;font-size:12.5px;color:var(--muted)}
-.gt b{display:block;font-size:20px;font-weight:600;letter-spacing:-.01em;line-height:1.25}
-.gl .chart{flex:0 0 42%;margin:0}
-.gl .chart .plot{height:46px;border:0}
-.gl .cticks{display:none}
-.gl .chart .gline b{font-size:10.5px;bottom:2px}
+/* Home's glance (glanceHtml): pastel tiles in two columns. Left to spend spans both and carries the month's line (lineSvg),
+   drawn in ink on the pastel in both themes. Each tile is a button: label at the top, the number below, the picture in the corner. */
+#glance{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px}
+.tile{display:flex;flex-direction:column;align-items:stretch;justify-content:space-between;gap:6px;min-height:150px;min-width:0;text-align:left;box-shadow:var(--shadow)}
+.tile.full{grid-column:1/-1;min-height:0;padding:20px}
+.tile small{display:block;font-size:13px;color:rgba(11,11,12,.68)}
+.tile b{font-weight:600}
+.tile .tv{font-size:24px;letter-spacing:-.02em;line-height:1.15}
+.tile .big{font-size:40px;margin:2px 0}
+.tile>.e:first-child{position:absolute;top:14px;right:14px}
+.tile .tt{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.tile .ringbox{align-items:flex-start}
+.tile .ringbox small:empty{display:none}
+.tile .chart{margin:10px 0 0}
+.tile .chart .plot{height:110px;border-bottom-color:rgba(11,11,12,.15)}
+.tile .chart path[stroke]{stroke:#0B0B0C}
+.tile .chart .gline{border-top-color:rgba(11,11,12,.4)}
+.tile .chart .gline b{left:0;right:auto;background:none;padding:0}
+.tile .cticks{color:rgba(11,11,12,.62)}
 /* Notes and lists from the assistant (app.js notesHtml): on Home, and in the assistant's card */
-#notes:empty{display:none}
+#notes:empty,#again:empty,#due:empty{display:none}
 .nt h2 .rbtn{flex:none}
 .nt p{white-space:pre-line;margin:2px 0 6px}
 .nti{display:flex;align-items:center;gap:10px;padding:7px 0;font-size:14.5px;cursor:pointer}
@@ -171,7 +182,8 @@ section{display:flex;flex-direction:column;gap:14px}
 .inlist .row+.row,.pcard .row+.row{border-top-color:rgba(11,11,12,.08)}
 .row b{font-weight:600}
 .row small{display:block;font-size:12.5px;color:var(--muted)}
-.inlist .row small{color:rgba(11,11,12,.64)}
+.inlist .row small,.pcard .row small{color:rgba(11,11,12,.64)}
+.pcard .row .disc{background:rgba(255,255,255,.72) !important} /* Due soon on a pastel: the pictures sit on white */
 .pill{display:inline-flex;align-items:center;gap:5px;padding:4px 11px;border-radius:999px;font-size:12.5px;font-weight:500;white-space:nowrap;background:var(--field);color:var(--ink)}
 .pill.white{background:#fff;color:#0B0B0C}
 .pill.ok{background:var(--mint);color:var(--on-pastel)}
@@ -195,6 +207,8 @@ section{display:flex;flex-direction:column;gap:14px}
 .dayh{display:flex;justify-content:space-between;font-size:13px;color:var(--muted);padding:6px 6px 0;font-weight:500}
 .pay{padding:7px 13px;border-radius:99px;background:var(--primary);color:var(--on-primary);font-size:13px;font-weight:600;white-space:nowrap}
 .pay.soft{background:var(--field);color:var(--ink)}
+.pcard .pay{background:#0B0B0C;color:#fff}
+.pcard .pay.soft{background:rgba(255,255,255,.72);color:#0B0B0C}
 
 .seg{display:flex;background:var(--field);border-radius:999px;padding:4px;gap:2px}
 .seg button{flex:1;padding:9px 8px;font-size:14px;font-weight:500;border-radius:999px;color:var(--muted);white-space:nowrap}
@@ -399,24 +413,31 @@ dialog::backdrop{background:rgba(8,10,12,.42)}
   #insights>:empty,.colA>:empty,.colB>:empty{display:none}
 }
 
-/* The assistant (ai.js): a glowing orb in the tab bar (the sidebar on wide screens), then a full-screen dark dialog with the orb, a frosted pill and a glass card */
+/* The assistant (ai.js): a glowing orb in the tab bar (the sidebar on wide screens), then a full-screen dialog with the orb, a frosted pill and a glass card.
+   Its colours are --ai- tokens: light below, dark (the deep blue screen) in the two dark-theme rules after it, like :root. */
 .ai-orb span{width:44px;height:44px;flex:none;border-radius:50%;position:relative;background:radial-gradient(circle at 34% 28%,#bfdbfe 0,#3b82f6 26%,#1e3a8a 55%,#020617 80%);box-shadow:0 0 14px 1px rgba(59,130,246,.6),inset 0 0 5px rgba(191,219,254,.9)}
 .ai-orb span::after{content:"";position:absolute;inset:-1px;border-radius:50%;background:conic-gradient(from 0deg,transparent 0 62%,rgba(255,255,255,.95) 74%,transparent 86%);-webkit-mask:radial-gradient(circle,transparent 60%,#000 63%);mask:radial-gradient(circle,transparent 60%,#000 63%)}
 @media (prefers-reduced-motion:no-preference){.ai-orb span::after{animation:spin 3.2s linear infinite}}
 /* phones: the orb alone (its aria-label names it); the sidebar shows "Ask" beside a small orb */
 .ai-orb small{display:none}
 @media (min-width:768px){.ai-orb span{width:22px;height:22px}.ai-orb small{display:inline;font-size:inherit}}
-#ai{--ai-ease:cubic-bezier(.2,.9,.2,1);--ai-glass:rgba(255,255,255,.08);--ai-edge:rgba(255,255,255,.16);--ai-t2:rgba(255,255,255,.62);--ai-good:#86efac;--ai-bad:#fca5a5;
-  position:fixed;inset:0;width:100%;height:100%;max-width:none;max-height:none;margin:0;border-radius:0;overflow:hidden;color:#fff;animation:none;
-  background:radial-gradient(125% 52% at 50% 112%,#cfe0ff 0%,#5a95ff 12%,#2259e6 24%,#0c2c8f 37%,#05144a 52%,#010515 69%,#000 84%);
+#ai{--ai-ease:cubic-bezier(.2,.9,.2,1);--ai-bg:radial-gradient(125% 52% at 50% 112%,#7aa8ff 0%,#a9c6ff 14%,#cfe0ff 28%,#e8efff 46%,#F5F5F7 70%);
+  --ai-t2:rgba(11,11,12,.6);--ai-glass:rgba(255,255,255,.7);--ai-edge:rgba(11,11,12,.1);--ai-fill:rgba(11,11,12,.05);--ai-line:rgba(11,11,12,.08);
+  --ai-card:linear-gradient(180deg,rgba(255,255,255,.82),rgba(255,255,255,.66));--ai-pill:linear-gradient(180deg,rgba(255,255,255,.9),rgba(255,255,255,.62));--ai-note:rgba(255,255,255,.85);--ai-good:var(--good);--ai-bad:var(--bad);--ai-warn:#92400E;
+  position:fixed;inset:0;width:100%;height:100%;max-width:none;max-height:none;margin:0;border-radius:0;overflow:hidden;color:var(--ink);animation:none;background:var(--ai-bg);
   opacity:0;transform:scale(.94);transform-origin:var(--ox,85%) var(--oy,6%);transition:opacity .3s,transform .5s var(--ai-ease)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) #ai{--ai-bg:radial-gradient(125% 52% at 50% 112%,#cfe0ff 0%,#5a95ff 12%,#2259e6 24%,#0c2c8f 37%,#05144a 52%,#010515 69%,#000 84%);--ai-t2:rgba(255,255,255,.62);--ai-glass:rgba(255,255,255,.08);--ai-edge:rgba(255,255,255,.16);--ai-fill:rgba(255,255,255,.07);--ai-line:rgba(255,255,255,.08);
+  --ai-card:linear-gradient(180deg,rgba(28,40,84,.36),rgba(8,12,30,.5));--ai-pill:linear-gradient(180deg,rgba(255,255,255,.17),rgba(255,255,255,.06));--ai-note:rgba(0,0,0,.5);--ai-good:#86efac;--ai-bad:#fca5a5;--ai-warn:#fde68a}}
+:root[data-theme="dark"] #ai{--ai-bg:radial-gradient(125% 52% at 50% 112%,#cfe0ff 0%,#5a95ff 12%,#2259e6 24%,#0c2c8f 37%,#05144a 52%,#010515 69%,#000 84%);--ai-t2:rgba(255,255,255,.62);--ai-glass:rgba(255,255,255,.08);--ai-edge:rgba(255,255,255,.16);--ai-fill:rgba(255,255,255,.07);--ai-line:rgba(255,255,255,.08);
+  --ai-card:linear-gradient(180deg,rgba(28,40,84,.36),rgba(8,12,30,.5));--ai-pill:linear-gradient(180deg,rgba(255,255,255,.17),rgba(255,255,255,.06));--ai-note:rgba(0,0,0,.5);--ai-good:#86efac;--ai-bad:#fca5a5;--ai-warn:#fde68a}
 #ai.ai-on{opacity:1;transform:none}
 #ai::backdrop{background:transparent}
 .ai-x{position:absolute;z-index:4;top:calc(env(safe-area-inset-top) + 16px);right:16px;width:40px;height:40px;border-radius:50%;display:grid;place-items:center;background:var(--ai-glass);border:1px solid var(--ai-edge);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px)}
 .ai-x svg{width:15px;height:15px}
-#aiOrb{position:absolute;left:50%;top:calc(env(safe-area-inset-top) + 4%);width:86%;max-width:360px;aspect-ratio:1;cursor:pointer;mix-blend-mode:screen;transform:translateX(-50%) scale(var(--s,1))}
+#aiOrb{position:absolute;left:50%;top:calc(env(safe-area-inset-top) + 4%);width:86%;max-width:360px;aspect-ratio:1;cursor:pointer;transform:translateX(-50%) scale(var(--s,1));
+  -webkit-mask-image:radial-gradient(closest-side,#000 72%,transparent);mask-image:radial-gradient(closest-side,#000 72%,transparent)} /* the halo fades out before the canvas edge (a square shows on the light screen) */
 .ai-cssorb::before{content:"";position:absolute;inset:21%;border-radius:50%;background:radial-gradient(circle at 34% 28%,#bfdbfe 0,#3b82f6 26%,#1e3a8a 55%,#020617 80%);box-shadow:0 0 60px 6px rgba(59,130,246,.55),inset 0 0 24px rgba(191,219,254,.8)}
-.ai-say{position:absolute;left:50%;top:53%;width:min(calc(100% - 48px),520px);transform:translateX(-50%);text-align:center}
+.ai-say{position:absolute;left:50%;top:53%;width:min(calc(100% - 48px),520px);transform:translateX(-50%);text-align:center;transition:opacity .3s}
 #aiHi{min-height:1.5em;margin:0 0 10px;font-size:17px;color:var(--ai-t2)}
 .ai-big{font-size:32px;line-height:1.14;font-weight:600;letter-spacing:-.025em;-webkit-mask-image:linear-gradient(180deg,#000 30%,rgba(0,0,0,.5) 100%);mask-image:linear-gradient(180deg,#000 30%,rgba(0,0,0,.5) 100%)}
 .ai-big.ai-long{font-size:23px;line-height:1.25}
@@ -425,38 +446,39 @@ dialog::backdrop{background:rgba(8,10,12,.42)}
 @keyframes aiIn{from{opacity:0;filter:blur(10px);transform:translateY(6px)}}
 .ai-fading .ai-w{animation:aiOut .26s ease forwards}
 @keyframes aiOut{to{opacity:0;filter:blur(10px)}}
-#aiNote{position:absolute;z-index:4;top:calc(env(safe-area-inset-top) + 20px);left:50%;max-width:70%;transform:translate(-50%,-8px);padding:8px 14px;border-radius:999px;font-size:13px;text-align:center;opacity:0;pointer-events:none;transition:opacity .3s,transform .3s;background:rgba(0,0,0,.5);border:1px solid var(--ai-edge);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px)}
+#aiNote{position:absolute;z-index:4;top:calc(env(safe-area-inset-top) + 20px);left:50%;max-width:70%;transform:translate(-50%,-8px);padding:8px 14px;border-radius:999px;font-size:13px;text-align:center;opacity:0;pointer-events:none;transition:opacity .3s,transform .3s;background:var(--ai-note);border:1px solid var(--ai-edge);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px)}
 #aiNote.ai-on{opacity:1;transform:translate(-50%,0)}
 .ai-pill{position:absolute;z-index:2;left:max(16px,calc(50% - 260px));right:max(16px,calc(50% - 260px));bottom:calc(env(safe-area-inset-bottom) + 22px);height:64px;border-radius:999px;display:flex;align-items:center;gap:6px;padding:0 8px 0 24px;
-  background:linear-gradient(180deg,rgba(255,255,255,.17),rgba(255,255,255,.06));border:1px solid rgba(255,255,255,.24);-webkit-backdrop-filter:blur(20px) saturate(140%);backdrop-filter:blur(20px) saturate(140%);
+  background:var(--ai-pill);border:1px solid var(--ai-edge);-webkit-backdrop-filter:blur(20px) saturate(140%);backdrop-filter:blur(20px) saturate(140%);
   box-shadow:inset 0 1px 0 rgba(255,255,255,.25),0 14px 30px -12px rgba(0,0,0,.45);transition:left .5s var(--ai-ease),right .5s var(--ai-ease),opacity .3s}
 .ai-pill input{flex:1;min-width:0;background:none;border:0;outline:0;font-size:17px}
-.ai-pill input::placeholder{color:rgba(255,255,255,.72)}
+.ai-pill input::placeholder{color:var(--ai-t2)}
 .ai-wave{position:relative;width:48px;height:48px;border-radius:50%;display:flex;align-items:center;justify-content:center;gap:3px;transition:background .3s}
 .ai-wave::after{content:"";position:absolute;inset:-12px -10px -12px -16px} /* a bigger, invisible place to tap */
 .ai-cam{position:relative;flex:none;width:40px;height:40px;border-radius:50%;display:grid;place-items:center;cursor:pointer;opacity:.85}
 .ai-cam svg{width:22px;height:22px}
 .ai-cam input{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
-.ai-wave i{width:2.5px;border-radius:2px;background:#fff;height:calc(var(--b) * (1 + var(--l,0) * 1.6));transition:height .08s}
-.ai-pill.ai-live .ai-wave{background:rgba(255,255,255,.16);box-shadow:0 0 22px rgba(147,197,253,.45)}
+.ai-wave i{width:2.5px;border-radius:2px;background:currentColor;height:calc(var(--b) * (1 + var(--l,0) * 1.6));transition:height .08s}
+.ai-pill.ai-live .ai-wave{background:var(--ai-edge);box-shadow:0 0 22px rgba(147,197,253,.45)}
 .ai-busyrow{display:none;align-items:center;gap:10px;font-size:15px;white-space:nowrap}
 .ai-dots{display:flex;gap:4px}
-.ai-dots i{width:5px;height:5px;border-radius:50%;background:#fff;animation:aiDot 1s infinite;animation-delay:calc(var(--i) * .15s)}
+.ai-dots i{width:5px;height:5px;border-radius:50%;background:currentColor;animation:aiDot 1s infinite;animation-delay:calc(var(--i) * .15s)}
 @keyframes aiDot{0%,80%,100%{opacity:.25;transform:none}40%{opacity:1;transform:translateY(-3px)}}
 .ai-pill.ai-busy{left:calc(50% - 112px);right:calc(50% - 112px);padding:0 18px;justify-content:center}
 .ai-pill.ai-busy input,.ai-pill.ai-busy .ai-wave,.ai-pill.ai-busy .ai-cam{display:none}
 .ai-pill.ai-busy .ai-busyrow{display:flex}
-.ai-pill.ai-hide{opacity:0;pointer-events:none}
-.ai-card{position:absolute;z-index:3;left:max(12px,calc(50% - 280px));right:max(12px,calc(50% - 280px));bottom:calc(env(safe-area-inset-bottom) + 22px);top:calc(100% - env(safe-area-inset-bottom) - 86px);border-radius:32px;display:flex;flex-direction:column;overflow:hidden;
-  background:linear-gradient(180deg,rgba(28,40,84,.36),rgba(8,12,30,.5));border:1px solid var(--ai-edge);-webkit-backdrop-filter:blur(28px) saturate(150%);backdrop-filter:blur(28px) saturate(150%);
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.16),0 30px 80px -20px rgba(0,0,0,.6);opacity:0;pointer-events:none;transition:top .55s var(--ai-ease),border-radius .55s var(--ai-ease),opacity .25s}
-.ai-card.ai-on{top:calc(env(safe-area-inset-top) + 64px);border-radius:30px;opacity:1;pointer-events:auto}
+/* The card sits just above the pill (which stays usable), as tall as what it shows and no higher than below the close button; it pops up out of the pill */
+.ai-card{position:absolute;z-index:3;left:max(12px,calc(50% - 280px));right:max(12px,calc(50% - 280px));bottom:calc(env(safe-area-inset-bottom) + 96px);max-height:calc(100% - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 160px);border-radius:30px;display:flex;flex-direction:column;overflow:hidden;
+  background:var(--ai-card);border:1px solid var(--ai-edge);-webkit-backdrop-filter:blur(28px) saturate(150%);backdrop-filter:blur(28px) saturate(150%);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.16),0 30px 80px -20px rgba(0,0,0,.6);opacity:0;pointer-events:none;transform:translateY(16px) scale(.97);transform-origin:50% 100%;transition:transform .45s var(--ai-ease),opacity .25s}
+.ai-card.ai-on{opacity:1;pointer-events:auto;transform:none}
+@media (max-width:767px){#ai:has(.ai-card.ai-on) .ai-say{opacity:0}} /* the card shows the words now; on wide screens they stay on the left */
 .ai-grab{flex:none;height:22px;display:grid;place-items:center}
-.ai-grab::before{content:"";width:40px;height:5px;border-radius:5px;background:rgba(255,255,255,.28)}
-.ai-cbody{flex:1;overflow-y:auto;padding:4px 18px 18px;opacity:0;filter:blur(8px);transition:opacity .35s,filter .35s}
+.ai-grab::before{content:"";width:40px;height:5px;border-radius:5px;background:currentColor;opacity:.28}
+.ai-cbody{flex:1 1 auto;min-height:0;overflow-y:auto;padding:4px 18px 18px;opacity:0;filter:blur(8px);transition:opacity .35s,filter .35s}
 .ai-card.ai-on .ai-cbody{opacity:1;filter:none;transition-delay:.2s}
-.ai-ask{width:fit-content;max-width:82%;margin:6px 0 0 auto;padding:10px 15px;border-radius:18px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.07)}
-.ai-ans{margin:14px 0 4px;color:rgba(255,255,255,.86)}
+.ai-ask{width:fit-content;max-width:82%;margin:6px 0 0 auto;padding:10px 15px;border-radius:18px;background:var(--ai-fill);border:1px solid var(--ai-line)}
+.ai-ans{margin:14px 0 4px;opacity:.86}
 .ai-ans:empty{display:none}
 .ai-h{margin:18px 0 8px;font-size:13px;font-weight:600;color:var(--ai-t2)}
 .ai-muted{font-size:12px;color:var(--ai-t2)}
@@ -464,29 +486,29 @@ dialog::backdrop{background:rgba(8,10,12,.42)}
 .ai-card.ai-on .ai-cfoot{opacity:1;transition-delay:.25s}
 .ai-cfoot:empty{display:none}
 .ai-tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
-.ai-tile{padding:12px;border-radius:18px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.07)}
+.ai-tile{padding:12px;border-radius:18px;background:var(--ai-fill);border:1px solid var(--ai-line)}
 .ai-tile small{display:block;font-size:12px;color:var(--ai-t2)}
 .ai-tile b{font-size:18px;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:-.01em}
 .ai-bar{margin:10px 0;display:grid;grid-template-columns:1fr auto;gap:5px 10px;font-size:14px}
 .ai-bar span:last-child{font-variant-numeric:tabular-nums}
-.ai-trk{grid-column:1/-1;height:6px;border-radius:6px;overflow:hidden;background:rgba(255,255,255,.08)}
+.ai-trk{grid-column:1/-1;height:6px;border-radius:6px;overflow:hidden;background:var(--ai-fill)}
 .ai-trk i{display:block;height:100%;width:var(--w);border-radius:6px;background:linear-gradient(90deg,#60a5fa,#a5b4fc);animation:aiGrow .9s var(--ai-ease) both .3s}
 .ai-trk.ai-over i{background:linear-gradient(90deg,#fb923c,#f87171)}
 @keyframes aiGrow{from{width:0}}
-.ai-r{display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid rgba(255,255,255,.07)}
+.ai-r{display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid var(--ai-line)}
 .ai-r:first-child{border-top:0}
 .ai-g{flex:1;min-width:0}
 .ai-g b{display:block;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ai-g small{font-size:12px;color:var(--ai-t2)}
 .ai-a{font-variant-numeric:tabular-nums;font-weight:500}
 .ai-pos{color:var(--ai-good)}
-.ai-disc{flex:none;width:40px;height:40px;border-radius:50%;display:grid;place-items:center;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.08)}
+.ai-disc{flex:none;width:40px;height:40px;border-radius:50%;display:grid;place-items:center;background:var(--ai-fill);border:1px solid var(--ai-line)}
 .ai-disc.ai-l{width:66px;height:66px}
 .ai-pills{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
 .ai-tag{display:inline-block;padding:3px 9px;border-radius:999px;font-size:12px;font-weight:500;background:rgba(74,222,128,.15);color:var(--ai-good)}
 .ai-tag.ai-bad{background:rgba(248,113,113,.15);color:var(--ai-bad)}
-.ai-tag.ai-warn{background:rgba(250,204,21,.15);color:#fde68a}
-.ai-pv{display:flex;flex-direction:column;align-items:center;text-align:center;margin-top:14px;padding:18px 16px 14px;border-radius:24px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);transition:border-color .4s,box-shadow .4s}
+.ai-tag.ai-warn{background:rgba(250,204,21,.15);color:var(--ai-warn)}
+.ai-pv{display:flex;flex-direction:column;align-items:center;text-align:center;margin-top:14px;padding:18px 16px 14px;border-radius:24px;background:var(--ai-fill);border:1px solid var(--ai-line);transition:border-color .4s,box-shadow .4s}
 .ai-pv.ai-ok{border-color:rgba(74,222,128,.55);box-shadow:0 0 44px -8px rgba(74,222,128,.5)}
 .ai-what{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:8px;margin-top:10px;font-size:16px;font-weight:600}
 .ai-when{margin-top:2px;font-size:13px;color:var(--ai-t2)}
@@ -495,20 +517,19 @@ dialog::backdrop{background:rgba(8,10,12,.42)}
 .ai-amt input{min-width:1.6ch;padding:0;background:none;border:0;outline:0;text-align:center;font-variant-numeric:tabular-nums;letter-spacing:inherit}
 .ai-f{margin-top:14px}
 .ai-f>label{display:block;margin:0 0 6px 4px;font-size:12px;color:var(--ai-t2)}
-.ai-seg{display:flex;padding:4px;border-radius:999px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.08);margin-top:14px}
+.ai-seg{display:flex;padding:4px;border-radius:999px;background:var(--ai-fill);border:1px solid var(--ai-line);margin-top:14px}
 .ai-f .ai-seg,.ai-row2 .ai-seg{margin-top:0}
-.ai-seg button{flex:1;padding:9px 6px;border-radius:999px;font-size:14px;color:rgba(255,255,255,.75);white-space:nowrap;transition:background .2s,color .2s}
-.ai-seg button[aria-pressed=true]{background:#fff;color:#000;font-weight:600}
+.ai-seg button{flex:1;padding:9px 6px;border-radius:999px;font-size:14px;color:var(--ink-2);white-space:nowrap;transition:background .2s,color .2s}
+.ai-seg button[aria-pressed=true]{background:var(--primary);color:var(--on-primary);font-weight:600}
 .ai-row2{display:flex;gap:8px}
 .ai-row2>*{flex:1;min-width:0}
 .ai-cats{display:flex;gap:8px;overflow-x:auto;margin:0 -18px;padding:2px 18px}
-.ai-cat{flex:none;display:flex;align-items:center;gap:6px;padding:6px 13px 6px 6px;border-radius:999px;font-size:13px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.08);transition:background .2s,color .2s}
-.ai-cat[aria-pressed=true]{background:#fff;color:#000;font-weight:600}
-.ai-in{width:100%;padding:12px 14px;border-radius:16px;background:var(--ai-glass);border:1px solid rgba(255,255,255,.12);color:#fff;outline:0;font-size:15px}
-.ai-in:focus{border-color:rgba(255,255,255,.4)}
-.ai-in[type=date]{color-scheme:dark}
+.ai-cat{flex:none;display:flex;align-items:center;gap:6px;padding:6px 13px 6px 6px;border-radius:999px;font-size:13px;background:var(--ai-fill);border:1px solid var(--ai-line);transition:background .2s,color .2s}
+.ai-cat[aria-pressed=true]{background:var(--primary);color:var(--on-primary);font-weight:600}
+.ai-in{width:100%;padding:12px 14px;border-radius:16px;background:var(--ai-fill);border:1px solid var(--ai-line);color:inherit;outline:0;font-size:15px}
+.ai-in:focus{border-color:var(--ai-t2)}
 .ai-err{margin:10px 0 0;min-height:1px;text-align:center;font-size:13px;color:var(--ai-bad)}
-.ai-save{height:56px;border-radius:999px;display:flex;align-items:center;justify-content:center;gap:8px;background:#fff;color:#000;font-size:16px;font-weight:600;transition:background .3s,color .3s}
+.ai-save{height:56px;border-radius:999px;display:flex;align-items:center;justify-content:center;gap:8px;background:var(--primary);color:var(--on-primary);font-size:16px;font-weight:600;transition:background .3s,color .3s}
 .ai-save.ai-done{background:#22c55e;color:#03210e}
 .ai-save svg{width:20px;height:20px}
 .ai-save path{stroke-dasharray:24;stroke-dashoffset:24;animation:aiDraw .4s .1s forwards}
@@ -516,19 +537,29 @@ dialog::backdrop{background:rgba(8,10,12,.42)}
 /* Many entries at once: amount and note per row */
 .ai-mis{margin-top:12px;display:grid;gap:8px}
 .ai-mi{display:flex;align-items:center;gap:8px}
-.ai-mamt{display:flex;align-items:baseline;flex:none;width:96px;padding:11px 10px;border-radius:16px;background:var(--ai-glass);border:1px solid rgba(255,255,255,.12);font-weight:600;font-variant-numeric:tabular-nums}
+.ai-mamt{display:flex;align-items:baseline;flex:none;width:96px;padding:11px 10px;border-radius:16px;background:var(--ai-fill);border:1px solid var(--ai-line);font-weight:600;font-variant-numeric:tabular-nums}
 .ai-mamt span{flex:none;white-space:nowrap;opacity:.7;margin-right:2px}
 .ai-mamt input{width:100%;min-width:0;padding:0;background:none;border:0;outline:0;font:inherit;color:inherit}
 .ai-mi .ai-in{flex:1;min-width:0}
 .ai-rm{flex:none;width:32px;height:32px;border-radius:50%;font-size:20px;line-height:1;color:var(--ai-t2)}
 /* A note in the card: app.js notesHtml, in glass */
-#ai .nt{margin-top:12px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);box-shadow:none;color:#fff}
-#ai .nt .rbtn{background:rgba(255,255,255,.1);color:#fff}
-#ai .nti+.nti{border-top-color:rgba(255,255,255,.08)}
-#ai .nti input{accent-color:#fff}
+#ai .nt{margin-top:12px;background:var(--ai-fill);border:1px solid var(--ai-line);box-shadow:none;color:inherit}
+#ai .nt .rbtn{background:var(--ai-fill);color:inherit}
+#ai .nti+.nti{border-top-color:var(--ai-line)}
+#ai .nti input{accent-color:var(--primary)}
 #ai .nti input:checked+span{color:var(--ai-t2)}
-.ai-ghost{min-height:48px;padding:0 18px;border-radius:999px;background:var(--ai-glass);border:1px solid rgba(255,255,255,.12)}
-@media (prefers-reduced-motion:reduce){.ai-w,.ai-fading .ai-w,.ai-trk i,.ai-dots i{animation:none}#ai,.ai-card,.ai-pill,.ai-cbody{transition:none}}
+.ai-ghost{min-height:48px;padding:0 18px;border-radius:999px;background:var(--ai-fill);border:1px solid var(--ai-line)}
+/* Wide screens: the assistant slides to the left half and the card opens beside it, on the right */
+@media (min-width:768px){
+  #aiOrb,.ai-say{transition:left .55s var(--ai-ease)}
+  .ai-card{left:max(calc(50% + 12px),calc(75% - 280px));right:max(24px,calc(25% - 280px));top:calc(env(safe-area-inset-top) + 64px);bottom:auto;max-height:calc(100% - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 86px);transform:translateX(40px);transition:transform .55s var(--ai-ease),opacity .3s}
+  .ai-card.ai-on{transform:none}
+  #ai:has(.ai-card.ai-on) #aiOrb,#ai:has(.ai-card.ai-on) .ai-say{left:25%}
+  #ai:has(.ai-card.ai-on) .ai-say{width:min(calc(50% - 48px),520px)}
+  #ai:has(.ai-card.ai-on) .ai-pill{left:max(24px,calc(25% - 260px));right:max(calc(50% + 12px),calc(75% - 260px))}
+  #ai:has(.ai-card.ai-on) .ai-pill.ai-busy{left:calc(25% - 112px);right:calc(75% - 112px)}
+}
+@media (prefers-reduced-motion:reduce){.ai-w,.ai-fading .ai-w,.ai-trk i,.ai-dots i{animation:none}#ai,.ai-card,.ai-pill,.ai-cbody,#aiOrb,.ai-say{transition:none}}
 </style>
 </head>
 <body>

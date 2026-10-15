@@ -71,7 +71,7 @@ const ym = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'
     await page.evaluate(() => document.fonts.ready);
     assert.ok(await page.evaluate(() => document.fonts.check('600 16px Lexend')), 'Lexend loaded offline');
     assert.deepStrictEqual(await page.evaluate(() => [...document.images].filter(i => i.offsetParent && !i.naturalWidth).map(i => i.src)), []);
-    assert.match(await page.textContent('#glance'), /Set a savings goal.*Set a monthly budget/, 'no goal, no budget yet: the starters');
+    assert.match(await page.textContent('#glance'), /Set a monthly budget.*Set a savings goal/, 'no goal, no budget yet: the starters');
 
     // A category must be chosen, from the grid; the reason is optional
     await page.click('[data-new="Expense"]');

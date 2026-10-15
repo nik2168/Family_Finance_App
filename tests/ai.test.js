@@ -23,10 +23,10 @@ const APP = path.join(__dirname, '..', 'src');
       }
       window.__sent = []; window.__urls = []; window.__next = null; window.__gum = 0;
       const gum = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
-      navigator.mediaDevices.getUserMedia = c => { __gum++; return gum(c); }; // counts the times the browser could ask for the mic
-      window.__played = 0; // sounds played (no voice comes from the fake, so every buffer played is a sound)
-      const start = AudioBufferSourceNode.prototype.start;
-      AudioBufferSourceNode.prototype.start = function () { __played++; return start.apply(this, arguments); };
+      navigator.mediaDevices.getUserMedia = c => { __gum++; return gum(c).then(s => (window.__stream = s)); }; // counts the times the browser could ask for the mic
+      window.__played = 0; // sound tones played (the sounds are made with oscillators; the voice is a buffer)
+      const start = OscillatorNode.prototype.start;
+      OscillatorNode.prototype.start = function () { __played++; return start.apply(this, arguments); };
       window.WebSocket = function (url) {
         const s = window.__ws = this, reply = o => setTimeout(() => s.onmessage && s.onmessage({ data: JSON.stringify(o) }), 5);
         __urls.push(url);
@@ -62,12 +62,12 @@ const APP = path.join(__dirname, '..', 'src');
     await page.waitForSelector('#ai[open]');
     const setup = (await page.waitForFunction(() => __sent.find(m => m.setup)).then(h => h.jsonValue())).setup;
     assert.strictEqual(setup.model, 'models/gemini-3.8-live');
-    assert.deepStrictEqual(setup.tools[0].functionDeclarations.map(d => d.name), ['add_entry', 'add_bill', 'add_loan', 'add_entries', 'confirm', 'save_note', 'notes', 'listen', 'query_entries', 'overview']);
+    assert.deepStrictEqual(setup.tools[0].functionDeclarations.map(d => d.name), ['add_entry', 'add_bill', 'add_loan', 'add_entries', 'cancel', 'save_note', 'notes', 'listen', 'query_entries', 'overview']);
     assert.ok((await page.evaluate(() => __urls[0])).endsWith('?key=test-key'));
     await page.waitForFunction(() => document.querySelector('#aiBig').textContent.trim() === 'How can I help you today?');
     // Voice first: the mic is on as it opens, with a sound; tapping the text box stops it
     await page.waitForSelector('.ai-pill.ai-live');
-    await page.waitForFunction(() => __played >= 2); // opened, listening
+    await page.waitForFunction(() => __played >= 1); // the listening chime
     await page.focus('#aiText');
     await page.waitForSelector('.ai-pill:not(.ai-live)');
 
@@ -98,6 +98,19 @@ const APP = path.join(__dirname, '..', 'src');
     await page.waitForSelector('.ai-card:not(.ai-on)');
     assert.ok(await page.evaluate(() => $('#ai').open));
 
+    // A small question gets a small card (only the part asked for), just above the text box, which stays usable
+    await say('top 3 categories?', { name: 'query_entries', args: { type: 'Expense', show: ['categories'], top: 3 } });
+    await lastAnswer();
+    await page.waitForSelector('.ai-card.ai-on .ai-bar');
+    await page.waitForTimeout(600); // the card pops up
+    assert.strictEqual(await page.locator('.ai-card .ai-tiles').count(), 0);
+    assert.ok(await page.locator('.ai-card .ai-bar').count() <= 3);
+    const [card, pill] = await Promise.all(['#aiCard', '#aiPill'].map(s => page.locator(s).boundingBox()));
+    assert.ok(card.y + card.height <= pill.y && card.height < 400, 'a small card above the text box');
+    assert.ok(await page.locator('#aiText').isVisible());
+    await page.keyboard.press('Escape');
+    await page.waitForSelector('.ai-card:not(.ai-on)');
+
     // A loan card that is cancelled saves nothing, and says so
     await say('gave ramesh 5000 at 2 percent', { name: 'add_loan', args: { dir: 'given', reason: 'Ramesh', amount: 5000, interest: 2, per: 'month' } });
     await page.waitForSelector('.ai-card.ai-on #aiCancel');
@@ -121,15 +134,15 @@ const APP = path.join(__dirname, '..', 'src');
     assert.strictEqual(await page.evaluate(() => view().rows.filter(e => (e.note === 'Auto' && e.amount === 90) || e.note === 'From Ramesh').length), 2);
     await page.waitForSelector('.ai-card:not(.ai-on)');
 
-    // "Save", said while the card is open, saves it (the card's own call is answered too)
+    // "Cancel", said while the card is open, closes it unsaved (the card's own call is answered too). No tool can save: only the tap.
     await say('spent 250 on milk', { name: 'add_entry', args: { type: 'Expense', category: 'milk', amount: 250, note: 'Milk' } });
     await page.waitForSelector('.ai-card.ai-on #aiSave');
-    await page.evaluate(() => __ws.onmessage({ data: JSON.stringify({ toolCall: { functionCalls: [{ id: 'v1', name: 'confirm', args: { action: 'save' } }] } }) }));
+    await page.evaluate(() => __ws.onmessage({ data: JSON.stringify({ toolCall: { functionCalls: [{ id: 'v1', name: 'cancel', args: {} }] } }) }));
     await page.waitForFunction(n => __sent.filter(m => m.toolResponse).length >= n, answers + 2);
     answers += 2;
-    const conf = await page.evaluate(() => __sent.filter(m => m.toolResponse).map(m => m.toolResponse.functionResponses[0]).find(r => r.name === 'confirm'));
-    assert.strictEqual(conf.response.saved, true);
-    assert.strictEqual(await page.evaluate(() => view().rows.filter(e => e.category === 'Milk' && e.amount === 250).length), 1);
+    const conf = await page.evaluate(() => __sent.filter(m => m.toolResponse).map(m => m.toolResponse.functionResponses[0]).find(r => r.name === 'cancel'));
+    assert.strictEqual(conf.response.saved, false);
+    assert.strictEqual(await page.evaluate(() => view().rows.filter(e => e.category === 'Milk' && e.amount === 250).length), 0);
     await page.waitForSelector('.ai-card:not(.ai-on)');
 
     // Notes: saved at once and shown in the card; the same title adds to it and ticks by voice
@@ -141,13 +154,12 @@ const APP = path.join(__dirname, '..', 'src');
     assert.deepStrictEqual((await lastAnswer()).response.note.items, [{ t: 'Atta', done: false }, { t: 'Paneer', done: true }, { t: 'Milk', done: false }]);
     await say('what is on my list?', { name: 'notes', args: {} });
     assert.strictEqual((await lastAnswer()).response.notes[0].items.length, 3);
-    await page.keyboard.press('Escape'); // the card
-    await page.waitForSelector('.ai-card:not(.ai-on)');
-
-    await page.keyboard.press('Escape');
+    assert.ok(!(await page.evaluate(() => $('#aiCard').classList.contains('ai-on'))), 'a new question closed the note card');
+    await page.keyboard.press('Escape'); // so this closes the assistant (by cancel, or by the browser itself: both run closeAI)
     await page.waitForFunction(() => !$('#ai').open);
+    assert.ok(await page.evaluate(() => __stream.getTracks().every(t => t.readyState === 'ended')), 'closing lets go of the mic');
     const recent = await page.textContent('#recent');
-    assert.ok(['Milk', 'From Ramesh', 'Auto'].every(t => recent.includes(t)), 'the saved entries show on Home');
+    assert.ok(['From Ramesh', 'Auto'].every(t => recent.includes(t)), 'the saved entries show on Home');
 
     // The note stays on Home: tick the rest, then a finished list can become an expense; ✕ removes it
     assert.match(await page.textContent('#notes'), /Groceries.*Atta.*Paneer.*Milk/);
@@ -170,9 +182,14 @@ const APP = path.join(__dirname, '..', 'src');
     await page.click('#backHome');
     const played = await page.evaluate(() => __played);
 
-    // Listening: a session of its own with turn-taking off; tapping the orb ends the conversation. The mic is asked for once.
+    // Listening: a session of its own with turn-taking off; tapping the orb ends the conversation. The mic is asked for once per opening.
+    // It remembers: a new session starts with the last 10 messages (kept while the app is open)
+    const setups = await page.evaluate(() => __sent.filter(m => m.setup).length);
     await page.click('#aiBtn');
     await page.waitForSelector('#ai[open]');
+    const memo = (await page.waitForFunction(n => { const s = __sent.filter(m => m.setup); return s.length > n && s[s.length - 1].setup; }, setups).then(h => h.jsonValue())).systemInstruction.parts[0].text;
+    assert.ok(memo.includes('User: what is on my list?'), 'the last messages go to the new session (a turn cut off by closing too)');
+    assert.strictEqual(memo.split('\n').filter(l => /^(User|You): /.test(l)).length, 10, 'only the last 10');
     await say('listen to this conversation', { name: 'listen', args: {} });
     await page.waitForSelector('.ai-pill.ai-live');
     const ls = await page.evaluate(() => __sent.filter(m => m.setup).pop().setup);
@@ -189,7 +206,7 @@ const APP = path.join(__dirname, '..', 'src');
     await page.click('#aiWave'); // talk again: a normal session, the same mic
     await page.waitForSelector('.ai-pill.ai-live');
     assert.ok(!(await page.evaluate(() => __sent.filter(m => m.setup).pop().setup)).realtimeInputConfig);
-    assert.strictEqual(await page.evaluate(() => __gum), 1, 'the mic is asked for once');
+    assert.strictEqual(await page.evaluate(() => __gum), 2, 'the mic is asked for once each time it opens (twice so far)');
     await page.click('#aiWave');
     await page.waitForSelector('.ai-pill:not(.ai-live)');
     assert.strictEqual(await page.evaluate(() => __played), played, 'no sounds once they are off');

@@ -236,7 +236,8 @@
     else x = { items: (a.items || []).map(function (e) { var type = e.type === 'Income' ? 'Income' : 'Expense'; return { type: type, category: matchName(cats[type], e.category) || 'Others', amount: e.amount || '', note: e.note || '', date: parseDay(e.date) ? e.date : ymd(new Date()) }; }) };
     if (pending) pending.done({ saved: false, reason: 'Replaced by a newer version' }); // "make it 35k": the card updates in place
     return new Promise(function (done) {
-      pending = { name: name, v: x, done: function (r) { pending = null; done(r); } };
+      // How it ended goes into the memory, after the request, so a new session does not open it again
+      pending = { name: name, v: x, done: function (r) { pending = null; keepTurn(); remember('App', name + (r.saved ? ' saved' : ' not saved: ' + r.reason)); done(r); } };
       var many = name === 'add_entries';
       $('#aiMain').innerHTML = (many ? '' : '<div class="ai-pv" id="aiPv"><div id="aiPvh"></div><label class="ai-amt"><span>₹</span><input id="aiAmt" inputmode="decimal" placeholder="0" aria-label="Amount"></label></div>') +
         '<div id="aiFlds"></div><p class="ai-err" id="aiErr" role="alert"></p>';
@@ -369,7 +370,7 @@
       'For lists, notes and things to remember (groceries, things to bring or do), call save_note; it saves at once. To add to or tick items on a list, call save_note with its title. Call notes to read them.',
       'When the user asks you to listen to a conversation, call listen and say nothing more.',
       'For a question about money, pass show (and top) so the screen shows only what answers it: "top 3 categories" is query_entries with show ["categories"] and top 3.'].join('\n') +
-      (past.length ? '\nThe conversation so far (carry on from it):\n' + past.join('\n') : '');
+      (past.length ? '\nEarlier in this conversation (all finished: never redo or repeat anything from it, just answer what the user says now):\n' + past.join('\n') : '');
   }
   var LISTEN = 'You will hear a conversation (a call, a meeting, a talk at a shop) in English, Hindi or Hinglish. Do not reply while it goes on. ' +
     'When it ends, call save_note once: a short title, the to-dos, decisions, amounts and dates as items, and a summary of two or three lines as text, ' +
@@ -421,10 +422,13 @@
     if (s.turnComplete) { keepTurn(); newTurn = true; userNew = true; unbusy(); }
   }
   // Calls run one after another (a confirm card waits for the user), then all answers go back together.
+  // A session hung up meanwhile (the assistant closed on a card) drops the rest: no card opens on a closed screen.
   function runTools(calls) {
+    var s = ws;
     if (calls[0]) busy(BUSY[calls[0].name] || 'Thinking…');
     calls.reduce(function (p, c) {
       return p.then(function (out) {
+        if (ws !== s) return out;
         var r;
         try { r = TOOLS[c.name] ? TOOLS[c.name](c.args || {}) : { error: 'Unknown tool' }; } catch (e) { r = { error: e.message }; }
         return Promise.resolve(r).then(function (res) {
@@ -434,6 +438,7 @@
         });
       });
     }, Promise.resolve([])).then(function (out) {
+      if (ws !== s) return;
       send({ toolResponse: { functionResponses: out } });
       if (lastRead && out.some(function (o) { return o.name === lastRead.name; })) {
         if (cardOn() && !pending) openRead(); // a follow-up question updates the card in place
@@ -478,7 +483,7 @@
         if (mic !== s) return; // stopped meanwhile
         micNode = new AudioWorkletNode(inCtx, 'pcm');
         // The real rate goes along, so a browser that ignores sampleRate:16000 still works (Gemini resamples).
-        micNode.port.onmessage = function (e) { send({ realtimeInput: { audio: { data: b64(e.data), mimeType: 'audio/pcm;rate=' + inCtx.sampleRate } } }); };
+        micNode.port.onmessage = function (e) { if (talking()) new Int16Array(e.data).fill(0); send({ realtimeInput: { audio: { data: b64(e.data), mimeType: 'audio/pcm;rate=' + inCtx.sampleRate } } }); };
         micSrc = inCtx.createMediaStreamSource(stream);
         micSrc.connect(micNode); micSrc.connect(micAn);
         micNode.connect(inCtx.destination); // silent; some browsers only run a node that is connected
@@ -549,6 +554,10 @@
     playing.push(src);
     src.onended = function () { var i = playing.indexOf(src); if (i >= 0) playing.splice(i, 1); };
   }
+  // While its voice plays (and .4 s after, for the speaker and the room) the mic sends silence: echo cancelling learns the room
+  // only after a few seconds, so its first answer would leak back in and it would answer itself. A suspended context never mutes it.
+  // ponytail: half-duplex, so no talking over it; tapping the orb cuts it off. Drop the gate if echo cancelling proves good enough.
+  function talking() { return outCtx && outCtx.state === 'running' && outCtx.currentTime < playAt + .4; }
   function stopPlayback() { playing.slice().forEach(function (s) { try { s.stop(); } catch (e) {} }); playing = []; playAt = 0; }
   var tbuf = new Float32Array(512);
   function rms(an) { if (!an) return 0; an.getFloatTimeDomainData(tbuf); for (var s = 0, i = 0; i < tbuf.length; i++) s += tbuf[i] * tbuf[i]; return Math.sqrt(s / tbuf.length); }
@@ -712,7 +721,7 @@
   $('#aiPill').addEventListener('submit', function (e) { e.preventDefault(); var t = $('#aiText').value; $('#aiText').value = ''; askAI(t); });
   $('#aiWave').addEventListener('click', toggleMic);
   $('#ai').addEventListener('focusin', function (e) { if (e.target.matches('#aiText, #aiCard input')) { wantMic = false; if (mic) toggleMic(); } }); // typing instead (the text box, or the card's fields)
-  $('#ai').addEventListener('click', function (e) { if (e.target.closest('#aiOrb')) { kick = 1; toggleMic(); } }); // the orb is a big talk button too, and pulses when tapped
+  $('#ai').addEventListener('click', function (e) { if (e.target.closest('#aiOrb')) { kick = 1; if (playing.length) { voiceTurn = false; stopPlayback(); } else toggleMic(); } }); // the orb is a big talk button too (and cuts it off while it talks), and pulses when tapped
   $('#aiCard').addEventListener('click', function (e) {
     var b = e.target.closest('[data-k]'), rm = e.target.closest('[data-rm]');
     if (rm && pending) { pending.v.items.splice(Number(rm.dataset.rm), 1); if (pending.v.items.length) drawConfirm(); else closeCard(); }

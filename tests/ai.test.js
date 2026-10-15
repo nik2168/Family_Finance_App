@@ -182,14 +182,40 @@ const APP = path.join(__dirname, '..', 'src');
     await page.click('#backHome');
     const played = await page.evaluate(() => __played);
 
+    // While it talks the mic sends silence (its own voice leaking back in would make it answer itself); tapping the orb cuts it off
+    await page.click('#aiBtn');
+    await page.waitForSelector('.ai-pill.ai-live');
+    await page.evaluate(() => {
+      window.__mark = __sent.length;
+      const pcm = new Uint8Array(new Int16Array(24000).fill(8000).buffer);
+      __ws.onmessage({ data: JSON.stringify({ serverContent: { modelTurn: { parts: [{ inlineData: { mimeType: 'audio/pcm;rate=24000', data: btoa(String.fromCharCode.apply(null, pcm)) } }] } } }) });
+    });
+    await page.waitForTimeout(600);
+    const heard = await page.evaluate(() => __sent.slice(__mark).filter(m => m.realtimeInput && m.realtimeInput.audio).map(m => /^A*=*$/.test(m.realtimeInput.audio.data)));
+    assert.ok(heard.length && heard.every(Boolean), 'the mic sends silence while it talks');
+    await page.click('#aiOrb', { force: true });
+    await page.evaluate(() => { window.__mark = __sent.length; });
+    await page.waitForTimeout(1500); // the fake mic beeps once a second
+    assert.ok(await page.locator('.ai-pill.ai-live').count(), 'the tap stopped its voice, not the mic');
+    assert.ok(await page.evaluate(() => __sent.slice(__mark).some(m => m.realtimeInput && m.realtimeInput.audio && !/^A*=*$/.test(m.realtimeInput.audio.data))), 'and it hears again');
+
+    // Closing on a card drops the calls still waiting: no card comes back on reopening
+    await page.evaluate(() => __ws.onmessage({ data: JSON.stringify({ toolCall: { functionCalls: [{ id: 'd1', name: 'add_entry', args: { type: 'Expense', category: 'milk', amount: 40 } }, { id: 'd2', name: 'add_entry', args: { type: 'Expense', category: 'milk', amount: 60 } }] } }) }));
+    await page.waitForSelector('.ai-card.ai-on #aiSave');
+    await page.click('#aiClose');
+    await page.waitForFunction(() => !$('#ai').open);
+    await page.waitForTimeout(100);
+    assert.ok(!(await page.evaluate(() => $('#aiCard').classList.contains('ai-on'))), 'the second card did not open on the closed screen');
+
     // Listening: a session of its own with turn-taking off; tapping the orb ends the conversation. The mic is asked for once per opening.
-    // It remembers: a new session starts with the last 10 messages (kept while the app is open)
+    // It remembers: a new session starts with the last 10 messages (kept while the app is open), and how each card ended
     const setups = await page.evaluate(() => __sent.filter(m => m.setup).length);
     await page.click('#aiBtn');
     await page.waitForSelector('#ai[open]');
     const memo = (await page.waitForFunction(n => { const s = __sent.filter(m => m.setup); return s.length > n && s[s.length - 1].setup; }, setups).then(h => h.jsonValue())).systemInstruction.parts[0].text;
     assert.ok(memo.includes('User: what is on my list?'), 'the last messages go to the new session (a turn cut off by closing too)');
-    assert.strictEqual(memo.split('\n').filter(l => /^(User|You): /.test(l)).length, 10, 'only the last 10');
+    assert.ok(memo.includes('App: add_entry not saved: The user cancelled'), 'a card closed unsaved is remembered as not saved');
+    assert.strictEqual(memo.split('\n').filter(l => /^(User|You|App): /.test(l)).length, 10, 'only the last 10');
     await say('listen to this conversation', { name: 'listen', args: {} });
     await page.waitForSelector('.ai-pill.ai-live');
     const ls = await page.evaluate(() => __sent.filter(m => m.setup).pop().setup);
@@ -206,7 +232,7 @@ const APP = path.join(__dirname, '..', 'src');
     await page.click('#aiWave'); // talk again: a normal session, the same mic
     await page.waitForSelector('.ai-pill.ai-live');
     assert.ok(!(await page.evaluate(() => __sent.filter(m => m.setup).pop().setup)).realtimeInputConfig);
-    assert.strictEqual(await page.evaluate(() => __gum), 2, 'the mic is asked for once each time it opens (twice so far)');
+    assert.strictEqual(await page.evaluate(() => __gum), 3, 'the mic is asked for once each time it opens (three times so far)');
     await page.click('#aiWave');
     await page.waitForSelector('.ai-pill:not(.ai-live)');
     assert.strictEqual(await page.evaluate(() => __played), played, 'no sounds once they are off');

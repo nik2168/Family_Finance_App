@@ -431,10 +431,14 @@ function glanceHtml(v, p, now, s) {
   if (!d) budget = starter('full', 'setBudget', '--lavender', 'bag', 'Set a monthly budget', 'See what is left to spend each day');
   else {
     var pl = paceLine(v.rows, b, now), over = pl.end > d.limit, mon = ' ' + MONTHS[now.getMonth()];
-    budget = tile('full', 'id="setBudget"', '--lavender', '<span class="tt"><small>' + (d.left >= 0 ? 'Left to spend' : 'Over the budget') + '</small><span class="pill white">' + (d.days === 1 ? 'Last day' : d.days + ' days left') + '</span></span>' +
+    // The month's top 3 categories, all spending counted
+    var top = Object.keys(s.spent).filter(function (c) { return s.spent[c] > 0; }).sort(function (a, c) { return s.spent[c] - s.spent[a]; }).slice(0, 3);
+    // A white card; the budget is said in words, not on the dashed line (a label there runs into the lines once spending passes it)
+    budget = '<button type="button" class="card tile full" id="setBudget"><span class="tt"><small>' + (d.left >= 0 ? 'Left to spend' : 'Over the budget') + '</small><span class="pill">' + (d.days === 1 ? 'Last day' : d.days + ' days left') + '</span></span>' +
       '<b class="big num' + (d.left < 0 ? ' neg' : '') + '">' + money.format(Math.abs(d.left)) + '</b>' +
-      '<small>' + (d.left > 0 ? 'About ' + money.format(d.perDay) + ' a day, ' : '') + '<span' + (over ? ' class="neg"' : '') + '>' + (d.left > 0 ? 'on' : 'On') + ' pace for ' + compact(pl.end) + '</span></small>' +
-      lineSvg([{ v: pl.done }, { v: pl.pace, dashed: true }], { fill: over ? '--blush-d' : '--lavender-d', goal: d.limit, goalText: 'Budget ' + compact(d.limit), label: 'Spending this month against the budget', ticks: ['1' + mon, (pl.pace.length - 1) + mon] }));
+      '<small>Budget ' + compact(d.limit) + '. ' + (d.left > 0 ? 'About ' + money.format(d.perDay) + ' a day, ' : '') + '<span' + (over ? ' class="neg"' : '') + '>' + (d.left > 0 ? 'on' : 'On') + ' pace for ' + compact(pl.end) + '</span></small>' +
+      lineSvg([{ v: pl.done }, { v: pl.pace, dashed: true }], { fill: over ? '--blush-d' : '--mint-d', goal: d.limit, goalText: '', label: 'Spending this month against the budget', ticks: ['1' + mon, (pl.pace.length - 1) + mon] }) +
+      (top.length ? '<span class="tcats">' + top.map(function (c) { return '<span class="tcat">' + disc('Expense', c, 'xs', 18) + '<span class="grow"><span>' + esc(c) + '</span><b class="num">' + compact(s.spent[c]) + '</b></span></span>'; }).join('') + '</span>' : '') + '</button>';
   }
   if (p.focus === 'debt') {
     goal = tile('', 'id="glGoal" data-tab="insights"', '--butter', img3d('bank', 32) + '<small>Debt-free by</small><b class="tv num">' + (p.pace ? monthYear(inMonths(now, p.pace)) : 'Not yet') + '</b>' +

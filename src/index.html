@@ -114,7 +114,9 @@ section{display:flex;flex-direction:column;gap:14px}
 #glance{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px}
 .tile{display:flex;flex-direction:column;align-items:stretch;justify-content:space-between;gap:6px;min-height:150px;min-width:0;text-align:left;box-shadow:var(--shadow)}
 .tile.full{grid-column:1/-1;min-height:0;padding:20px}
-.tile small{display:block;font-size:13px;color:rgba(11,11,12,.68)}
+.tile small{display:block;font-size:13px}
+.pcard.tile small{color:rgba(11,11,12,.68)}
+.card.tile small{color:var(--muted)}
 .tile b{font-weight:600}
 .tile .tv{font-size:24px;letter-spacing:-.02em;line-height:1.15}
 .tile .big{font-size:40px;margin:2px 0}
@@ -123,11 +125,24 @@ section{display:flex;flex-direction:column;gap:14px}
 .tile .ringbox{align-items:flex-start}
 .tile .ringbox small:empty{display:none}
 .tile .chart{margin:10px 0 0}
-.tile .chart .plot{height:110px;border-bottom-color:rgba(11,11,12,.15)}
-.tile .chart path[stroke]{stroke:#0B0B0C}
-.tile .chart .gline{border-top-color:rgba(11,11,12,.4)}
-.tile .chart .gline b{left:0;right:auto;background:none;padding:0}
-.tile .cticks{color:rgba(11,11,12,.62)}
+.tile .chart .plot{height:110px}
+.pcard.tile .chart .plot{border-bottom-color:rgba(11,11,12,.15)}
+.pcard.tile .chart path[stroke]{stroke:#0B0B0C}
+.pcard.tile .chart .gline{border-top-color:rgba(11,11,12,.4)}
+.pcard.tile .cticks{color:rgba(11,11,12,.62)}
+/* Left to spend: a white card, kept short on a phone; the month's top 3 categories under its line */
+.card.tile.full{padding:16px;gap:2px}
+.card.tile .big{font-size:32px;margin:0}
+.card.tile .tt .pill{padding:2px 9px}
+.card.tile .chart{margin-top:6px}
+.card.tile .chart .plot{height:56px}
+.card.tile .cticks{display:none}
+.tcats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:8px;padding-top:8px;border-top:1px solid var(--line)}
+.tcat{display:flex;align-items:center;gap:7px;min-width:0;font-size:12.5px;line-height:1.25}
+.tcat .disc{width:28px;height:28px}
+.tcat .grow span{display:block;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tcat b{display:block}
+@media (min-width:768px){.card.tile .big{font-size:40px}.card.tile .chart .plot{height:110px}.card.tile .cticks{display:flex}}
 /* Notes and lists from the assistant (app.js notesHtml): on Home, and in the assistant's card */
 #notes:empty,#again:empty,#due:empty{display:none}
 .nt h2 .rbtn{flex:none}

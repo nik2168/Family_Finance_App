@@ -16,7 +16,7 @@
   var DECLS = [
     { name: 'add_entry', description: 'Prepare a new income or expense. The user sees it on a card and must tap Save.',
       parameters: { type: 'OBJECT', properties: { type: { type: 'STRING', enum: ['Income', 'Expense'] }, category: { type: 'STRING', description: 'One of the existing categories for that type' },
-        amount: { type: 'NUMBER', description: 'Rupees' }, note: { type: 'STRING', description: 'Short reason, in the user\'s words' }, date: { type: 'STRING', description: 'YYYY-MM-DD, default today' } }, required: ['type', 'amount'] } },
+        amount: { type: 'NUMBER', description: 'Rupees' }, note: { type: 'STRING', description: 'Short title of what it was spent on or where it came from, e.g. Milk, Petrol, Salary' }, date: { type: 'STRING', description: 'YYYY-MM-DD, default today' } }, required: ['type', 'amount', 'note'] } },
     { name: 'add_bill', description: 'Prepare a repeating bill (rent, electricity, LIC...). The user must tap Save.',
       parameters: { type: 'OBJECT', properties: { name: { type: 'STRING' }, category: { type: 'STRING', description: 'An expense category' }, amount: { type: 'NUMBER' },
         day: { type: 'INTEGER', description: 'Day of the month it is due, 1-31' }, every: { type: 'INTEGER', description: 'Every how many months: 1, 3, 6 or 12' } }, required: ['name', 'amount'] } },
@@ -25,8 +25,8 @@
         interest: { type: 'NUMBER', description: 'Percent' }, per: { type: 'STRING', enum: ['month', 'year'] } }, required: ['dir', 'reason', 'amount'] } },
     { name: 'add_entries', description: 'Prepare several incomes and expenses at once, when the user names more than one. They see a short list and save them all with one tap.',
       parameters: { type: 'OBJECT', properties: { items: { type: 'ARRAY', items: { type: 'OBJECT', properties: { type: { type: 'STRING', enum: ['Income', 'Expense'] },
-        category: { type: 'STRING', description: 'One of the existing categories for that type' }, amount: { type: 'NUMBER', description: 'Rupees' }, note: { type: 'STRING', description: 'Short, in the user\'s words' },
-        date: { type: 'STRING', description: 'YYYY-MM-DD, default today' } }, required: ['type', 'amount'] } } }, required: ['items'] } },
+        category: { type: 'STRING', description: 'One of the existing categories for that type' }, amount: { type: 'NUMBER', description: 'Rupees' }, note: { type: 'STRING', description: 'Short title of what it was spent on or where it came from, e.g. Milk, Petrol, Salary' },
+        date: { type: 'STRING', description: 'YYYY-MM-DD, default today' } }, required: ['type', 'amount', 'note'] } } }, required: ['items'] } },
     { name: 'cancel', description: 'Close the card the user is looking at without saving, when they say cancel ("no", "rehne do"). Only the user can save, with a tap.' },
     { name: 'save_note', description: 'Save a note or checklist on this phone (groceries, things to do or bring, plans), or add to or tick items on the one with the same title. Saved at once; it shows on Home.',
       parameters: { type: 'OBJECT', properties: { title: { type: 'STRING', description: 'Short, e.g. "Groceries", "To do"' }, items: { type: 'ARRAY', items: { type: 'STRING' }, description: 'Items to add' },
@@ -258,7 +258,7 @@
       if (!headOnly) $('#aiFlds').innerHTML = '<div class="ai-mis">' + x.items.map(function (e, i) {
         var inc = e.type === 'Income';
         return '<div class="ai-mi">' + img(e.category, 24) + '<label class="ai-mamt' + (inc ? ' ai-pos' : '') + '"><span>' + (inc ? '+₹' : '₹') + '</span><input data-i="' + i + '" data-f="amount" inputmode="decimal" placeholder="0" value="' + esc(grouped(e.amount)) + '" aria-label="Amount"></label>' +
-          '<input class="ai-in" data-i="' + i + '" data-f="note" placeholder="' + esc(e.category) + '" value="' + esc(e.note) + '" aria-label="Note" autocomplete="off"><button type="button" class="ai-rm" data-rm="' + i + '" aria-label="Remove">×</button></div>';
+          '<input class="ai-in" data-i="' + i + '" data-f="note" placeholder="' + ENTRY_NOTE[e.type][0] + '" value="' + esc(e.note) + '" aria-label="Note" autocomplete="off"><button type="button" class="ai-rm" data-rm="' + i + '" aria-label="Remove">×</button></div>';
       }).join('') + '</div>';
       return;
     }
@@ -266,7 +266,7 @@
       p = pic(x.category || 'Others'); title = x.category || 'Pick a category'; sub = dayText(x.date);
       tag = '<span class="ai-tag' + (x.type === 'Income' ? '' : ' ai-bad') + '">' + x.type + '</span>';
       var t = ymd(new Date()), y = ymd(new Date(Date.now() - 864e5)), other = x.date !== t && x.date !== y;
-      h = seg('type', [['Expense', 'Expense'], ['Income', 'Income']], x.type) + field('Category', chips(cats[x.type], x.category)) + field('Note', input('note', 'What was it for?', x.note)) +
+      h = seg('type', [['Expense', 'Expense'], ['Income', 'Income']], x.type) + field('Category', chips(cats[x.type], x.category)) + field(ENTRY_NOTE[x.type][0], input('note', ENTRY_NOTE[x.type][1], x.note)) +
         field('When', '<div class="ai-row2">' + seg('date', [[t, 'Today'], [y, 'Yesterday']], x.date) + '<input class="ai-in" type="date" data-in="date" max="' + t + '" value="' + (other ? x.date : '') + '" aria-label="Pick a date"></div>');
     } else if (n === 'add_bill') {
       p = pic(x.category || x.name || 'Bills'); title = x.name || 'New bill'; sub = REPEATS.filter(function (e) { return e[0] === x.every; })[0][1] + (x.day ? ' · due on day ' + x.day : '');
@@ -275,10 +275,10 @@
         field('Due on day', input('day', '1–31', x.day, 'numeric')) + field('Repeats', seg('every', REPEATS, x.every));
     } else {
       var T = LOAN_TEXT[x.dir];
-      p = T.pic; title = x.reason || T.newTitle; sub = num(x.interest) > 0 ? x.interest + '% a ' + x.per : 'No interest';
+      p = T.pic; title = x.reason || T.newTitle; sub = x.dir !== 'borrowed' && num(x.interest) > 0 ? x.interest + '% a ' + x.per : 'No interest';
       tag = '<span class="ai-tag' + (x.dir === 'borrowed' ? ' ai-bad' : '') + '">' + KINDS[x.dir] + '</span>';
       h = seg('dir', Object.keys(KINDS).map(function (k) { return [k, KINDS[k]]; }), x.dir) + field(T.label, input('reason', T.ph, x.reason)) +
-        field('Interest % (optional)', '<div class="ai-row2">' + input('interest', '0', x.interest, 'decimal') + seg('per', [['month', 'a month'], ['year', 'a year']], x.per) + '</div>');
+        (x.dir === 'borrowed' ? '' : field('Interest % (optional)', '<div class="ai-row2">' + input('interest', '0', x.interest, 'decimal') + seg('per', [['month', 'a month'], ['year', 'a year']], x.per) + '</div>')); // a pending has none, as in the app's form
     }
     $('#aiPvh').innerHTML = disc(p, true) + '<div class="ai-what">' + esc(title) + tag + '</div><div class="ai-when">' + esc(sub) + '</div>';
     var amt = num(x.amount);
@@ -304,6 +304,7 @@
       for (var i = 0; i < x.items.length; i++) {
         var it = x.items[i], amt = Math.round(num(it.amount) * 100) / 100, when = it.date === ymd(now) ? now : new Date(it.date + 'T12:00:00');
         if (!(amt > 0)) return stop('Type the amount for ' + (it.note || it.category));
+        if (!it.note.trim()) return stop(ENTRY_NOTE[it.type][2] + ' (' + it.category + ')');
         var en = { id: crypto.randomUUID(), dateTime: (isNaN(when) || when > now ? now : when).toISOString(), type: it.type, category: it.category, amount: amt, note: it.note.trim(), createdAt: now.toISOString() };
         if (me()) en.by = me();
         if ((bad = validateEntry(en))) return stop(bad);
@@ -313,6 +314,7 @@
       final = list.map(function (e) { return { type: e.type, category: e.category, amount: e.amount, note: e.note }; });
     } else if (p.name === 'add_entry') {
       if (!x.category) return stop('Pick a category');
+      if (!x.note.trim()) return stop(ENTRY_NOTE[x.type][2]);
       var dt = x.date === ymd(now) ? now : new Date(x.date + 'T12:00:00');
       if (isNaN(dt) || dt > now) return stop('Pick a valid date');
       var e = { id: id, dateTime: dt.toISOString(), type: x.type, category: x.category, amount: amount, note: x.note.trim(), createdAt: now.toISOString() };
@@ -327,7 +329,7 @@
       final = { name: x.name.trim().slice(0, 40), category: x.category, amount: amount, day: d, every: x.every, next: d >= now.getDate() ? monthKey(now) : addMonths(monthKey(now), 1) };
       bad = setOp('bill', final, id);
     } else {
-      var T = LOAN_TEXT[x.dir], rate = String(x.interest).trim() === '' ? 0 : num(x.interest);
+      var T = LOAN_TEXT[x.dir], rate = x.dir === 'borrowed' || String(x.interest).trim() === '' ? 0 : num(x.interest);
       if (!x.reason.trim()) return stop(T.need);
       if (!(rate >= 0 && rate <= 100)) return stop('Interest must be a number from 0 to 100');
       var loan = { id: id, dateTime: now.toISOString(), reason: x.reason.trim(), amount: amount, interest: round2(rate), per: x.per, priority: 'medium', dir: x.dir, createdAt: now.toISOString() };
@@ -364,6 +366,7 @@
       'Reply in the language the user speaks (English, Hindi or Hinglish), in one or two short sentences. The screen shows the details, so do not read out long lists.',
       'To add an income, expense, bill, loan or investment, call the matching add_ tool. The user checks it on a card and taps Save. Only say it was saved when the result has saved:true.',
       'For any question about the user\'s money, call query_entries or overview first. Never guess numbers and never add them up yourself; use the totals the tools return.',
+      'Every income and expense needs a note: a short, relevant title (Milk, Petrol, Salary); if the user did not say one, make it from what they said.',
       'Amounts: 30k = 30000, 1.5 lakh = 150000. Pick the closest existing category, or Others when nothing fits.',
       'When the user names several incomes or expenses at once, call add_entries once with all of them (you pick the categories and dates). For one, call add_entry.',
       'While a card is open: when the user says cancel (no, rehne do), call cancel. Only the user saves, by tapping Save; when they say save, ask them to tap Save. For a change, call the same add_ tool again with everything corrected.',

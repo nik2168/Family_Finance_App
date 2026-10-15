@@ -32,27 +32,29 @@ var LOAN_TEXT = {
   // Pending: what the family owes, a shop's dues (with its expense category: paying it back is an expense in it) or a cash loan.
   borrowed: { color: '--blush', pic: 'bank', left: 'Still to pay', add: 'Add pending', list: 'Pending', none: ['Nothing pending', 'Tap "Add pending" when you owe someone'],
     foot: 'Paying back a pending with a category (a shop\'s dues) counts as an expense in it; a cash loan\'s doesn\'t. Interest you pay counts as an expense.', newTitle: 'New pending', editTitle: 'Edit pending',
-    kind: 'Pending', kindIcon: 'arrow-down-left', label: 'Owed to, and why', ph: 'e.g. Kirana shop, DAP from Mahesh',
-    need: 'Write who it is owed to and why', left2: ' to pay', over: ' still to pay', done: 'Paid', small: 'Owed ', paid: 'Paid back ',
+    kind: 'Pending', kindIcon: 'arrow-down-left', label: 'Owed to', ph: 'e.g. Kirana shop, Mahesh',
+    need: 'Write who it is owed to', left2: ' to pay', over: ' still to pay', done: 'Paid', small: 'Owed ', paid: 'Paid back ',
     save: 'Save', saved: 'Pending saved', what: 'this pending', payments: ['payment', 'payments'], deleted: 'Pending deleted', pill: 'bad',
     rate: 'Interest (optional)', rates: [0, 1, 1.5, 2, 3], per: 'month' },
   given: { color: '--mint', pic: 'hand', left: 'Still to get back', add: 'Give money', list: 'Money given', none: ['Nothing given', 'Tap "Give money" when you lend to someone'],
     foot: '"Got interest" adds it to Income › Interest. Money given is kept apart from income and expenses.', newTitle: 'Give money', editTitle: 'Edit money given',
-    kind: 'Money given', kindIcon: 'arrow-up-right', label: 'Given to, and why', ph: 'e.g. To Raju, for his shop',
-    need: 'Write who you gave it to and why', left2: ' to get', over: ' still to get', done: 'Got back', small: 'Gave ', paid: 'Got back ',
+    kind: 'Money given', kindIcon: 'arrow-up-right', label: 'Given to', ph: 'e.g. Raju, for his shop',
+    need: 'Write who you gave it to', left2: ' to get', over: ' still to get', done: 'Got back', small: 'Gave ', paid: 'Got back ',
     save: 'Save', saved: 'Saved', what: 'this', payments: ['payment received', 'payments received'], deleted: 'Deleted', pill: 'ok',
     rate: 'Interest (optional)', rates: [0, 1, 1.5, 2, 3], per: 'month' },
   // Funds and deposits: "worth now" grows at the expected return (an estimate); money added and withdrawals change it.
   invested: { color: '--lavender', pic: 'up', left: 'Worth now (estimate)', add: 'Add an investment', list: 'Investments', none: ['No investments', 'Tap "Add an investment" for an FD, RD, SIP or PPF'],
     foot: '"Worth now" is an estimate from the expected return, not live prices. Money added and taken out are kept apart from income and expenses.',
-    newTitle: 'New investment', editTitle: 'Edit investment', kind: 'Investment', kindIcon: 'trend-up', label: 'Name', ph: 'e.g. HDFC SIP, Post office RD',
-    need: 'Write its name', left2: ' now', over: '', done: 'Withdrawn', small: 'Invested ', paid: 'Withdrawn ', save: 'Save investment', saved: 'Investment saved',
+    newTitle: 'New investment', editTitle: 'Edit investment', kind: 'Investment', kindIcon: 'trend-up', label: 'Invested in', ph: 'e.g. HDFC SIP, Post office RD',
+    need: 'Write what you invested in', left2: ' now', over: '', done: 'Withdrawn', small: 'Invested ', paid: 'Withdrawn ', save: 'Save investment', saved: 'Investment saved',
     what: 'this investment', payments: ['withdrawal or top-up', 'withdrawals and top-ups'], deleted: 'Investment deleted', pill: 'ok',
     rate: 'Expected return', rates: [6.5, 7, 8, 10, 12], per: 'year' }
 };
 function loansOf(v, dir) { return v.loans.filter(function (l) { return loanDir(l) === dir; }); }
 function tabDir() { return MONEY_TABS[state.tab] || 'borrowed'; }
-var QUICK = [100, 500, 1000, 2000];
+// The name every income and expense needs, by type: [label, example, what to say when it is missing]
+var ENTRY_NOTE = { Expense: ['Spent on', 'e.g. Milk, Petrol, School fees', 'Write what it was spent on'],
+  Income: ['Money from', 'e.g. Salary, Sold wheat, Shop rent', 'Write where the money came from'] };
 var HISTORY_SHOW = 100, HOME_LATEST = 3, HOME_LATEST_WIDE = 7;
 var $ = function (s) { return document.querySelector(s); };
 // Tablets and laptops: sidebar with the sheet switcher, page titles in the toolbar (index.html, same width).
@@ -1035,30 +1037,12 @@ function renderPayInfo() {
   $('#payInfo').hidden = false;
 }
 
-function recentNotes(type, category) {
-  var seen = {}, out = [];
-  view().rows.filter(function (e) { return e.type === type && e.category === category && e.note; })
-    .sort(function (a, b) { return Date.parse(b.dateTime) - Date.parse(a.dateTime); })
-    .forEach(function (e) { var n = e.note.trim(); if (!seen[n.toLowerCase()] && out.length < 6) { seen[n.toLowerCase()] = true; out.push(n); } });
-  return out;
-}
-
-function renderNoteChips() {
-  var sh = state.sheet, notes = sh.type ? recentNotes(sh.type, sh.category) : [];
-  var cur = $('#note').value.trim().toLowerCase();
-  $('#noteChips').hidden = !notes.length;
-  $('#noteChips').innerHTML = notes.map(function (n) {
-    return '<button type="button" class="chip" data-note="' + esc(n) + '" aria-pressed="' + (n.toLowerCase() === cur) + '">' + icon('note-pencil', 'sm') + esc(n) + '</button>';
-  }).join('');
-}
-
-// Category grid: one tap. Income or Expense is switched above it.
+// Category grid: one tap.
 function renderCat() {
   var sh = state.sheet, cats = view().cats[sh.type] || [], pend = sh.mode === 'loan-add' || sh.mode === 'loan-edit';
   $('#catGrid').innerHTML = (pend ? '<button type="button" class="cg" data-cat="" aria-pressed="' + !sh.category + '"><span class="disc" style="background:var(--blush)">' + img3d('bank', 28) + '</span>Cash loan</button>' : '') + cats.map(function (c) {
     return '<button type="button" class="cg" data-cat="' + esc(c) + '" aria-pressed="' + (sh.category === c) + '"><span class="disc" style="background:var(' + discOf(sh.type, c) + ')">' + img(c, 28) + '</span>' + esc(c) + '</button>';
   }).join('');
-  document.querySelectorAll('#typeSeg button').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.type === sh.type)); });
 }
 // Dropdowns: a button with aria-controls opens its list; picking, tapping outside or Esc closes it.
 function toggleDD(btn, open) {
@@ -1103,7 +1087,7 @@ function renderDay() {
   $('#changeWhen').setAttribute('aria-pressed', String(picked));
 }
 function renderQuick() {
-  var sh = state.sheet, chips = QUICK.map(function (q) { return '<button type="button" class="chip" data-add="' + q + '">+' + money.format(q) + '</button>'; });
+  var sh = state.sheet, chips = [];
   if (sh.mode === 'repay') {
     var l = sh.loan, x = view().settings.loans[l.id] || {};
     if (sh.pay === 'back' && sh.dir !== 'invested') chips.unshift('<button type="button" class="chip dark" data-set="' + l.owed + '">Full ' + esc(money.format(l.owed)) + '</button>');
@@ -1112,6 +1096,7 @@ function renderQuick() {
     if (sh.pay === 'add' && x.sip) chips.unshift('<button type="button" class="chip dark" data-set="' + x.sip + '">This month ' + esc(money.format(x.sip)) + '</button>');
   }
   $('#quick').innerHTML = chips.join('');
+  $('#quick').hidden = !chips.length;
 }
 function renderPaySeg() {
   var sh = state.sheet, l = sh.loan, x = view().settings.loans[l.id] || {}, kinds;
@@ -1132,7 +1117,6 @@ function openSheet(sh, values) {
   var mode = sh.mode, isEntry = mode === 'add' || mode === 'edit', isLoan = mode === 'loan-add' || mode === 'loan-edit', isPay = mode === 'repay', isBill = mode === 'bill', T = LOAN_TEXT[sh.dir || 'borrowed'];
   if (isEntry || isBill) entryHeader();
   else if (isLoan) sheetHeader(T.pic, T.color, mode === 'loan-add' ? T.newTitle : T.editTitle, T.pill, icon(T.kindIcon, 'sm') + T.kind);
-  $('#typeSeg').hidden = !isEntry;
   $('#paySeg').hidden = true;
   $('#payInfo').hidden = true;
   if (isPay) renderPaySeg();
@@ -1141,30 +1125,28 @@ function openSheet(sh, values) {
   $('#catGrid').hidden = !(isEntry || isBill || pend);
   if (isEntry || isBill || pend) renderCat();
   $('#noteBox').hidden = isPay;
-  $('#noteLabel').textContent = isLoan ? T.label : isBill ? 'Bill name' : 'Reason (optional)';
-  $('#note').placeholder = isLoan ? T.ph : isBill ? 'e.g. Rent, Electricity, LIC' : 'What was it for?';
+  var words = isLoan ? [T.label, T.ph] : isBill ? ['Bill name', 'e.g. Rent, Electricity, LIC'] : ENTRY_NOTE[sh.type] || ['', ''];
+  $('#noteLabel').textContent = words[0];
+  $('#note').placeholder = words[1];
   $('#note').value = values.note || '';
   $('#deleteBtn').hidden = !(mode === 'edit' || mode === 'loan-edit' || (isBill && sh.id));
   $('#deleteText').textContent = mode === 'edit' ? 'Delete entry' : isBill ? 'Delete bill' : 'Delete';
   $('#err').textContent = '';
   $('#dateChips').hidden = isBill || mode === 'edit' || mode === 'loan-edit';
   setWhen(mode === 'edit' || mode === 'loan-edit' ? values.dateTime : null);
-  $('#repeatBox').hidden = !(mode === 'add' && !sh.bill && sh.type === 'Expense');
-  $('#repeat').checked = false;
   $('#billBox').hidden = !isBill;
   if (isBill) { $('#billDay').value = values.day || ''; sh.every = values.every || 1; renderEvery(); }
   $('#loanOpts').hidden = !isLoan;
   if (isLoan) loanOpts(values);
   renderQuick();
   renderAmount();
-  if (isEntry) renderNoteChips(); else $('#noteChips').hidden = true;
   var by = values.by || (mode === 'add' ? me() : '');
   $('#byLine').textContent = isEntry ? (by ? 'Added by ' + by : mode === 'add' ? 'Put your name in Settings to show who added it' : '') : '';
   $('#sheet').showModal();
   lockPage(true);
-  // Open the number pad straight away for new things; editing keeps the keyboard down so the form stays visible.
+  // New things start at the name (a payment, which has none, at the amount); editing keeps the keyboard down so the form stays visible.
   if (mode === 'edit' || mode === 'loan-edit' || (isBill && sh.id)) $('#saveBtn').focus();
-  else if ((isEntry || isBill) && !sh.category) $('#catGrid').focus();
+  else if (!isPay && !$('#note').value) $('#note').focus();
   else $('#amount').focus();
 }
 function renderEvery() { document.querySelectorAll('#everySeg button').forEach(function (b) { b.setAttribute('aria-pressed', String(Number(b.dataset.every) === state.sheet.every)); }); }
@@ -1178,14 +1160,12 @@ function loanOpts(values) {
   sh.compound = values.compound !== false;
   sh.type = x.type || '';
   $('#typeBox').hidden = $('#compBox').hidden = $('#sipBox').hidden = $('#goalBox').hidden = sh.dir !== 'invested';
-  $('#emiBox').hidden = $('#starBox').hidden = sh.dir !== 'borrowed';
-  $('#emi').value = x.emi || '';
-  $('#emiDay').value = sh.dir === 'borrowed' ? x.day || '' : '';
+  // A pending is kept simple: no interest or "before this month" to fill in (one an old pending has stays as it was)
+  $('#rateBox').hidden = $('#oldBox').hidden = sh.dir === 'borrowed';
   $('#sip').value = x.sip || '';
   $('#sipDay').value = sh.dir === 'invested' ? x.day || '' : '';
   $('#goal').value = x.goal || '';
   $('#goalBy').value = x.goalBy || '';
-  $('#star').checked = !!x.star || sh.priority === 'high';
   $('#old').checked = !!x.old;
   $('#oldTitle').textContent = { borrowed: 'Owed before this month', given: 'Given before this month', invested: 'I already had this before' }[sh.dir];
   $('#oldText').textContent = sh.dir === 'invested' ? 'Not counted as money put in this month: its value today' : 'Not counted as this month\'s money';
@@ -1236,6 +1216,7 @@ function saveSheet(ev) {
   var err = function (t, el) { $('#err').textContent = t; if (el) el.focus(); };
   if ((sh.mode === 'add' || sh.mode === 'edit' || sh.mode === 'bill') && !sh.category) return err('Choose a category');
   if (!(amount > 0)) return err('Type the amount');
+  if ((sh.mode === 'add' || sh.mode === 'edit') && !reason) return err(ENTRY_NOTE[sh.type][2], $('#note'));
   if ((sh.mode === 'loan-add' || sh.mode === 'loan-edit') && !reason) return err(T.need, $('#note'));
   if (sh.mode === 'bill' && !reason) return err('Give the bill a name', $('#note'));
   var dt = !$('#whenBox').hidden ? new Date($('#when').value) : new Date(Date.now() - (sh.day || 0) * 864e5);
@@ -1248,7 +1229,6 @@ function saveSheet(ev) {
     if (by) e.by = by;
     bad = validateEntry(e) || queue('entry', sh.mode === 'add' ? 'add' : 'update', id, e);
     if (!bad && sh.bill && v.settings.bills[sh.bill]) { var bl = v.settings.bills[sh.bill]; setOp('bill', Object.assign({}, bl, { next: addMonths(bl.next, bl.every) }), sh.bill); }
-    if (!bad && $('#repeat').checked) setOp('bill', { name: (reason || sh.category).slice(0, 40), category: sh.category, amount: amount, day: dt.getDate(), every: 1, next: addMonths(monthKey(dt), 1) }, crypto.randomUUID());
     msg = sh.mode === 'add' ? 'Saved ' + money.format(amount) : 'Changes saved';
   } else if (sh.mode === 'bill') {
     var billDay = dayOf($('#billDay').value), today = new Date();
@@ -1294,13 +1274,8 @@ function saveSheet(ev) {
     if (!(rate >= 0 && rate <= 100)) return err('Interest must be a number from 0 to 100', $('#rate'));
     var extras = {}, prev = v.settings.loans[id] || {};
     if (sh.dir === 'borrowed') {
-      if ($('#emi').value.trim() && !numberOf($('#emi').value)) return err('Type the EMI as an amount', $('#emi'));
-      if ($('#emiDay').value.trim() && !dayOf($('#emiDay').value)) return err('The day is 1 to 31', $('#emiDay'));
-      if (numberOf($('#emi').value)) extras.emi = numberOf($('#emi').value);
-      if (dayOf($('#emiDay').value)) extras.day = dayOf($('#emiDay').value);
-      if ($('#star').checked) extras.star = true;
+      ['emi', 'day', 'star'].forEach(function (k) { if (prev[k]) extras[k] = prev[k]; }); // no longer asked; an old pending keeps them
       if (sh.category) extras.cat = sh.category;
-      sh.priority = $('#star').checked ? 'high' : sh.priority === 'high' ? 'medium' : sh.priority;
     } else if (sh.dir === 'invested') {
       if ($('#sipDay').value.trim() && !dayOf($('#sipDay').value)) return err('The day is 1 to 31', $('#sipDay'));
       if (sh.type) extras.type = sh.type;
@@ -1362,9 +1337,10 @@ $('#amount').addEventListener('input', function () {
   $('#err').textContent = '';
   renderAmount();
 });
-// "Next" on the number pad goes on to the reason (paying has no reason, so Enter saves there).
+// The name, then the amount; "done" on the number pad puts the keyboard away while a category is still to pick, else saves.
+$('#note').addEventListener('keydown', function (ev) { if (ev.key === 'Enter') { ev.preventDefault(); $('#amount').focus(); } });
 $('#amount').addEventListener('keydown', function (ev) {
-  if (ev.key === 'Enter' && !$('#noteBox').hidden) { ev.preventDefault(); $('#note').focus(); }
+  if (ev.key === 'Enter' && !$('#catGrid').hidden && !state.sheet.category && state.sheet.mode !== 'loan-add' && state.sheet.mode !== 'loan-edit') { ev.preventDefault(); this.blur(); }
 });
 // Keep the field being typed in above the phone keyboard: only the sheet scrolls (scrollIntoView moved the whole page on iOS
 // when the sheet had little room to scroll, as in Give money), the field going about 90px below the top of what is visible.
@@ -1415,15 +1391,12 @@ document.addEventListener('click', function (ev) {
   else if (t.id === 'qClear') { state.f.q = ''; $('#q').value = ''; renderHistory(view()); $('#q').focus(); }
   else if (t.id === 'hShare') shareHistory();
   else if (t.id === 'insShare' || t.id === 'shareMonth') shareSummary();
-  else if (d.add) { state.amt = String(Math.round((amountValue() + Number(d.add)) * 100) / 100); renderAmount(); }
   else if (d.set) { state.amt = d.set; renderAmount(); }
-  else if (t.hasAttribute('data-note')) { $('#note').value = d.note; renderNoteChips(); }
-  else if (d.type && t.closest('#typeSeg')) { if (state.sheet.type !== d.type) { state.sheet.type = d.type; state.sheet.category = ''; $('#repeatBox').hidden = !(state.sheet.mode === 'add' && d.type === 'Expense' && !state.sheet.bill); } entryHeader(); renderCat(); renderNoteChips(); }
   else if (t.hasAttribute('data-cat') && t.closest('#catGrid')) {
     var m0 = state.sheet.mode;
     state.sheet.category = d.cat; $('#err').textContent = ''; renderCat();
-    if (m0 !== 'loan-add' && m0 !== 'loan-edit') { entryHeader(); if (m0 !== 'bill') renderNoteChips(); }
-    if (!state.amt) $('#amount').focus();
+    if (m0 !== 'loan-add' && m0 !== 'loan-edit') entryHeader();
+    if (!$('#noteBox').hidden && !$('#note').value.trim()) $('#note').focus(); else if (!state.amt) $('#amount').focus();
   }
   else if (d.paykind) { state.sheet.pay = d.paykind; var lx = view().settings.loans[state.sheet.loan.id] || {}, l2 = state.sheet.loan; state.amt = String(d.paykind === 'emi' ? lx.emi || '' : d.paykind === 'int' ? Math.round(l2.monthly) || '' : d.paykind === 'add' ? lx.sip || '' : ''); renderPaySeg(); renderQuick(); renderAmount(); }
   else if (t.hasAttribute('data-day')) { state.sheet.day = Number(d.day); $('#whenBox').hidden = true; renderDay(); }
@@ -1486,7 +1459,7 @@ $('#ask').addEventListener('cancel', function (ev) { ev.preventDefault(); answer
 $('#rate').addEventListener('input', renderRate);
 $('#q').addEventListener('input', function () { state.f.q = this.value; renderHistory(view()); });
 document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape' && !$('#sheet').open && !$('#ask').open) closeDDs(); });
-$('#note').addEventListener('input', function () { $('#err').textContent = ''; if (state.sheet && state.sheet.type && state.sheet.mode !== 'bill') renderNoteChips(); });
+$('#note').addEventListener('input', function () { $('#err').textContent = ''; });
 $('#entryForm').addEventListener('submit', saveSheet);
 $('#setupForm').addEventListener('submit', function (ev) {
   ev.preventDefault();

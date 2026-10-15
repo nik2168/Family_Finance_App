@@ -78,6 +78,11 @@ const APP = path.join(__dirname, '..', 'src');
     assert.strictEqual(await page.textContent('.ai-cat[aria-pressed=true]'), 'Salary');
     assert.strictEqual(await page.inputValue('#aiAmt'), '30,000');
     assert.strictEqual(await page.textContent('#aiSave'), 'Save ₹30,000');
+    // The name is required, as in the app's own form
+    await page.fill('[data-in="note"]', '');
+    await page.click('#aiSave');
+    assert.strictEqual(await page.textContent('#aiErr'), 'Write where the money came from');
+    await page.fill('[data-in="note"]', 'October salary');
     await page.click('#aiSave');
     const saved = await lastAnswer();
     assert.strictEqual(saved.response.saved, true);
@@ -200,7 +205,7 @@ const APP = path.join(__dirname, '..', 'src');
     assert.ok(await page.evaluate(() => __sent.slice(__mark).some(m => m.realtimeInput && m.realtimeInput.audio && !/^A*=*$/.test(m.realtimeInput.audio.data))), 'and it hears again');
 
     // Closing on a card drops the calls still waiting: no card comes back on reopening
-    await page.evaluate(() => __ws.onmessage({ data: JSON.stringify({ toolCall: { functionCalls: [{ id: 'd1', name: 'add_entry', args: { type: 'Expense', category: 'milk', amount: 40 } }, { id: 'd2', name: 'add_entry', args: { type: 'Expense', category: 'milk', amount: 60 } }] } }) }));
+    await page.evaluate(() => __ws.onmessage({ data: JSON.stringify({ toolCall: { functionCalls: [{ id: 'd1', name: 'add_entry', args: { type: 'Expense', category: 'milk', amount: 40, note: 'Milk' } }, { id: 'd2', name: 'add_entry', args: { type: 'Expense', category: 'milk', amount: 60, note: 'Milk' } }] } }) }));
     await page.waitForSelector('.ai-card.ai-on #aiSave');
     await page.click('#aiClose');
     await page.waitForFunction(() => !$('#ai').open);

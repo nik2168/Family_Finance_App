@@ -327,6 +327,15 @@ dialog::backdrop{background:rgba(8,10,12,.42)}
 .amount input{width:100%;border:0;background:none;outline:none;font:inherit;letter-spacing:inherit;color:var(--ink);text-align:center;padding:0}
 .amount input::placeholder{color:var(--muted)}
 .amount:focus-within{box-shadow:inset 0 0 0 2px var(--ink)}
+/* The name on the left, the amount beside it at the field's height; a payment has no name, so its amount fills the row */
+.nrow{display:flex;gap:8px;align-items:flex-end}
+#noteBox{flex:1;min-width:0}
+.nrow .amount{flex:0 0 42%;font-size:26px;padding:9px 12px 9px 30px;border-radius:18px}
+.nrow .amount span{left:12px;font-size:19px}
+.nrow .amount input{text-align:right}
+.nrow #noteBox[hidden]+.amount{flex:1;font-size:40px;padding:8px 44px;border-radius:22px}
+.nrow #noteBox[hidden]+.amount span{left:18px;font-size:28px}
+.nrow #noteBox[hidden]+.amount input{text-align:center}
 .chips{display:flex;gap:8px;overflow-x:auto;padding:1px;flex-shrink:0}
 .chip{flex:none;padding:8px 14px;border-radius:999px;background:var(--field);font-size:14px;font-weight:500;display:inline-flex;gap:6px;align-items:center;white-space:nowrap}
 .chip.card{background:var(--surface);box-shadow:var(--shadow);padding:8px 14px}
@@ -747,31 +756,28 @@ dialog::backdrop{background:rgba(8,10,12,.42)}
       <div class="grow"><h3 id="sheetTitle"></h3><span class="pill" id="sheetKind"></span></div>
       <button class="rbtn sm" type="button" id="cancel" aria-label="Close"><svg class="i sm"><use href="#i-x"/></svg></button>
     </div>
-    <div class="seg" id="typeSeg" role="group" aria-label="Expense or income"><button type="button" data-type="Expense">Expense</button><button type="button" data-type="Income">Income</button></div>
     <div class="seg" id="paySeg" role="group" aria-label="What is paid"></div>
-    <label class="amount"><span>₹</span><input id="amount" inputmode="decimal" enterkeyhint="next" autocomplete="off" placeholder="0" aria-label="Amount"></label>
+    <div class="nrow">
+      <label id="noteBox"><span class="lbl" id="noteLabel">Name</span><input class="field" id="note" maxlength="200" enterkeyhint="next" autocomplete="off"></label>
+      <label class="amount"><span>₹</span><input id="amount" inputmode="decimal" enterkeyhint="done" autocomplete="off" placeholder="0" aria-label="Amount"></label>
+    </div>
     <p class="box" id="payInfo" hidden></p>
     <div class="chips" id="quick"></div>
     <div class="cgrid" id="catGrid" role="group" aria-label="Category"></div>
-    <label id="noteBox"><span class="lbl" id="noteLabel">Reason</span><input class="field" id="note" maxlength="200" autocomplete="off" placeholder="What was it for?"></label>
-    <div class="chips" id="noteChips"></div>
     <div id="loanOpts" hidden style="display:flex;flex-direction:column;gap:10px">
       <div id="typeBox"><span class="lbl">Type</span><div class="chips" id="invTypes"></div></div>
       <div id="compBox"><span class="lbl">Growth</span>
       <div class="seg" role="group" aria-label="Growth"><button type="button" data-comp="compound">Grows on itself</button><button type="button" data-comp="simple">Same each month</button></div></div>
-      <div><span class="lbl" id="rateLabel">Interest (optional)</span>
+      <div id="rateBox"><span class="lbl" id="rateLabel">Interest (optional)</span>
       <div class="rate">
         <label class="field ratein"><input id="rate" inputmode="decimal" autocomplete="off" maxlength="6" placeholder="0" aria-label="Interest percent"><b>%</b></label>
         <div class="seg" role="group" aria-label="Interest is charged"><button type="button" data-per="month">a month</button><button type="button" data-per="year">a year</button></div>
       </div>
       <div class="chips" id="rateChips" style="margin-top:8px"></div></div>
-      <div id="emiBox" class="two"><label><span class="lbl">EMI (optional)</span><input class="field" id="emi" inputmode="decimal" autocomplete="off" placeholder="₹ a month"></label>
-        <label><span class="lbl">Due on day</span><input class="field" id="emiDay" inputmode="numeric" autocomplete="off" placeholder="1–31"></label></div>
       <div id="sipBox" class="two"><label><span class="lbl">Every month (SIP, RD)</span><input class="field" id="sip" inputmode="decimal" autocomplete="off" placeholder="₹, optional"></label>
         <label><span class="lbl">On day</span><input class="field" id="sipDay" inputmode="numeric" autocomplete="off" placeholder="1–31"></label></div>
       <div id="goalBox" class="two"><label><span class="lbl">Its own goal (optional)</span><input class="field" id="goal" inputmode="decimal" autocomplete="off" placeholder="₹, e.g. Diwali"></label>
         <label><span class="lbl">By</span><input class="field" id="goalBy" type="month"></label></div>
-      <label class="swrow" id="starBox"><div class="grow"><b>★ Pay this first</b><small>Otherwise the costliest loan goes first</small></div><input type="checkbox" class="sw" id="star"></label>
       <label class="swrow" id="oldBox"><div class="grow"><b id="oldTitle">I already had this before</b><small id="oldText">Not counted as this month's money</small></div><input type="checkbox" class="sw" id="old"></label>
     </div>
     <div id="billBox" hidden style="display:flex;flex-direction:column;gap:10px">
@@ -780,7 +786,6 @@ dialog::backdrop{background:rgba(8,10,12,.42)}
     </div>
     <div class="chips" id="dateChips"><button type="button" class="chip" data-day="0">Today</button><button type="button" class="chip" data-day="1">Yesterday</button><button type="button" class="chip" id="changeWhen"><img class="e" src="assets/3d/cal.png" alt="">Pick a date</button></div>
     <label id="whenBox" hidden><span class="lbl">Date and time</span><input class="field" type="datetime-local" id="when"></label>
-    <label class="swrow" id="repeatBox"><div class="grow"><b>Repeat every month</b><small>Makes a bill in Due soon</small></div><input type="checkbox" class="sw" id="repeat"></label>
     <p class="err" id="err" role="alert"></p>
     <button type="submit" class="btn" id="saveBtn"><svg class="i sm"><use href="#i-check"/></svg><span id="saveText">Save</span></button>
     <button type="button" class="btn danger" id="deleteBtn" hidden><svg class="i sm"><use href="#i-trash"/></svg><span id="deleteText">Delete</span></button>

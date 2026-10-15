@@ -73,8 +73,10 @@ const ym = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'
     assert.deepStrictEqual(await page.evaluate(() => [...document.images].filter(i => i.offsetParent && !i.naturalWidth).map(i => i.src)), []);
     assert.match(await page.textContent('#glance'), /Set a monthly budget.*Set a savings goal/, 'no goal, no budget yet: the starters');
 
-    // A category must be chosen, from the grid; the reason is optional
+    // The name comes first (it is required), the amount beside it, then a category from the grid
     await page.click('[data-new="Expense"]');
+    assert.strictEqual(await focused(), 'note', 'a new expense starts at its name');
+    assert.strictEqual(await page.textContent('#noteLabel'), 'Spent on');
     assert.deepStrictEqual(await page.$$eval('#catGrid .cg', b => b.map(x => x.textContent)), ['House', 'Dairy', 'Crops', 'Others']);
     await keypad('500');
     await page.click('#saveBtn');
@@ -82,8 +84,13 @@ const ym = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'
     await page.click('#catGrid [data-cat="House"]');
     assert.strictEqual(await page.textContent('#sheetTitle'), 'House');
     assert.strictEqual(await page.getAttribute('#catGrid [data-cat="House"]', 'aria-pressed'), 'true');
-    await page.click('#typeSeg [data-type="Income"]');
-    assert.deepStrictEqual(await page.$$eval('#catGrid .cg', b => b.map(x => x.textContent)), ['Job', 'Dairy', 'Crops', 'Others'], 'Expense / Income switch inside the sheet');
+    await page.click('#saveBtn');
+    assert.strictEqual(await page.textContent('#err'), 'Write what it was spent on');
+    assert.strictEqual(await focused(), 'note');
+    await page.click('#cancel');
+    await page.click('[data-new="Income"]');
+    assert.strictEqual(await page.textContent('#noteLabel'), 'Money from');
+    assert.deepStrictEqual(await page.$$eval('#catGrid .cg', b => b.map(x => x.textContent)), ['Job', 'Dairy', 'Crops', 'Others']);
     await page.click('#cancel');
 
     async function add(type, cat, amount, note) {
@@ -97,23 +104,26 @@ const ym = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'
     await add('Expense', 'House', '1250', 'Ration');
     await add('Expense', 'Others', '3500', 'Wedding gift');
     await add('Expense', 'Dairy', '2400.5', 'Cattle feed');
-    await add('Income', 'Others', '1500', '');
-    assert.match(await page.textContent('#recent'), /Others/, 'no reason: the row shows its category');
+    await pick('Income', 'Others');
+    await keypad('1500');
+    await page.click('#saveBtn');
+    assert.strictEqual(await page.textContent('#err'), 'Write where the money came from', 'no name: not saved');
+    await page.fill('#note', 'Sold calf');
+    await page.click('#saveBtn');
+    await closed();
+    assert.match(await page.textContent('#recent'), /Sold calf/);
 
-    // Quick amounts, recent-reason chips, Today / Yesterday
+    // Name, then "next" to the amount; no quick amounts; Today / Yesterday
     await pick('Expense', 'Dairy');
-    assert.strictEqual(await page.textContent('#noteChips'), 'Cattle feed');
-    assert.strictEqual(await focused(), 'amount', 'the number pad opens once a category is picked');
+    assert.strictEqual(await focused(), 'note', 'picking a category with no name yet goes to the name');
+    await page.keyboard.type('Cattle feed');
+    await page.keyboard.press('Enter');
+    assert.strictEqual(await focused(), 'amount', '"Next" goes on to the amount');
     await page.keyboard.type('12a.3456');
     assert.strictEqual(await page.inputValue('#amount'), '12.34', 'only a valid amount can be typed');
-    await page.keyboard.press('Enter');
-    assert.strictEqual(await focused(), 'note', '"Next" goes on to the reason');
     await clearAmount();
-    await page.click('#noteChips .chip');
-    assert.strictEqual(await page.inputValue('#note'), 'Cattle feed');
-    await page.click('#quick [data-add="500"]');
-    await page.click('#quick [data-add="1000"]');
-    await page.focus('#amount'); await page.keyboard.press('End'); await page.keyboard.press('Backspace');
+    await keypad('150');
+    assert.ok(await page.isHidden('#quick'));
     assert.strictEqual(await page.textContent('#saveText'), 'Save ₹150');
     assert.strictEqual(await page.getAttribute('#dateChips [data-day="0"]', 'aria-pressed'), 'true', 'Today by default');
     await page.click('#dateChips [data-day="1"]');
@@ -153,27 +163,22 @@ const ym = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'
     assert.match(await page.textContent('#syncPill'), /7 waiting to sync/);
     await shot(page, '04-history', true);
 
-    // ---- Loans, still offline: add (★ pay first), pay back part, too-much is refused, delete a payment, pay the month's interest
+    // ---- Pending, still offline: kept simple (who and how much); pay back part, too-much is refused, delete a payment
     await tab('loans');
     assert.strictEqual(await page.textContent('#headTitle'), 'Money');
     await page.click('#addLoan');
-    assert.strictEqual(await focused(), 'amount', 'the number pad opens straight away for a new loan');
-    assert.ok(await page.isVisible('#emiBox') && await page.isVisible('#starBox') && await page.isHidden('#typeBox'));
+    assert.strictEqual(await focused(), 'note', 'a new pending starts at who it is owed to');
+    assert.strictEqual(await page.textContent('#noteLabel'), 'Owed to');
+    assert.ok(await page.isHidden('#rateBox') && await page.isHidden('#oldBox') && await page.isHidden('#typeBox'), 'no interest or options to fill in');
     await keypad('20000');
     await page.click('#saveBtn');
     assert.match(await page.textContent('#err'), /owed to/);
     await page.fill('#note', 'From Ramesh, tractor repair');
-    await page.click('#rateChips [data-rate="2"]');
-    assert.strictEqual(await page.inputValue('#rate'), '2');
-    await page.click('[data-per="year"]');
-    await page.click('[data-per="month"]');
-    assert.strictEqual(await page.getAttribute('[data-per="month"]', 'aria-pressed'), 'true');
-    await page.check('#star');
     await shot(page, '05a-loan-sheet');
     await page.click('#saveBtn');
     await closed();
     assert.strictEqual(await page.textContent('#loanOwed'), '₹20,000');
-    assert.match(await page.textContent('#loanList'), /Pay first.*From Ramesh/);
+    assert.match(await page.textContent('#loanList'), /From Ramesh/);
     await page.click('[data-pay][data-kind="back"]');
     assert.match(await page.textContent('#quick'), /Full ₹20,000/);
     await keypad('25000');
@@ -194,36 +199,25 @@ const ym = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'
     await page.click('[data-del-repay] >> nth=0');
     await reply();
     assert.strictEqual(await page.textContent('#loanOwed'), '₹15,000');
-    assert.match(await page.textContent('#loanList'), /2% a month, about ₹300 a month/);
-    assert.match(await page.textContent('#loanSummary'), /Interest.*≈ ₹300\/mo/);
-    // Interest is an expense, not a repayment: "still owed" stays
-    await page.click('[data-pay][data-kind="int"]');
-    assert.strictEqual(await page.inputValue('#amount'), '300', 'this month\'s interest, ready');
-    assert.match(await page.textContent('#payInfo'), /Interest is a cost/);
-    await page.click('#saveBtn');
-    await closed();
-    assert.strictEqual(await page.textContent('#loanOwed'), '₹15,000', 'interest does not lower what is owed');
-    assert.match(await page.textContent('#loanList'), /interest ✓ paid/);
+    assert.strictEqual(await page.locator('[data-pay][data-kind="int"]').count(), 0, 'no interest to pay');
     await shot(page, '06-loans', true);
 
     // ---- Back online: everything reaches the sheet exactly once
     await goOnline();
     const entries = sheet().rows.map(e => [e.category, e.amount, e.note]);
-    assert.deepStrictEqual(entries.sort(), [['Crops', 1500, 'Ration'], ['Dairy', 12000, 'Milk payment'], ['Dairy', 2400.5, 'Cattle feed'], ['Loan interest', 300, 'From Ramesh, tractor repair'], ['Others', 1500, '']]);
-    assert.deepStrictEqual(sheet().cats.Expense, ['House', 'Dairy', 'Crops', 'Loan interest', 'Others'], 'Loan interest is added the first time');
+    assert.deepStrictEqual(entries.sort(), [['Crops', 1500, 'Ration'], ['Dairy', 12000, 'Milk payment'], ['Dairy', 2400.5, 'Cattle feed'], ['Others', 1500, 'Sold calf']]);
     const ramesh = sheet().loans[0];
-    assert.deepStrictEqual([ramesh.reason, ramesh.amount, ramesh.interest, ramesh.per, ramesh.priority], ['From Ramesh, tractor repair', 20000, 2, 'month', 'high'], '★ pay first is high priority in the sheet');
-    assert.deepStrictEqual(SET().loans[ramesh.id], { star: true, paid: ym(new Date()) });
+    assert.deepStrictEqual([ramesh.reason, ramesh.amount, ramesh.interest], ['From Ramesh, tractor repair', 20000, 0]);
     assert.deepStrictEqual(sheet().repays.map(p => p.amount), [5000]);
     assert.strictEqual(await page.textContent('#loanOwed'), '₹15,000');
 
     // ---- Insights: totals, where the income went, notes, categories, and the plan for a family in debt
     await tab('insights');
     assert.strictEqual(await page.textContent('#sIn'), '₹13,500');
-    assert.strictEqual(await page.textContent('#sOut'), '₹4,200.5', 'interest paid is an expense');
-    assert.strictEqual(await page.textContent('#sSave'), '₹9,299.5');
-    assert.match(await page.textContent('#splitLeg'), /Spent₹4,200\.5.*Loans paid₹5,000.*In hand₹24,299\.5/, 'saved, less what paid the loan, plus what was borrowed');
-    assert.deepStrictEqual(await page.$$eval('#insCats .crow .cn', b => b.map(x => x.textContent)), ['Dairy 57%', 'Crops 36%', 'Loan interest 7%']);
+    assert.strictEqual(await page.textContent('#sOut'), '₹3,900.5');
+    assert.strictEqual(await page.textContent('#sSave'), '₹9,599.5');
+    assert.match(await page.textContent('#splitLeg'), /Spent₹3,900\.5.*Loans paid₹5,000.*In hand₹24,599\.5/, 'saved, less what paid the loan, plus what was borrowed');
+    assert.deepStrictEqual(await page.$$eval('#insCats .crow .cn', b => b.map(x => x.textContent)), ['Dairy 62%', 'Crops 38%']);
     assert.match(await page.textContent('#insPlan'), /Loan plan.*Not paid off at this pace/, 'more owed than saved: the loan plan; nothing saved in past months yet');
     assert.match(await page.textContent('#insHealth'), /Savings rate.*Safety net.*EMI load.*Net worth/);
     await page.click('#insCats [data-catf="Expense-Dairy"]');
@@ -258,8 +252,8 @@ const ym = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'
     for (let i = 0; i < 25; i++) backend.typeRow(2026, 8, [new Date(Date.UTC(2026, 8, 1 + i, 6)), 'House', '', 10 + i, 'Old ' + i]); // typed into September
     await sync();
     await tab('history');
-    assert.strictEqual(await page.locator('#historyList .lrow').count(), 30, 'every entry is listed');
-    assert.strictEqual(await page.locator('#historyList .lrow.tap').count(), 30, 'and every one can be changed');
+    assert.strictEqual(await page.locator('#historyList .lrow').count(), 29, 'every entry is listed');
+    assert.strictEqual(await page.locator('#historyList .lrow.tap').count(), 29, 'and every one can be changed');
     // Added/Edited: rows made in the app and synced have a stamp line, rows typed into the sheet have none
     const stamps = await page.$$eval('#historyList .lrow .stamp', b => b.map(x => x.textContent));
     assert(stamps.length >= 1 && stamps.length <= 5 && stamps.every(t => /^Added \d{1,2} \w{3}, /.test(t)), 'stamp lines: ' + JSON.stringify(stamps));
@@ -278,7 +272,7 @@ const ym = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'
     await page.fill('#q', 'old 2');
     assert.strictEqual(await hcount(), 6, 'Old 2 and Old 20-24');
     await page.click('#qClear');
-    assert.strictEqual(await hcount(), 30);
+    assert.strictEqual(await hcount(), 29);
     await fpick('#fWhen', '2026-8'); // September
     assert.strictEqual(await page.textContent('#fWhen'), 'Sep 2026');
     await fpick('#fCat', 'Expense-House');
@@ -292,7 +286,7 @@ const ym = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'
     await fpick('#fCat', 'Income-Dairy');
     assert.match(await page.textContent('#historyList'), /No matches/);
     await page.click('#hClear');
-    assert.strictEqual(await hcount(), 30);
+    assert.strictEqual(await hcount(), 29);
     assert.ok(await page.isHidden('#hClear'));
     assert.ok(await page.isHidden('#whoBox'), 'no "Everyone" filter until someone has a name');
 
@@ -411,7 +405,8 @@ const ym = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'
     assert.match(await page.textContent('#loanList'), /Nothing given/);
     await page.click('#addLoan');
     assert.strictEqual(await page.textContent('#sheetTitle'), 'Give money');
-    assert.ok(await page.isHidden('#emiBox') && await page.isHidden('#starBox'));
+    assert.strictEqual(await page.textContent('#noteLabel'), 'Given to');
+    assert.ok(await page.isVisible('#rateBox'), 'money given still has its interest');
     await keypad('10000');
     await page.click('#saveBtn');
     assert.match(await page.textContent('#err'), /who you gave it to/);
@@ -449,7 +444,7 @@ const ym = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'
     await tab('invested');
     await page.click('#addLoan');
     assert.strictEqual(await page.textContent('#sheetTitle'), 'New investment');
-    assert.ok(await page.isVisible('#typeBox') && await page.isVisible('#compBox') && await page.isHidden('#starBox'), 'type and growth instead of EMI and priority');
+    assert.ok(await page.isVisible('#typeBox') && await page.isVisible('#compBox') && await page.textContent('#noteLabel') === 'Invested in', 'type and growth');
     await page.click('[data-itype="fd"]');
     assert.deepStrictEqual([await page.inputValue('#rate'), await page.getAttribute('[data-per="year"]', 'aria-pressed'), await page.getAttribute('[data-comp="compound"]', 'aria-pressed')], ['7', 'true', 'true']);
     await keypad('50000');
@@ -515,7 +510,7 @@ const ym = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'
     await reply();
     await synced();
     assert.strictEqual(sheet().rows.find(e => e.note === 'Goat feed').category, 'Others');
-    assert.deepStrictEqual(sheet().cats.Expense, ['House', 'Dairy', 'Crops', 'Loan interest', 'Others']);
+    assert.deepStrictEqual(sheet().cats.Expense, ['House', 'Dairy', 'Crops', 'Others']);
     await page.click('#backHome');
     assert.strictEqual(await page.textContent('#headTitle'), 'Settings', 'Categories goes back to Settings');
     await page.click('#backHome');

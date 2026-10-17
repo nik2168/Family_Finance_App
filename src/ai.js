@@ -230,15 +230,15 @@
   var CHECK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7"/></svg>';
   function confirmCard(name, a) {
     var cats = data().cats, x;
-    if (name === 'add_entry') { var type = a.type === 'Income' ? 'Income' : 'Expense'; x = { type: type, category: matchName(cats[type], a.category) || '', amount: a.amount || '', note: a.note || '', date: parseDay(a.date) ? a.date : ymd(new Date()) }; }
-    else if (name === 'add_bill') x = { name: a.name || '', category: matchName(cats.Expense, a.category) || '', amount: a.amount || '', day: a.day || '', every: [1, 3, 6, 12].indexOf(Number(a.every)) >= 0 ? Number(a.every) : 1 };
+    if (name === 'add_entry') a = { items: [a] }; // one entry: the same one-row card as many (amount and name; the model picks category and date)
+    if (name === 'add_bill') x = { name: a.name || '', category: matchName(cats.Expense, a.category) || '', amount: a.amount || '', day: a.day || '', every: [1, 3, 6, 12].indexOf(Number(a.every)) >= 0 ? Number(a.every) : 1 };
     else if (name === 'add_loan') x = { dir: KINDS[a.dir] ? a.dir : 'borrowed', reason: a.reason || '', amount: a.amount || '', interest: a.interest || '', per: a.per === 'year' ? 'year' : 'month' };
     else x = { items: (a.items || []).map(function (e) { var type = e.type === 'Income' ? 'Income' : 'Expense'; return { type: type, category: matchName(cats[type], e.category) || 'Others', amount: e.amount || '', note: e.note || '', date: parseDay(e.date) ? e.date : ymd(new Date()) }; }) };
     if (pending) pending.done({ saved: false, reason: 'Replaced by a newer version' }); // "make it 35k": the card updates in place
     return new Promise(function (done) {
       // How it ended goes into the memory, after the request, so a new session does not open it again
       pending = { name: name, v: x, done: function (r) { pending = null; keepTurn(); remember('App', name + (r.saved ? ' saved' : ' not saved: ' + r.reason)); done(r); } };
-      var many = name === 'add_entries';
+      var many = isList(name);
       $('#aiMain').innerHTML = (many ? '' : '<div class="ai-pv" id="aiPv"><div id="aiPvh"></div><label class="ai-amt"><span>₹</span><input id="aiAmt" inputmode="decimal" placeholder="0" aria-label="Amount"></label></div>') +
         '<div id="aiFlds"></div><p class="ai-err" id="aiErr" role="alert"></p>';
       $('#aiFoot').innerHTML = '<button class="ai-save" id="aiSave" type="button"></button><button class="ai-ghost" id="aiCancel" type="button">Cancel</button>';
@@ -248,27 +248,23 @@
       fadeTo($('#aiAns'), 'Check it, change anything, then tap Save.'); // the model waits for the tap, so it says nothing yet
     });
   }
+  function isList(n) { return n === 'add_entries' || n === 'add_entry'; }
   function grouped(v) { var n = num(v); return n > 0 ? n.toLocaleString('en-IN', { maximumFractionDigits: 2 }) : String(v || ''); }
   function fitAmount() { $('#aiAmt').style.width = (Math.max(1, $('#aiAmt').value.length) + .4) + 'ch'; }
   function drawConfirm(headOnly) {
     var x = pending.v, n = pending.name, cats = data().cats, h, p, title, tag, sub;
     // Many at once: just the amount and the note of each (the model picked the category and date), and one Save
-    if (n === 'add_entries') {
-      $('#aiSave').textContent = 'Save' + (x.items.length > 1 ? ' all ' + x.items.length : '');
+    if (isList(n)) {
+      var one = x.items.length === 1 && num(x.items[0].amount);
+      $('#aiSave').textContent = 'Save' + (x.items.length > 1 ? ' all ' + x.items.length : one > 0 ? ' ' + money.format(one) : '');
       if (!headOnly) $('#aiFlds').innerHTML = '<div class="ai-mis">' + x.items.map(function (e, i) {
         var inc = e.type === 'Income';
         return '<div class="ai-mi">' + img(e.category, 24) + '<label class="ai-mamt' + (inc ? ' ai-pos' : '') + '"><span>' + (inc ? '+₹' : '₹') + '</span><input data-i="' + i + '" data-f="amount" inputmode="decimal" placeholder="0" value="' + esc(grouped(e.amount)) + '" aria-label="Amount"></label>' +
-          '<input class="ai-in" data-i="' + i + '" data-f="note" placeholder="' + ENTRY_NOTE[e.type][0] + '" value="' + esc(e.note) + '" aria-label="Note" autocomplete="off"><button type="button" class="ai-rm" data-rm="' + i + '" aria-label="Remove">×</button></div>';
+          '<input class="ai-in" data-i="' + i + '" data-f="note" placeholder="' + ENTRY_NOTE[e.type][0] + '" value="' + esc(e.note) + '" aria-label="Note" autocomplete="off">' + (x.items.length > 1 ? '<button type="button" class="ai-rm" data-rm="' + i + '" aria-label="Remove">×</button>' : '') + '</div>';
       }).join('') + '</div>';
       return;
     }
-    if (n === 'add_entry') {
-      p = pic(x.category || 'Others'); title = x.category || 'Pick a category'; sub = dayText(x.date);
-      tag = '<span class="ai-tag' + (x.type === 'Income' ? '' : ' ai-bad') + '">' + x.type + '</span>';
-      var t = ymd(new Date()), y = ymd(new Date(Date.now() - 864e5)), other = x.date !== t && x.date !== y;
-      h = seg('type', [['Expense', 'Expense'], ['Income', 'Income']], x.type) + field('Category', chips(cats[x.type], x.category)) + field(ENTRY_NOTE[x.type][0], input('note', ENTRY_NOTE[x.type][1], x.note)) +
-        field('When', '<div class="ai-row2">' + seg('date', [[t, 'Today'], [y, 'Yesterday']], x.date) + '<input class="ai-in" type="date" data-in="date" max="' + t + '" value="' + (other ? x.date : '') + '" aria-label="Pick a date"></div>');
-    } else if (n === 'add_bill') {
+    if (n === 'add_bill') {
       p = pic(x.category || x.name || 'Bills'); title = x.name || 'New bill'; sub = REPEATS.filter(function (e) { return e[0] === x.every; })[0][1] + (x.day ? ' · due on day ' + x.day : '');
       tag = '<span class="ai-tag ai-warn">Bill</span>';
       h = field('Bill name', input('name', 'e.g. Rent, Electricity, LIC', x.name)) + field('Category', chips(cats.Expense, x.category)) +
@@ -297,8 +293,8 @@
   function saveConfirm() {
     var p = pending, x = p.v, amount = Math.round(num(x.amount) * 100) / 100, now = new Date(), id = crypto.randomUUID(), bad, final;
     var stop = function (t) { $('#aiErr').textContent = t; return { saved: false, error: t }; };
-    if (p.name !== 'add_entries' && !(amount > 0)) return stop('Type the amount');
-    if (p.name === 'add_entries') {
+    if (!isList(p.name) && !(amount > 0)) return stop('Type the amount');
+    if (isList(p.name)) {
       // All checked first, then all queued. ponytail: a full phone storage could stop the queue part-way; the ones queued stay saved.
       var list = [];
       for (var i = 0; i < x.items.length; i++) {
@@ -312,15 +308,7 @@
       }
       list.some(function (e) { return (bad = queue('entry', 'add', e.id, e)); });
       final = list.map(function (e) { return { type: e.type, category: e.category, amount: e.amount, note: e.note }; });
-    } else if (p.name === 'add_entry') {
-      if (!x.category) return stop('Pick a category');
-      if (!x.note.trim()) return stop(ENTRY_NOTE[x.type][2]);
-      var dt = x.date === ymd(now) ? now : new Date(x.date + 'T12:00:00');
-      if (isNaN(dt) || dt > now) return stop('Pick a valid date');
-      var e = { id: id, dateTime: dt.toISOString(), type: x.type, category: x.category, amount: amount, note: x.note.trim(), createdAt: now.toISOString() };
-      if (me()) e.by = me();
-      bad = validateEntry(e) || queue('entry', 'add', id, e);
-      final = { type: x.type, category: x.category, amount: amount, note: e.note, date: x.date };
+      if (p.name === 'add_entry') { final = final[0]; final.date = x.items[0].date; }
     } else if (p.name === 'add_bill') {
       var d = parseInt(x.day, 10);
       if (!x.name.trim()) return stop('Give the bill a name');

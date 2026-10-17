@@ -1459,6 +1459,7 @@ document.addEventListener('change', function (ev) {
 $('#askForm').addEventListener('submit', function (ev) { ev.preventDefault(); answer(true); });
 $('#ask').addEventListener('cancel', function (ev) { ev.preventDefault(); answer(null); });
 $('#rate').addEventListener('input', renderRate);
+document.addEventListener('gesturestart', function (ev) { ev.preventDefault(); }); // iOS ignores user-scalable=no: no pinch zoom
 $('#q').addEventListener('input', function () { state.f.q = this.value; renderHistory(view()); });
 document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape' && !$('#sheet').open && !$('#ask').open) closeDDs(); });
 $('#note').addEventListener('input', function () { $('#err').textContent = ''; });

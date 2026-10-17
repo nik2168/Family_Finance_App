@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>Family Money</title>
 <meta name="theme-color" content="#F5F5F7" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
@@ -41,7 +41,7 @@
 /* Native-app feel: scrolling works everywhere, the scrollbars stay hidden */
 *{scrollbar-width:none}
 *::-webkit-scrollbar{display:none}
-html,body{background:var(--bg)}
+html,body{background:var(--bg);touch-action:manipulation} /* no double-tap zoom */
 body{font-family:var(--font);color:var(--ink);font-size:15px;line-height:1.45;-webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent}
 button,input{font:inherit;color:inherit}
 button{cursor:pointer;border:0;background:none;padding:0}
@@ -551,7 +551,7 @@ dialog::backdrop{background:rgba(8,10,12,.42)}
 .ai-cats{display:flex;gap:8px;overflow-x:auto;margin:0 -18px;padding:2px 18px}
 .ai-cat{flex:none;display:flex;align-items:center;gap:6px;padding:6px 13px 6px 6px;border-radius:999px;font-size:13px;background:var(--ai-fill);border:1px solid var(--ai-line);transition:background .2s,color .2s}
 .ai-cat[aria-pressed=true]{background:var(--primary);color:var(--on-primary);font-weight:600}
-.ai-in{width:100%;padding:12px 14px;border-radius:16px;background:var(--ai-fill);border:1px solid var(--ai-line);color:inherit;outline:0;font-size:15px}
+.ai-in{width:100%;padding:12px 14px;border-radius:16px;background:var(--ai-fill);border:1px solid var(--ai-line);color:inherit;outline:0;font-size:16px}
 .ai-in:focus{border-color:var(--ai-t2)}
 .ai-err{margin:10px 0 0;min-height:1px;text-align:center;font-size:13px;color:var(--ai-bad)}
 .ai-save{height:56px;border-radius:999px;display:flex;align-items:center;justify-content:center;gap:8px;background:var(--primary);color:var(--on-primary);font-size:16px;font-weight:600;transition:background .3s,color .3s}
@@ -562,7 +562,7 @@ dialog::backdrop{background:rgba(8,10,12,.42)}
 /* Many entries at once: amount and note per row */
 .ai-mis{margin-top:12px;display:grid;gap:8px}
 .ai-mi{display:flex;align-items:center;gap:8px}
-.ai-mamt{display:flex;align-items:baseline;flex:none;width:96px;padding:11px 10px;border-radius:16px;background:var(--ai-fill);border:1px solid var(--ai-line);font-weight:600;font-variant-numeric:tabular-nums}
+.ai-mamt{display:flex;align-items:baseline;flex:none;width:96px;font-size:16px;padding:11px 10px;border-radius:16px;background:var(--ai-fill);border:1px solid var(--ai-line);font-weight:600;font-variant-numeric:tabular-nums}
 .ai-mamt span{flex:none;white-space:nowrap;opacity:.7;margin-right:2px}
 .ai-mamt input{width:100%;min-width:0;padding:0;background:none;border:0;outline:0;font:inherit;color:inherit}
 .ai-mi .ai-in{flex:1;min-width:0}

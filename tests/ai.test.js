@@ -75,18 +75,21 @@ const APP = path.join(__dirname, '..', 'src');
     await say('got my salary 30k today', { name: 'add_entry', args: { type: 'Income', category: 'salary', amount: 30000, note: 'October salary' } });
     await page.waitForSelector('.ai-card.ai-on #aiSave');
     assert.strictEqual(await page.textContent('#aiAsk'), 'got my salary 30k today');
-    assert.strictEqual(await page.textContent('.ai-cat[aria-pressed=true]'), 'Salary');
-    assert.strictEqual(await page.inputValue('#aiAmt'), '30,000');
+    // Just one row, amount then name (the model picked the category); nothing else to fill in
+    assert.strictEqual(await page.locator('.ai-mi').count(), 1);
+    assert.strictEqual(await page.locator('#aiCard .ai-cat, #aiCard .ai-seg, #aiCard .ai-rm').count(), 0);
+    assert.strictEqual(await page.inputValue('[data-f=amount]'), '30,000');
     assert.strictEqual(await page.textContent('#aiSave'), 'Save ₹30,000');
     // The name is required, as in the app's own form
-    await page.fill('[data-in="note"]', '');
+    await page.fill('[data-f=note]', '');
     await page.click('#aiSave');
-    assert.strictEqual(await page.textContent('#aiErr'), 'Write where the money came from');
-    await page.fill('[data-in="note"]', 'October salary');
+    assert.strictEqual(await page.textContent('#aiErr'), 'Write where the money came from (Salary)');
+    await page.fill('[data-f=note]', 'October salary');
     await page.click('#aiSave');
     const saved = await lastAnswer();
     assert.strictEqual(saved.response.saved, true);
     assert.strictEqual(saved.response.final.amount, 30000);
+    assert.strictEqual(saved.response.final.category, 'Salary');
     assert.strictEqual(await page.evaluate(() => view().rows.filter(e => e.category === 'Salary' && e.amount === 30000 && e.note === 'October salary').length), 1);
     await page.waitForSelector('.ai-card:not(.ai-on)');
 

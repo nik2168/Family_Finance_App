@@ -327,15 +327,15 @@ dialog::backdrop{background:rgba(8,10,12,.42)}
 .amount input{width:100%;border:0;background:none;outline:none;font:inherit;letter-spacing:inherit;color:var(--ink);text-align:center;padding:0}
 .amount input::placeholder{color:var(--muted)}
 .amount:focus-within{box-shadow:inset 0 0 0 2px var(--ink)}
-/* The name on the left, the amount beside it at the field's height; a payment has no name, so its amount fills the row */
+/* The amount on the left, the name beside it at the field's height; a payment has no name, so its amount fills the row */
 .nrow{display:flex;gap:8px;align-items:flex-end}
 #noteBox{flex:1;min-width:0}
 .nrow .amount{flex:0 0 42%;font-size:26px;padding:9px 12px 9px 30px;border-radius:18px}
 .nrow .amount span{left:12px;font-size:19px}
 .nrow .amount input{text-align:right}
-.nrow #noteBox[hidden]+.amount{flex:1;font-size:40px;padding:8px 44px;border-radius:22px}
-.nrow #noteBox[hidden]+.amount span{left:18px;font-size:28px}
-.nrow #noteBox[hidden]+.amount input{text-align:center}
+.nrow:has(#noteBox[hidden]) .amount{flex:1;font-size:40px;padding:8px 44px;border-radius:22px}
+.nrow:has(#noteBox[hidden]) .amount span{left:18px;font-size:28px}
+.nrow:has(#noteBox[hidden]) .amount input{text-align:center}
 .chips{display:flex;gap:8px;overflow-x:auto;padding:1px;flex-shrink:0}
 .chip{flex:none;padding:8px 14px;border-radius:999px;background:var(--field);font-size:14px;font-weight:500;display:inline-flex;gap:6px;align-items:center;white-space:nowrap}
 .chip.card{background:var(--surface);box-shadow:var(--shadow);padding:8px 14px}
@@ -742,8 +742,8 @@ dialog::backdrop{background:rgba(8,10,12,.42)}
       <button type="button" data-tab="home" aria-current="page"><svg class="i"><use href="#i-house-fill"/></svg>Home</button>
       <button type="button" data-tab="history"><svg class="i"><use href="#i-clock-counter-clockwise"/></svg>History</button>
       <button type="button" class="ai-orb" id="aiBtn" aria-label="Ask the assistant" hidden><span></span><small>Ask</small></button>
-      <button type="button" data-tab="insights"><svg class="i"><use href="#i-chart-bar"/></svg>Insights</button>
       <button type="button" data-tab="money"><svg class="i"><use href="#i-hand-coins"/></svg>Money</button>
+      <button type="button" data-tab="insights"><svg class="i"><use href="#i-chart-bar"/></svg>Insights</button>
     </div>
   </nav>
 </div>
@@ -758,8 +758,8 @@ dialog::backdrop{background:rgba(8,10,12,.42)}
     </div>
     <div class="seg" id="paySeg" role="group" aria-label="What is paid"></div>
     <div class="nrow">
-      <label id="noteBox"><span class="lbl" id="noteLabel">Name</span><input class="field" id="note" maxlength="200" enterkeyhint="next" autocomplete="off"></label>
-      <label class="amount"><span>₹</span><input id="amount" inputmode="decimal" enterkeyhint="done" autocomplete="off" placeholder="0" aria-label="Amount"></label>
+      <label class="amount"><span>₹</span><input id="amount" inputmode="decimal" enterkeyhint="next" autocomplete="off" placeholder="0" aria-label="Amount"></label>
+      <label id="noteBox"><span class="lbl" id="noteLabel">Name</span><input class="field" id="note" maxlength="200" enterkeyhint="done" autocomplete="off"></label>
     </div>
     <p class="box" id="payInfo" hidden></p>
     <div class="chips" id="quick"></div>

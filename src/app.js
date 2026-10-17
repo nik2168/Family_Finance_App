@@ -1144,9 +1144,9 @@ function openSheet(sh, values) {
   $('#byLine').textContent = isEntry ? (by ? 'Added by ' + by : mode === 'add' ? 'Put your name in Settings to show who added it' : '') : '';
   $('#sheet').showModal();
   lockPage(true);
-  // New things start at the name (a payment, which has none, at the amount); editing keeps the keyboard down so the form stays visible.
+  // New things start at the amount (then the name, if the amount is already filled); editing keeps the keyboard down so the form stays visible.
   if (mode === 'edit' || mode === 'loan-edit' || (isBill && sh.id)) $('#saveBtn').focus();
-  else if (!isPay && !$('#note').value) $('#note').focus();
+  else if (state.amt && !isPay && !$('#note').value) $('#note').focus();
   else $('#amount').focus();
 }
 function renderEvery() { document.querySelectorAll('#everySeg button').forEach(function (b) { b.setAttribute('aria-pressed', String(Number(b.dataset.every) === state.sheet.every)); }); }
@@ -1338,8 +1338,10 @@ $('#amount').addEventListener('input', function () {
   renderAmount();
 });
 // The name, then the amount; "done" on the number pad puts the keyboard away while a category is still to pick, else saves.
-$('#note').addEventListener('keydown', function (ev) { if (ev.key === 'Enter') { ev.preventDefault(); $('#amount').focus(); } });
 $('#amount').addEventListener('keydown', function (ev) {
+  if (ev.key === 'Enter' && !$('#noteBox').hidden && !$('#note').value.trim()) { ev.preventDefault(); $('#note').focus(); }
+});
+$('#note').addEventListener('keydown', function (ev) {
   if (ev.key === 'Enter' && !$('#catGrid').hidden && !state.sheet.category && state.sheet.mode !== 'loan-add' && state.sheet.mode !== 'loan-edit') { ev.preventDefault(); this.blur(); }
 });
 // Keep the field being typed in above the phone keyboard: only the sheet scrolls (scrollIntoView moved the whole page on iOS
@@ -1396,7 +1398,7 @@ document.addEventListener('click', function (ev) {
     var m0 = state.sheet.mode;
     state.sheet.category = d.cat; $('#err').textContent = ''; renderCat();
     if (m0 !== 'loan-add' && m0 !== 'loan-edit') entryHeader();
-    if (!$('#noteBox').hidden && !$('#note').value.trim()) $('#note').focus(); else if (!state.amt) $('#amount').focus();
+    if (!state.amt) $('#amount').focus(); else if (!$('#noteBox').hidden && !$('#note').value.trim()) $('#note').focus();
   }
   else if (d.paykind) { state.sheet.pay = d.paykind; var lx = view().settings.loans[state.sheet.loan.id] || {}, l2 = state.sheet.loan; state.amt = String(d.paykind === 'emi' ? lx.emi || '' : d.paykind === 'int' ? Math.round(l2.monthly) || '' : d.paykind === 'add' ? lx.sip || '' : ''); renderPaySeg(); renderQuick(); renderAmount(); }
   else if (t.hasAttribute('data-day')) { state.sheet.day = Number(d.day); $('#whenBox').hidden = true; renderDay(); }

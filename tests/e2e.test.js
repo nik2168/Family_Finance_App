@@ -73,9 +73,9 @@ const ym = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'
     assert.deepStrictEqual(await page.evaluate(() => [...document.images].filter(i => i.offsetParent && !i.naturalWidth).map(i => i.src)), []);
     assert.match(await page.textContent('#glance'), /Set a monthly budget.*Set a savings goal/, 'no goal, no budget yet: the starters');
 
-    // The name comes first (it is required), the amount beside it, then a category from the grid
+    // The amount comes first, the name (required) beside it, then a category from the grid
     await page.click('[data-new="Expense"]');
-    assert.strictEqual(await focused(), 'note', 'a new expense starts at its name');
+    assert.strictEqual(await focused(), 'amount', 'a new expense starts at its amount');
     assert.strictEqual(await page.textContent('#noteLabel'), 'Spent on');
     assert.deepStrictEqual(await page.$$eval('#catGrid .cg', b => b.map(x => x.textContent)), ['House', 'Dairy', 'Crops', 'Others']);
     await keypad('500');
@@ -113,14 +113,14 @@ const ym = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'
     await closed();
     assert.match(await page.textContent('#recent'), /Sold calf/);
 
-    // Name, then "next" to the amount; no quick amounts; Today / Yesterday
+    // Amount, then "next" to the name; no quick amounts; Today / Yesterday
     await pick('Expense', 'Dairy');
-    assert.strictEqual(await focused(), 'note', 'picking a category with no name yet goes to the name');
-    await page.keyboard.type('Cattle feed');
-    await page.keyboard.press('Enter');
-    assert.strictEqual(await focused(), 'amount', '"Next" goes on to the amount');
+    assert.strictEqual(await focused(), 'amount', 'picking a category with no amount yet goes to the amount');
     await page.keyboard.type('12a.3456');
     assert.strictEqual(await page.inputValue('#amount'), '12.34', 'only a valid amount can be typed');
+    await page.keyboard.press('Enter');
+    assert.strictEqual(await focused(), 'note', '"Next" goes on to the name');
+    await page.keyboard.type('Cattle feed');
     await clearAmount();
     await keypad('150');
     assert.ok(await page.isHidden('#quick'));
@@ -167,7 +167,7 @@ const ym = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'
     await tab('loans');
     assert.strictEqual(await page.textContent('#headTitle'), 'Money');
     await page.click('#addLoan');
-    assert.strictEqual(await focused(), 'note', 'a new pending starts at who it is owed to');
+    assert.strictEqual(await focused(), 'amount', 'a new pending starts at its amount');
     assert.strictEqual(await page.textContent('#noteLabel'), 'Owed to');
     assert.ok(await page.isHidden('#rateBox') && await page.isHidden('#oldBox') && await page.isHidden('#typeBox'), 'no interest or options to fill in');
     await keypad('20000');
@@ -348,8 +348,8 @@ const ym = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'
     assert.ok(sheet().rows.some(e => e.id === 'legacy-0001'));
     assert.strictEqual(await page.evaluate(() => localStorage.getItem('fm.pending')), null);
 
-    // ---- Navigation: Home, History, Insights, Money
-    assert.deepStrictEqual(await page.$$eval('.nav button', b => b.filter(x => x.offsetParent).map(x => x.textContent.trim())), ['Home', 'History', 'Insights', 'Money']);
+    // ---- Navigation: Home, History, Money, Insights
+    assert.deepStrictEqual(await page.$$eval('.nav button', b => b.filter(x => x.offsetParent).map(x => x.textContent.trim())), ['Home', 'History', 'Money', 'Insights']);
 
     // ---- Settings: who uses this phone, budgets (Others is cell B1), focus, the financial year, a bill and paying it from Due soon
     await page.click('#avatar');

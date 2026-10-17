@@ -498,6 +498,12 @@ dialog::backdrop{background:rgba(8,10,12,.42)}
   box-shadow:inset 0 1px 0 rgba(255,255,255,.16),0 30px 80px -20px rgba(0,0,0,.6);opacity:0;pointer-events:none;transform:translateY(16px) scale(.97);transform-origin:50% 100%;transition:transform .45s var(--ai-ease),opacity .25s}
 .ai-card.ai-on{opacity:1;pointer-events:auto;transform:none}
 @media (max-width:767px){#ai:has(.ai-card.ai-on) .ai-say{opacity:0}} /* the card shows the words now; on wide screens they stay on the left */
+/* Keyboard up for a card field (fitAI): the card drops to just above it, the text box hides, Save and Cancel share a row */
+@media (max-width:767px){
+  #ai.ai-kb .ai-card{bottom:10px;max-height:calc(100% - env(safe-area-inset-top) - 80px)}
+  #ai.ai-kb:has(.ai-card.ai-on) .ai-pill{opacity:0;pointer-events:none}
+  #ai.ai-kb .ai-cfoot{grid-template-columns:1fr auto;padding-bottom:12px}
+}
 .ai-grab{flex:none;height:22px;display:grid;place-items:center}
 .ai-grab::before{content:"";width:40px;height:5px;border-radius:5px;background:currentColor;opacity:.28}
 .ai-cbody{flex:1 1 auto;min-height:0;overflow-y:auto;padding:4px 18px 18px;opacity:0;filter:blur(8px);transition:opacity .35s,filter .35s}

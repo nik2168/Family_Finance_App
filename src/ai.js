@@ -653,7 +653,15 @@
 
   // ---- Open, close, ask. The assistant is a modal dialog: the app behind is inert, Esc closes the card first, then it.
   // iOS: the keyboard shrinks the visible area and pans it down, but not the dialog, so it is fitted to what is visible (like fitSheet).
-  function fitAI() { var vv = window.visualViewport, s = $('#ai').style; if (vv && $('#ai').open) { s.top = vv.offsetTop + 'px'; s.height = vv.height + 'px'; } }
+  // Typing in the card with the keyboard up: the card takes the text box's place (ai-kb), so its fields stay in sight above Save.
+  // Set and cleared only as the keyboard opens and closes, so a tap on Save never shifts the card under the finger.
+  function fitAI() {
+    var vv = window.visualViewport, ai = $('#ai'), s = ai.style, kb;
+    if (!vv || !ai.open) return;
+    s.top = vv.offsetTop + 'px'; s.height = vv.height + 'px';
+    kb = vv.height < innerHeight - 120;
+    if (kb && $('#aiCard').contains(document.activeElement)) ai.classList.add('ai-kb'); else if (!kb) ai.classList.remove('ai-kb');
+  }
   function openAI() {
     var ai = $('#ai'), b = $('#aiBtn').getBoundingClientRect();
     ai.style.setProperty('--ox', (b.left + b.width / 2) + 'px');
@@ -671,6 +679,7 @@
   }
   function closeAI() {
     var ai = $('#ai');
+    ai.classList.remove('ai-kb');
     if (cardOn()) closeCard(true);
     wantMic = false;
     hangUp();

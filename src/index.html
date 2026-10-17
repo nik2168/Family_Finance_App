@@ -591,8 +591,15 @@ dialog::backdrop{background:rgba(8,10,12,.42)}
   #ai:has(.ai-card.ai-on) .ai-pill.ai-busy{left:calc(25% - 112px);right:calc(75% - 112px)}
 }
 @media (prefers-reduced-motion:reduce){.ai-w,.ai-fading .ai-w,.ai-trk i,.ai-dots i,.ai-save path{animation:none}.ai-save path{stroke-dashoffset:0}#ai,.ai-card,.ai-pill,.ai-cbody,#aiOrb,.ai-say,#aiNote,.ai-wave i,.ai-pv{transition:none}}
-/* Low-end devices (ai.js sets ai-lite): no frosted glass, it is redrawn every frame */
+/* Light version (ai.js sets ai-lite: slow phones, or Settings > Assistant > Light animations): the app's own plain screen and cards,
+   a flat sky orb, no gradients and no frosted glass (it is redrawn every frame). :root.ai-lite so it beats the dark-theme #ai rules. */
+:root.ai-lite #ai{--ai-bg:var(--bg);--ai-card:var(--surface);--ai-pill:var(--surface);--ai-glass:var(--surface);--ai-note:var(--surface);--ai-edge:var(--line);--ai-t2:var(--muted)}
 .ai-lite #ai .ai-x,.ai-lite #aiNote,.ai-lite #ai .ai-pill,.ai-lite #ai .ai-card{-webkit-backdrop-filter:none;backdrop-filter:none}
+.ai-lite .ai-orb span,.ai-lite .ai-cssorb::before{background:var(--sky-d);box-shadow:none}
+.ai-lite .ai-orb span::after{display:none}
+.ai-lite #aiOrb,.ai-lite .ai-big{-webkit-mask-image:none;mask-image:none}
+.ai-lite .ai-trk i{background:var(--sky-d)}
+.ai-lite .ai-trk.ai-over i{background:var(--blush-d)}
 </style>
 </head>
 <body>

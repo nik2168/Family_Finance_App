@@ -601,6 +601,8 @@
   var orbEl = $('#aiOrb'), gl = null, uni = {}, raf = 0, lastTs = 0, T = 0, lvl = 0, thk = 0, mon = 0, kick = 0, reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
   // Low-end: reduced motion, or 4 GB RAM or less (only Chrome on Android reports it); the fps probe in tick catches the rest.
   var autoLite = reduce || (navigator.deviceMemory || 8) <= 4, canvas = orbEl, cssOrb = null, probeT = 0, frames = 0, lastS = '', lastL = '';
+  document.documentElement.classList.toggle('ai-lite', autoLite || load('fm.lite', false)); // the tab bar orb too, before the first open
+  document.addEventListener('change', function (e) { if (e.target.id === 'aiLite') document.documentElement.classList.toggle('ai-lite', autoLite || e.target.checked); });
   function useOrb(el) { if (orbEl !== el) { orbEl.replaceWith(el); orbEl = el; lastS = ''; } }
   function goLite() { // a CSS sphere instead, and no frosted glass
     gl = null;

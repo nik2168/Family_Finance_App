@@ -468,9 +468,9 @@ dialog::backdrop{background:rgba(8,10,12,.42)}
 .ai-big.ai-long{font-size:23px;line-height:1.25}
 .ai-big.ai-longer{font-size:17px;line-height:1.45;font-weight:500;letter-spacing:0}
 .ai-w{display:inline-block;animation:aiIn .55s var(--ai-ease) both;animation-delay:calc(var(--i,0) * 38ms)}
-@keyframes aiIn{from{opacity:0;filter:blur(10px);transform:translateY(6px)}}
+@keyframes aiIn{from{opacity:0;transform:translateY(6px)}}
 .ai-fading .ai-w{animation:aiOut .26s ease forwards}
-@keyframes aiOut{to{opacity:0;filter:blur(10px)}}
+@keyframes aiOut{to{opacity:0}}
 #aiNote{position:absolute;z-index:4;top:calc(env(safe-area-inset-top) + 20px);left:50%;max-width:70%;transform:translate(-50%,-8px);padding:8px 14px;border-radius:999px;font-size:13px;text-align:center;opacity:0;pointer-events:none;transition:opacity .3s,transform .3s;background:var(--ai-note);border:1px solid var(--ai-edge);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px)}
 #aiNote.ai-on{opacity:1;transform:translate(-50%,0)}
 .ai-pill{position:absolute;z-index:2;left:max(16px,calc(50% - 260px));right:max(16px,calc(50% - 260px));bottom:calc(env(safe-area-inset-bottom) + 22px);height:64px;border-radius:999px;display:flex;align-items:center;gap:6px;padding:0 8px 0 24px;
@@ -483,7 +483,7 @@ dialog::backdrop{background:rgba(8,10,12,.42)}
 .ai-cam{position:relative;flex:none;width:40px;height:40px;border-radius:50%;display:grid;place-items:center;cursor:pointer;opacity:.85}
 .ai-cam svg{width:22px;height:22px}
 .ai-cam input{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
-.ai-wave i{width:2.5px;border-radius:2px;background:currentColor;height:calc(var(--b) * (1 + var(--l,0) * 1.6));transition:height .08s}
+.ai-wave i{width:2.5px;border-radius:2px;background:currentColor;height:var(--b);transform:scaleY(calc(1 + var(--l,0) * 1.6));transition:transform .08s}
 .ai-pill.ai-live .ai-wave{background:var(--ai-edge);box-shadow:0 0 22px rgba(147,197,253,.45)}
 .ai-busyrow{display:none;align-items:center;gap:10px;font-size:15px;white-space:nowrap}
 .ai-dots{display:flex;gap:4px}
@@ -523,9 +523,9 @@ dialog::backdrop{background:rgba(8,10,12,.42)}
 .ai-bar{margin:10px 0;display:grid;grid-template-columns:1fr auto;gap:5px 10px;font-size:14px}
 .ai-bar span:last-child{font-variant-numeric:tabular-nums}
 .ai-trk{grid-column:1/-1;height:6px;border-radius:6px;overflow:hidden;background:var(--ai-fill)}
-.ai-trk i{display:block;height:100%;width:var(--w);border-radius:6px;background:linear-gradient(90deg,#60a5fa,#a5b4fc);animation:aiGrow .9s var(--ai-ease) both .3s}
+.ai-trk i{display:block;height:100%;width:var(--w);border-radius:6px;background:linear-gradient(90deg,#60a5fa,#a5b4fc);transform-origin:left;animation:aiGrow .9s var(--ai-ease) both .3s}
 .ai-trk.ai-over i{background:linear-gradient(90deg,#fb923c,#f87171)}
-@keyframes aiGrow{from{width:0}}
+@keyframes aiGrow{from{transform:scaleX(0)}}
 .ai-r{display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid var(--ai-line)}
 .ai-r:first-child{border-top:0}
 .ai-g{flex:1;min-width:0}
@@ -590,7 +590,9 @@ dialog::backdrop{background:rgba(8,10,12,.42)}
   #ai:has(.ai-card.ai-on) .ai-pill{left:max(24px,calc(25% - 260px));right:max(calc(50% + 12px),calc(75% - 260px))}
   #ai:has(.ai-card.ai-on) .ai-pill.ai-busy{left:calc(25% - 112px);right:calc(75% - 112px)}
 }
-@media (prefers-reduced-motion:reduce){.ai-w,.ai-fading .ai-w,.ai-trk i,.ai-dots i{animation:none}#ai,.ai-card,.ai-pill,.ai-cbody,#aiOrb,.ai-say{transition:none}}
+@media (prefers-reduced-motion:reduce){.ai-w,.ai-fading .ai-w,.ai-trk i,.ai-dots i,.ai-save path{animation:none}.ai-save path{stroke-dashoffset:0}#ai,.ai-card,.ai-pill,.ai-cbody,#aiOrb,.ai-say,#aiNote,.ai-wave i,.ai-pv{transition:none}}
+/* Low-end devices (ai.js sets ai-lite): no frosted glass, it is redrawn every frame */
+.ai-lite #ai .ai-x,.ai-lite #aiNote,.ai-lite #ai .ai-pill,.ai-lite #ai .ai-card{-webkit-backdrop-filter:none;backdrop-filter:none}
 </style>
 </head>
 <body>

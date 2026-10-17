@@ -922,7 +922,8 @@ function renderSettings(v) {
     '<div class="card set"><h2>Assistant</h2><div class="row">' + img3d('spark', 26) + '<div class="grow">Gemini key<small>Talk or type to add entries and ask about your money</small></div>' +
       '<input class="field" type="password" id="aiKey" value="' + esc(load('fm.gemini', '')) + '" placeholder="Paste key" autocomplete="off" style="width:130px;text-align:left" aria-label="Gemini key"></div>' +
       '<p class="t-xs muted" style="padding-top:6px">Get a free key at aistudio.google.com. It stays on this phone. What you ask, and the numbers needed to answer, go to Google; on the free tier Google may use them to improve its products.</p>' +
-      (load('fm.gemini', '') ? '<label class="swrow" style="margin-top:8px"><div class="grow"><b>Sounds</b><small>When the assistant starts and stops listening</small></div><input type="checkbox" class="sw" id="aiSfx"' + (load('fm.sfx', true) ? ' checked' : '') + '></label>' : '') + '</div>' +
+      (load('fm.gemini', '') ? '<label class="swrow" style="margin-top:8px"><div class="grow"><b>Sounds</b><small>When the assistant starts and stops listening</small></div><input type="checkbox" class="sw" id="aiSfx"' + (load('fm.sfx', true) ? ' checked' : '') + '></label>' +
+        '<label class="swrow" style="margin-top:8px"><div class="grow"><b>Light animations</b><small>A still orb and no glass blur, for slower phones</small></div><input type="checkbox" class="sw" id="aiLite"' + (load('fm.lite', false) ? ' checked' : '') + '></label>' : '') + '</div>' +
     '<div class="card"><h2>Theme</h2>' + segHtml('theme', load('fm.theme', 'auto'), [['auto', 'Auto'], ['light', 'Light'], ['dark', 'Dark']]) + '</div>' +
     '<div class="card"><h2>Sheets on this phone</h2><div style="display:grid;gap:2px">' + sheetsHtml() + '</div></div>' +
     '<button type="button" class="btn soft" data-tab="cats">' + icon('pencil-simple', 'sm') + 'Edit categories</button>' +
@@ -1454,6 +1455,7 @@ document.addEventListener('change', function (ev) {
   else if (t.hasAttribute('data-daily')) { if (!setOp('daily', numberOf(t.value))) { toast('Budget saved'); trySync(); } }
   else if (t.hasAttribute('data-nti')) { var n = findById(notes(), t.closest('[data-nt]').dataset.nt); if (n) { n.items[Number(t.dataset.nti)].done = t.checked; if (!queue('note', 'update', n.id, n)) { render(); trySync(); } } }
   else if (t.id === 'aiSfx') { save('fm.sfx', t.checked); toast(t.checked ? 'Sounds on' : 'Sounds off'); }
+  else if (t.id === 'aiLite') { save('fm.lite', t.checked); toast(t.checked ? 'Light animations on' : 'Light animations off'); }
   else if (t.hasAttribute('data-budget')) { if (!setOp('budget', numberOf(t.value), t.dataset.budget)) { toast('Budget saved'); trySync(); } }
 });
 $('#askForm').addEventListener('submit', function (ev) { ev.preventDefault(); answer(true); });

@@ -599,8 +599,21 @@
     ' gl_FragColor=vec4(col,max(col.r,max(col.g,col.b)));', // dark parts see-through: it glows on the black screen and on the light one
     '}'].join('\n');
   var orbEl = $('#aiOrb'), gl = null, uni = {}, raf = 0, lastTs = 0, T = 0, lvl = 0, thk = 0, mon = 0, kick = 0, reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  // Low-end: reduced motion, or 4 GB RAM or less (only Chrome on Android reports it); the fps probe in tick catches the rest.
+  var autoLite = reduce || (navigator.deviceMemory || 8) <= 4, canvas = orbEl, cssOrb = null, probeT = 0, frames = 0, lastS = '', lastL = '';
+  function useOrb(el) { if (orbEl !== el) { orbEl.replaceWith(el); orbEl = el; lastS = ''; } }
+  function goLite() { // a CSS sphere instead, and no frosted glass
+    gl = null;
+    document.documentElement.classList.add('ai-lite');
+    if (!cssOrb) { cssOrb = document.createElement('div'); cssOrb.id = 'aiOrb'; cssOrb.className = 'ai-cssorb'; }
+    useOrb(cssOrb);
+  }
+  // On each open: light if this device is weak or Settings > Assistant > Light animations is on.
   function setupGL() {
-    if (gl || orbEl.tagName !== 'CANVAS') return;
+    if (autoLite || load('fm.lite', false)) return goLite();
+    document.documentElement.classList.remove('ai-lite');
+    useOrb(canvas);
+    if (gl) return;
     try {
       gl = orbEl.getContext('webgl', { antialias: false });
       var sh = function (type, src) { var s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s); if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s)); return s; };
@@ -614,13 +627,7 @@
       gl.enableVertexAttribArray(0);
       gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
       ['uRes', 'uTime', 'uLevel', 'uThink', 'uMic'].forEach(function (u) { uni[u] = gl.getUniformLocation(prog, u); });
-    } catch (e) { // no WebGL: a CSS sphere instead
-      gl = null;
-      var d = document.createElement('div');
-      d.id = 'aiOrb'; d.className = 'ai-cssorb';
-      orbEl.replaceWith(d);
-      orbEl = d;
-    }
+    } catch (e) { autoLite = true; goLite(); } // no WebGL
   }
   function startOrb() { if (!raf) { lastTs = 0; raf = requestAnimationFrame(tick); } }
   function tick(ts) {
@@ -638,10 +645,15 @@
     thk += (($('#aiPill').classList.contains('ai-busy') ? 1 : 0) - thk) * .04;
     mon += ((mic ? 1 : 0) - mon) * .08;
     T += dt * (reduce ? .3 : 1) * (1 + thk * 1.6 + lvl * 1.2);
-    orbEl.style.setProperty('--s', 1 + lvl * .16);
-    $('#aiWave').style.setProperty('--l', mic ? lvl : 0);
+    var sv = (1 + lvl * .16).toFixed(3), lv = (mic ? lvl : 0).toFixed(2); // written only on change: each write restyles
+    if (sv !== lastS) orbEl.style.setProperty('--s', lastS = sv);
+    if (lv !== lastL) $('#aiWave').style.setProperty('--l', lastL = lv);
     if (!gl) return;
-    var px = Math.round(orbEl.clientWidth * Math.min(window.devicePixelRatio || 1, 2));
+    // fps probe, once: frames in the second after the open animation; under 45 means a weak GPU
+    // ponytail: a 30 Hz screen (iOS Low Power Mode) also reads as weak; fine, it wants the light orb anyway
+    if (!probeT) probeT = ts + 500;
+    else if (ts > probeT && ++frames && ts > probeT + 1000) { probeT = Infinity; if (frames < 45) { autoLite = true; return goLite(); } }
+    var px = Math.round(orbEl.clientWidth * Math.min(window.devicePixelRatio || 1, 1.5));
     if (orbEl.width !== px) { orbEl.width = orbEl.height = px; gl.viewport(0, 0, px, px); }
     gl.uniform2f(uni.uRes, px, px);
     gl.uniform1f(uni.uTime, T);

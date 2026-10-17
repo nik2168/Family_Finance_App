@@ -28,13 +28,14 @@ const APP = path.join(__dirname, '..', 'src');
       const start = OscillatorNode.prototype.start;
       OscillatorNode.prototype.start = function () { __played++; return start.apply(this, arguments); };
       window.WebSocket = function (url) {
-        const s = window.__ws = this, reply = o => setTimeout(() => s.onmessage && s.onmessage({ data: JSON.stringify(o) }), 5);
+        const s = window.__ws = this, reply = o => setTimeout(() => { if (o.setupComplete) s.live = true; if (s.onmessage) s.onmessage({ data: JSON.stringify(o) }); }, o.setupComplete ? 300 : 5); // set up slowly, like a real network, so the mic hears something first
         __urls.push(url);
         s.readyState = 0;
         setTimeout(() => { s.readyState = 1; if (s.onopen) s.onopen(); }, 5);
         s.send = raw => {
           const m = JSON.parse(raw);
           __sent.push(m);
+          if (!m.setup && !s.live) window.__early = true; // the mic starts while connecting: what it hears must wait for setupComplete
           if (m.setup) reply({ setupComplete: {} });
           else if (m.realtimeInput && m.realtimeInput.text && __next) { const c = __next; __next = null; reply({ toolCall: { functionCalls: [{ id: 'c' + __sent.length, name: c.name, args: c.args }] } }); }
           else if (m.toolResponse) { reply({ serverContent: { outputTranscription: { text: 'Done.' } } }); reply({ serverContent: { turnComplete: true } }); }
@@ -237,9 +238,12 @@ const APP = path.join(__dirname, '..', 'src');
     assert.match(await page.textContent('.ai-card .nt'), /Call with Ramesh.*Ramesh lends 5000.*Pay him 2000 on Friday/);
     await page.keyboard.press('Escape');
     await page.waitForSelector('.ai-card:not(.ai-on)');
-    await page.click('#aiWave'); // talk again: a normal session, the same mic
+    const before = await page.evaluate(() => __sent.filter(m => m.setup).length);
+    await page.click('#aiWave'); // talk again: a normal session, the same mic (live at once, while the session connects)
     await page.waitForSelector('.ai-pill.ai-live');
-    assert.ok(!(await page.evaluate(() => __sent.filter(m => m.setup).pop().setup)).realtimeInputConfig);
+    const talk = (await page.waitForFunction(n => { const s = __sent.filter(m => m.setup); return s.length > n && s[s.length - 1].setup; }, before).then(h => h.jsonValue()));
+    assert.ok(!talk.realtimeInputConfig);
+    assert.ok(!(await page.evaluate(() => window.__early)), 'nothing is sent before a session is set up');
     assert.strictEqual(await page.evaluate(() => __gum), 3, 'the mic is asked for once each time it opens (three times so far)');
     await page.click('#aiWave');
     await page.waitForSelector('.ai-pill:not(.ai-live)');

@@ -343,7 +343,7 @@
   var WORKLET = 'class P extends AudioWorkletProcessor{constructor(){super();this.b=new Int16Array(1600);this.n=0}' +
     'process(i){var c=i[0]&&i[0][0];if(c)for(var k=0;k<c.length;k++){var s=Math.max(-1,Math.min(1,c[k]));this.b[this.n++]=s<0?s*32768:s*32767;' +
     'if(this.n===this.b.length){this.port.postMessage(this.b.slice().buffer);this.n=0}}return true}}registerProcessor("pcm",P)';
-  var ws = null, ready = null, kind = '', inCtx, outCtx, outGain, outAn, micAn, workletLoaded = false, mic = null, micNode = null, micSrc = null, stream = null, wantMic = false;
+  var ws = null, ready = null, kind = '', inCtx, outCtx, outGain, outAn, micAn, warmed = null, setUp = false, waiting = [], mic = null, micNode = null, micSrc = null, stream = null, wantMic = false;
   var playing = [], playAt = 0, voiceTurn = false, idleTimer;
 
   function systemPrompt() {
@@ -374,6 +374,9 @@
       realtimeInputConfig: k ? { automaticActivityDetection: { disabled: true } } : undefined };
   }
   function send(o) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(o)); touch(); }
+  // The mic starts while the session is still connecting, so the user can talk at once: what they say waits here until it is set up.
+  // ponytail: about 15 s (150 chunks of 100 ms) is kept; a slower connection loses the start.
+  function sendLive(o) { if (setUp) send(o); else if (waiting.length < 150) waiting.push(o); }
   // A Live session counts against the free quota while it is open, so a quiet one is closed.
   function touch() { clearTimeout(idleTimer); idleTimer = setTimeout(function () { if (!mic && !playing.length && !pending) hangUp(); }, 60000); }
 
@@ -393,16 +396,16 @@
         no(new Error(why || 'Closed'));
         if (ws !== s) return;
         if (why) note(/api key/i.test(why) ? 'That Gemini key did not work. Check it in Settings.' : 'Assistant: ' + why);
-        keepTurn(); ws = null; ready = null; stopMic(); stopPlayback(); unbusy();
+        keepTurn(); ws = null; ready = null; stopMic(); setUp = false; waiting = []; stopPlayback(); unbusy();
       };
     });
     return ready;
   }
-  function hangUp() { keepTurn(); stopMic(); stopPlayback(); if (ws) { var s = ws; ws = null; s.close(1000); } ready = null; unbusy(); }
+  function hangUp() { keepTurn(); stopMic(); setUp = false; waiting = []; stopPlayback(); if (ws) { var s = ws; ws = null; s.close(1000); } ready = null; unbusy(); }
 
   function onMessage(m, ok) {
     touch();
-    if (m.setupComplete) return ok();
+    if (m.setupComplete) { setUp = true; waiting.splice(0).forEach(send); return ok(); }
     if (m.toolCall) runTools(m.toolCall.functionCalls || []);
     var s = m.serverContent;
     if (!s) return;
@@ -438,18 +441,29 @@
     });
   }
 
-  // ---- Audio. Made inside a tap, which iOS requires.
-  function audioOn() {
+  // ---- Audio. Made ahead (warm), suspended; a tap resumes it, which iOS requires.
+  function makeAudio() {
     var AC = window.AudioContext || window.webkitAudioContext;
-    if (!AC) return;
-    if (!outCtx) {
-      outCtx = new AC();
-      inCtx = new AC({ sampleRate: 16000 });
-      outGain = outCtx.createGain(); outAn = outCtx.createAnalyser(); outAn.fftSize = 512;
-      outGain.connect(outAn); outAn.connect(outCtx.destination);
-      micAn = inCtx.createAnalyser(); micAn.fftSize = 512;
-    }
-    outCtx.resume(); inCtx.resume();
+    if (!AC || outCtx) return;
+    outCtx = new AC();
+    inCtx = new AC({ sampleRate: 16000 });
+    outGain = outCtx.createGain(); outAn = outCtx.createAnalyser(); outAn.fftSize = 512;
+    outGain.connect(outAn); outAn.connect(outCtx.destination);
+    micAn = inCtx.createAnalyser(); micAn.fftSize = 512;
+  }
+  function audioOn() { makeAudio(); if (outCtx) { outCtx.resume(); inCtx.resume(); } }
+  // The slow first-time work, done while the app sits idle so the first tap on Ask opens at once: the audio contexts
+  // (~200 ms on a slow phone), the mic's worklet, and the orb's shader (the GPU compiles it on the first draw, up to seconds).
+  // ponytail: the shader warms on its own default canvas with zero uniforms; that is enough to make the GPU compile it.
+  function warm() {
+    if (warmed || !key()) return warmed;
+    makeAudio();
+    warmed = !inCtx ? Promise.resolve() : inCtx.audioWorklet.addModule(URL.createObjectURL(new Blob([WORKLET], { type: 'text/javascript' })))
+      .catch(function (e) { warmed = null; throw e; });
+    warmed.catch(function () {}); // its error shows when the mic needs it
+    setupGL();
+    if (gl) gl.drawArrays(gl.TRIANGLES, 0, 3);
+    return warmed;
   }
   // The mic is asked for each time the assistant opens and kept while it is open (muted between uses). releaseMic lets it go.
   // One request at a time (opening and "listen" can both ask); one that comes back after releaseMic (micGen moved on) is let go at once.
@@ -469,12 +483,11 @@
       s.getTracks().forEach(function (t) { t.enabled = wantMic; });
       if (!wantMic || mic === s) return; // the text box was tapped while the mic was being asked for, or it is on already
       mic = s;
-      return (workletLoaded ? Promise.resolve() : inCtx.audioWorklet.addModule(URL.createObjectURL(new Blob([WORKLET], { type: 'text/javascript' })))).then(function () {
-        workletLoaded = true;
+      return warm().then(function () {
         if (mic !== s) return; // stopped meanwhile
         micNode = new AudioWorkletNode(inCtx, 'pcm');
         // The real rate goes along, so a browser that ignores sampleRate:16000 still works (Gemini resamples).
-        micNode.port.onmessage = function (e) { if (talking()) new Int16Array(e.data).fill(0); send({ realtimeInput: { audio: { data: b64(e.data), mimeType: 'audio/pcm;rate=' + inCtx.sampleRate } } }); };
+        micNode.port.onmessage = function (e) { if (talking()) new Int16Array(e.data).fill(0); sendLive({ realtimeInput: { audio: { data: b64(e.data), mimeType: 'audio/pcm;rate=' + inCtx.sampleRate } } }); };
         micSrc = inCtx.createMediaStreamSource(stream);
         micSrc.connect(micNode); micSrc.connect(micAn);
         micNode.connect(inCtx.destination); // silent; some browsers only run a node that is connected
@@ -491,7 +504,7 @@
     if (micSrc) micSrc.disconnect();
     if (micNode) micNode.disconnect();
     mic = micNode = micSrc = null;
-    send({ realtimeInput: kind === 'listen' ? { activityEnd: {} } : { audioStreamEnd: true } }); // listening: the conversation is over, now the note
+    sendLive({ realtimeInput: kind === 'listen' ? { activityEnd: {} } : { audioStreamEnd: true } }); // listening: the conversation is over, now the note
     $('#aiPill').classList.remove('ai-live');
     $('#aiText').placeholder = 'Ask anything…';
   }
@@ -501,7 +514,12 @@
     if (mic) { if (kind === 'listen') busy('Writing the note…'); stopMic(); return sfx('stop'); } // the only stop with a sound: the user's own tap
     wantMic = true;
     audioOn();
-    connect().then(startMic).catch(fail);
+    talkNow();
+  }
+  // The mic and the session start together (see sendLive); a session that cannot connect turns the mic off again.
+  function talkNow() {
+    connect().catch(function (e) { wantMic = false; stopMic(); waiting = []; fail(e); });
+    startMic().catch(fail);
   }
   function startListening() {
     wantMic = true;
@@ -689,7 +707,7 @@
     startOrb();
     audioOn(); // inside the tap (iOS)
     wantMic = true;
-    connect().then(startMic).catch(fail); // voice first; typing stops it
+    talkNow(); // voice first; typing stops it
   }
   function closeAI() {
     var ai = $('#ai');
@@ -734,6 +752,7 @@
   $('#ai').addEventListener('close', function () { if (this.classList.contains('ai-on')) closeAI(); }); // closed by the browser itself (a second Esc or back skips cancel)
   $('#aiPill').addEventListener('submit', function (e) { e.preventDefault(); var t = $('#aiText').value; $('#aiText').value = ''; askAI(t); });
   $('#aiWave').addEventListener('click', toggleMic);
+  if (window.requestIdleCallback) requestIdleCallback(warm, { timeout: 3000 }); else setTimeout(warm, 1500);
   $('#ai').addEventListener('focusin', function (e) { if (e.target.matches('#aiText, #aiCard input')) { wantMic = false; if (mic) toggleMic(); } }); // typing instead (the text box, or the card's fields)
   $('#ai').addEventListener('click', function (e) { if (e.target.closest('#aiOrb')) { kick = 1; if (playing.length) { voiceTurn = false; stopPlayback(); } else toggleMic(); } }); // the orb is a big talk button too (and cuts it off while it talks), and pulses when tapped
   $('#aiCard').addEventListener('click', function (e) {
